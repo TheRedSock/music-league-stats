@@ -37,6 +37,7 @@ import {
   type MutualRelationship,
   type SearchParams,
   type SongAnalyticsRow,
+  type TimingRow,
 } from "@/lib/analytics";
 
 export const metadata: Metadata = {
@@ -68,37 +69,31 @@ function relationshipExtremes(
   relationships: DirectionalRelationship[],
   direction: "received" | "given",
 ) {
-  const all = relationships.filter((row) => row.direction === direction);
-  const sampled = all.filter(
-    (row) => row.encounters >= 10 && row.sharedRounds >= 3,
-  );
+  const sampled = relationships.filter((row) => row.direction === direction);
   return {
     most: [...sampled]
       .sort((a, b) => b.pointsPerEncounter - a.pointsPerEncounter)
-      .slice(0, 3),
+      .slice(0, 5),
     least: [...sampled]
       .sort((a, b) => a.pointsPerEncounter - b.pointsPerEncounter)
-      .slice(0, 3),
+      .slice(0, 5),
   };
 }
 
 function mutualExtremes(relationships: MutualRelationship[]) {
-  const sampled = relationships.filter(
-    (row) => row.opportunities >= 10 && row.sharedRounds >= 3,
-  );
   return {
-    mostPoints: [...sampled]
+    mostPoints: [...relationships]
       .sort((a, b) => b.points - a.points)
-      .slice(0, 3),
-    leastPoints: [...sampled]
+      .slice(0, 5),
+    leastPoints: [...relationships]
       .sort((a, b) => a.points - b.points)
-      .slice(0, 3),
-    highestShare: [...sampled]
+      .slice(0, 5),
+    highestShare: [...relationships]
       .sort((a, b) => b.ballotPointShare - a.ballotPointShare)
-      .slice(0, 3),
-    lowestShare: [...sampled]
+      .slice(0, 5),
+    lowestShare: [...relationships]
       .sort((a, b) => a.ballotPointShare - b.ballotPointShare)
-      .slice(0, 3),
+      .slice(0, 5),
   };
 }
 
@@ -150,6 +145,45 @@ function SubmissionList({
   );
 }
 
+function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
+  return (
+    <div>
+      <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+        {label}
+      </h3>
+      <ol className="mt-2 divide-y divide-white/[0.06]">
+        {rows.map((row) => (
+          <li
+            className="grid grid-cols-[1fr_auto] gap-4 py-3"
+            key={row.roundId}
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm text-zinc-200">
+                {row.leagueName} · R{row.ordinal} {row.roundName}
+              </p>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+                <div
+                  aria-hidden="true"
+                  className="h-full rounded-full bg-violet-300"
+                  style={{ width: `${row.relativeOrder! * 100}%` }}
+                />
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="font-mono text-sm text-violet-200">
+                {percentileLabel(row.relativeOrder)}
+              </p>
+              <p className="text-[10px] text-zinc-600">
+                {row.observedVoters} voters
+              </p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export default async function PlayerProfilePage({
   params,
   searchParams,
@@ -180,18 +214,22 @@ export default async function PlayerProfilePage({
     league: filter.leagueId,
     round: filter.roundId,
   };
-  const high = profile.submissions.slice(0, 3);
-  const low = [...profile.submissions].reverse().slice(0, 3);
+  const high = profile.submissions.slice(0, 5);
+  const low = [...profile.submissions].reverse().slice(0, 5);
   const received = relationshipExtremes(profile.relationships, "received");
   const given = relationshipExtremes(profile.relationships, "given");
   const mutual = mutualExtremes(profile.mutualRelationships);
-  const alignmentSplit = Math.ceil(profile.alignments.length / 2);
-  const highestAlignments = profile.alignments
-    .slice(0, Math.min(4, alignmentSplit));
-  const lowestAlignments = profile.alignments
-    .slice(Math.max(alignmentSplit, profile.alignments.length - 4))
-    .reverse();
+  const highestAlignments = profile.alignments.slice(0, 5);
+  const lowestAlignments = profile.alignments.slice(-5).reverse();
   const votedTiming = profile.timing.filter((row) => row.relativeOrder !== null);
+  const orderedTiming = [...votedTiming].sort(
+    (left, right) => left.relativeOrder! - right.relativeOrder!,
+  );
+  const lowestTiming = orderedTiming.slice(0, 3);
+  const highestTiming = orderedTiming.slice(-3).reverse();
+  const missedBallots = profile.timing.filter(
+    (row) => row.participation === "did_not_vote",
+  ).length;
   const averageTiming = votedTiming.length
     ? votedTiming.reduce((sum, row) => sum + row.relativeOrder!, 0) /
       votedTiming.length
@@ -370,15 +408,15 @@ export default async function PlayerProfilePage({
               ))}
               {!groups.most.length ? (
                 <p className="text-sm leading-6 text-zinc-500 sm:col-span-2">
-                  No comparison reaches 10 eligible opportunities across three
-                  rounds and at least half of the selected scope.
+                  No comparison has eligible opportunities in at least half of
+                  the selected rounds.
                 </p>
               ) : (
                 <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
                   The displayed rate is points per eligible opportunity,
-                  including inferred zeroes. Comparisons require at least 10
-                  opportunities across three rounds and coverage of at least
-                  half the selected scope.
+                  including inferred zeroes. Comparisons must cover at least
+                  half of the selected rounds; the required sample therefore
+                  scales down for league and round filters.
                 </p>
               )}
             </CardContent>
@@ -459,8 +497,8 @@ export default async function PlayerProfilePage({
           ))}
           {!mutual.mostPoints.length ? (
             <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
-              No mutual comparison reaches 10 eligible opportunities across
-              three rounds and at least half of the selected scope.
+              No mutual comparison has eligible opportunities in at least half
+              of the selected rounds.
             </p>
           ) : null}
         </CardContent>
@@ -558,61 +596,36 @@ export default async function PlayerProfilePage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {profile.timing.length ? (
+            {votedTiming.length ? (
               <>
-                {averageTiming !== null ? (
-                  <div className="mb-5">
-                    <p className="font-mono text-3xl font-semibold text-white">
-                      {percentileLabel(averageTiming)}
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Average relative voting order
-                    </p>
-                  </div>
-                ) : null}
-                <ol className="divide-y divide-white/[0.06]">
-                  {profile.timing.slice(0, 8).map((row) => (
-                    <li
-                      className="grid grid-cols-[1fr_auto] gap-4 py-3"
-                      key={row.roundId}
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-zinc-200">
-                          {row.leagueName} · R{row.ordinal} {row.roundName}
-                        </p>
-                        {row.relativeOrder !== null ? (
-                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-                            <div
-                              aria-hidden="true"
-                              className="h-full rounded-full bg-violet-300"
-                              style={{ width: `${row.relativeOrder * 100}%` }}
-                            />
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="text-right">
-                        <p className="font-mono text-sm text-violet-200">
-                          {row.participation === "did_not_vote"
-                            ? "Did not vote"
-                            : percentileLabel(row.relativeOrder)}
-                        </p>
-                        <p className="text-[10px] text-zinc-600">
-                          {row.observedVoters} voters
-                        </p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
+                <div className="mb-5">
+                  <p className="font-mono text-3xl font-semibold text-white">
+                    {percentileLabel(averageTiming)}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Average relative voting order
+                  </p>
+                </div>
+                <div className="grid gap-7 sm:grid-cols-2">
+                  <TimingList
+                    label="Highest percentiles"
+                    rows={highestTiming}
+                  />
+                  <TimingList label="Lowest percentiles" rows={lowestTiming} />
+                </div>
               </>
             ) : (
               <p className="text-sm text-zinc-500">
-                No submitted or voted rounds in this scope.
+                No recorded ballot timing in this scope.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">
               A lower percentile means the recorded ballot completion preceded
-              more observed ballots. Submitted rounds without any exported vote
-              row are shown as did not vote.
+              more observed ballots. The lists show the three highest and three
+              lowest recorded percentiles.
+              {missedBallots
+                ? ` ${missedBallots} submitted ${missedBallots === 1 ? "round has" : "rounds have"} no exported ballot and ${missedBallots === 1 ? "is" : "are"} excluded.`
+                : ""}
             </p>
           </CardContent>
         </Card>

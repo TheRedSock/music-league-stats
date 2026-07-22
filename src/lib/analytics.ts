@@ -488,6 +488,16 @@ function competitorDisplayName(alias = "c"): SQL {
 function voteOpportunityCtes(filter: AnalyticsFilter): SQL {
   return sql`
     ${selectedRoundsCte(filter)},
+    scope_thresholds as (
+      select
+        count(*)::int as scope_rounds,
+        greatest(1, ceil(count(*)::numeric / 2)::int) as minimum_shared_rounds,
+        least(
+          20,
+          greatest(5, ceil(count(*)::numeric / 2)::int * 5)
+        )::int as minimum_comparable_features
+      from selected_rounds
+    ),
     active_ballots as (
       select
         v.round_id,
@@ -813,10 +823,12 @@ function alignmentComparisonCtes(filter: AnalyticsFilter): SQL {
         sqrt(sum(cf.left_value * cf.left_value) * sum(cf.right_value * cf.right_value)) as magnitude
       from comparison_features cf
       group by cf.left_id, cf.right_id
-      having count(*) >= case when max(cf.scope_rounds) <= 1 then 5 else 20 end
-         and count(distinct cf.round_id) >= least(3, max(cf.scope_rounds))
-         and count(distinct cf.round_id)::double precision
-           / nullif((select count(*) from selected_rounds), 0) >= 0.5
+      having count(*) >= (
+          select minimum_comparable_features from scope_thresholds
+        )
+         and count(distinct cf.round_id) >= (
+          select minimum_shared_rounds from scope_thresholds
+        )
     )
   `;
 }
@@ -902,7 +914,7 @@ export async function getDashboardData(
       pc.dot / nullif(pc.magnitude, 0) as alignment,
       pc.comparable_features as "comparableFeatures",
       pc.shared_rounds as "sharedRounds",
-      (select count(*)::int from selected_rounds) as "scopeRounds"
+      (select scope_rounds from scope_thresholds) as "scopeRounds"
     from pair_comparisons pc
     join competitors left_player on left_player.id = pc.left_id
     join competitors right_player on right_player.id = pc.right_id
@@ -1262,13 +1274,14 @@ export async function getPlayerProfileData(
       rr.points,
       rr.encounters,
       rr.shared_rounds as "sharedRounds",
-      (select count(*)::int from selected_rounds) as "scopeRounds",
+      (select scope_rounds from scope_thresholds) as "scopeRounds",
       rr.points::double precision / rr.encounters as "pointsPerEncounter",
       rr.positives::double precision / rr.encounters as "positiveRate"
     from relationship_rows rr
     join competitors c on c.id = rr.competitor_id
-    where rr.shared_rounds::double precision
-      / nullif((select count(*) from selected_rounds), 0) >= 0.5
+    where rr.shared_rounds >= (
+      select minimum_shared_rounds from scope_thresholds
+    )
     order by rr.direction, "pointsPerEncounter" desc, rr.encounters desc
   `);
   const mutualRelationshipsPromise = db.execute<MutualRelationship>(sql`
@@ -1317,7 +1330,7 @@ export async function getPlayerProfileData(
       mr.points,
       mr.opportunities,
       mr.shared_rounds as "sharedRounds",
-      (select count(*)::int from selected_rounds) as "scopeRounds",
+      (select scope_rounds from scope_thresholds) as "scopeRounds",
       mr.points::double precision / mr.opportunities as "pointsPerOpportunity",
       mr.positives::double precision / mr.opportunities as "positiveRate",
       mr.points::double precision / nullif(mb.eligible_ballot_points, 0) as "ballotPointShare"
@@ -1326,8 +1339,9 @@ export async function getPlayerProfileData(
     join competitors c on c.id = mr.competitor_id
     where mr.opportunities > 0
       and mb.eligible_ballot_points > 0
-      and mr.shared_rounds::double precision
-        / nullif((select count(*) from selected_rounds), 0) >= 0.5
+      and mr.shared_rounds >= (
+        select minimum_shared_rounds from scope_thresholds
+      )
     order by "pointsPerOpportunity" desc, mr.opportunities desc
   `);
   const alignmentsPromise = db.execute<{
@@ -1348,7 +1362,7 @@ export async function getPlayerProfileData(
       pc.dot / nullif(pc.magnitude, 0) as alignment,
       pc.comparable_features as "comparableFeatures",
       pc.shared_rounds as "sharedRounds",
-      (select count(*)::int from selected_rounds) as "scopeRounds"
+      (select scope_rounds from scope_thresholds) as "scopeRounds"
     from pair_comparisons pc
     join competitors c
       on c.id = case
