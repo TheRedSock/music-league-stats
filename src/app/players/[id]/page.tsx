@@ -294,7 +294,7 @@ export default async function PlayerProfilePage({
             comparison normalized inside its original round.
           </p>
         </div>
-        <div className="w-full lg:max-w-xl">
+        <div className="w-full lg:max-w-3xl">
           <AnalyticsFilterBar filter={filter} options={options} />
           <p className="mt-2 text-right text-xs text-zinc-500">
             Showing {selectedFilterLabel(options, filter)}

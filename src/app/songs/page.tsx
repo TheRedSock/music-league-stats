@@ -124,7 +124,7 @@ export default async function SongsPage({
             {selectedFilterLabel(options, filter)}
           </p>
         </div>
-        <div className="w-full lg:max-w-xl">
+        <div className="w-full lg:max-w-3xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>

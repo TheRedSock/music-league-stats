@@ -1,7 +1,7 @@
 "use client";
 
-import { Filter, LoaderCircle } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Check, ChevronDown, Filter, LoaderCircle, X } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 
 import type {
@@ -34,7 +34,6 @@ function AnalyticsFilterBarContent({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const [leagueIds, setLeagueIds] = useState(filter.leagueIds);
   const [roundIds, setRoundIds] = useState(filter.roundIds);
@@ -73,7 +72,9 @@ function AnalyticsFilterBarContent({
   }
 
   function applyScope() {
-    const next = new URLSearchParams(searchParams.toString());
+    // Read the live query string at click time so this client component does
+    // not subscribe to useSearchParams during SSR/hydration.
+    const next = new URLSearchParams(window.location.search);
     next.delete("league");
     next.delete("round");
     if (leagueIds.length) {
@@ -91,15 +92,21 @@ function AnalyticsFilterBarContent({
   const scopeChanged =
     leagueIds.join(",") !== filter.leagueIds.join(",") ||
     roundIds.join(",") !== filter.roundIds.join(",");
+  const selectedLeagues = options.leagues.filter((league) =>
+    leagueIds.includes(league.id),
+  );
+  const selectedRounds = options.rounds.filter((round) =>
+    roundIds.includes(round.id),
+  );
 
   return (
     <div
       aria-label="Analytics filters"
-      className="rounded-2xl border border-white/[0.08] bg-zinc-950/70 p-3 shadow-2xl shadow-black/10"
+      className="rounded-2xl border border-white/[0.08] bg-zinc-950/70 p-2.5 shadow-2xl shadow-black/10"
       role="group"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex shrink-0 items-center gap-2 px-1 text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
           {pending ? (
             <LoaderCircle
               aria-hidden="true"
@@ -110,91 +117,157 @@ function AnalyticsFilterBarContent({
           )}
           Scope
         </div>
-        <button
-          className="rounded-full border border-lime-300/20 px-3 py-1 text-xs font-medium text-lime-200 disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={pending || !scopeChanged}
-          onClick={applyScope}
-          type="button"
-        >
-          Apply
-        </button>
-      </div>
-      <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <fieldset className="min-w-0 rounded-xl border border-white/10 bg-black/15 p-3">
-          <legend className="px-1 text-xs font-medium text-zinc-400">
-            Leagues
-          </legend>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:border-lime-300/40 hover:text-lime-200"
-              onClick={() => {
-                setLeagueIds([]);
-                setRoundIds([]);
-              }}
-              type="button"
-            >
-              All leagues
-            </button>
-            {options.leagues.map((league) => (
-              <label
-                className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-300 has-[:checked]:border-lime-300/40 has-[:checked]:text-lime-200"
-                key={league.id}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <details className="group relative shrink-0">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-lime-300/40 [&::-webkit-details-marker]:hidden">
+              Leagues
+              <span className="font-mono text-[10px] text-lime-300">
+                {leagueIds.length || "All"}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className="size-3.5 text-zinc-500 transition-transform group-open:rotate-180"
+              />
+            </summary>
+            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-80 max-w-[80vw] rounded-2xl border border-white/10 bg-zinc-950 p-2 shadow-2xl shadow-black/60">
+              <button
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                onClick={() => setLeagueIds([])}
+                type="button"
               >
-                <input
-                  checked={leagueIds.includes(league.id)}
-                  className="size-3 accent-lime-300"
-                  onChange={() => toggleLeague(league.id)}
-                  type="checkbox"
-                />
-                <span>{league.name}</span>
-              </label>
+                All leagues
+                {!leagueIds.length ? (
+                  <Check aria-hidden="true" className="size-4 text-lime-300" />
+                ) : null}
+              </button>
+              <div className="my-1 border-t border-white/[0.06]" />
+              <div className="max-h-64 overflow-y-auto pr-1">
+                {options.leagues.map((league) => (
+                  <label
+                    className="flex cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                    key={league.id}
+                  >
+                    <input
+                      checked={leagueIds.includes(league.id)}
+                      className="mt-0.5 size-3.5 shrink-0 accent-lime-300"
+                      onChange={() => toggleLeague(league.id)}
+                      type="checkbox"
+                    />
+                    <span className="min-w-0 leading-5">{league.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </details>
+
+          <details className="group relative shrink-0">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-lime-300/40 [&::-webkit-details-marker]:hidden">
+              Rounds
+              <span className="font-mono text-[10px] text-lime-300">
+                {roundIds.length || "All"}
+              </span>
+              <ChevronDown
+                aria-hidden="true"
+                className="size-3.5 text-zinc-500 transition-transform group-open:rotate-180"
+              />
+            </summary>
+            <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-96 max-w-[85vw] rounded-2xl border border-white/10 bg-zinc-950 p-2 shadow-2xl shadow-black/60">
+              <button
+                className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                onClick={() => setRoundIds([])}
+                type="button"
+              >
+                All rounds in selected leagues
+                {!roundIds.length ? (
+                  <Check aria-hidden="true" className="size-4 text-lime-300" />
+                ) : null}
+              </button>
+              <div className="my-1 border-t border-white/[0.06]" />
+              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                {options.leagues.map((league) => {
+                  const leagueRounds = visibleRounds.filter(
+                    (round) => round.leagueId === league.id,
+                  );
+                  return leagueRounds.length ? (
+                    <div key={league.id}>
+                      <p className="px-3 pb-1 pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-600">
+                        {league.name}
+                      </p>
+                      {leagueRounds.map((round) => (
+                        <label
+                          className="flex cursor-pointer items-start gap-2.5 rounded-xl px-3 py-2 text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white"
+                          key={round.id}
+                        >
+                          <input
+                            checked={roundIds.includes(round.id)}
+                            className="mt-0.5 size-3.5 shrink-0 accent-lime-300"
+                            onChange={() => toggleRound(round.id)}
+                            type="checkbox"
+                          />
+                          <span className="min-w-0 leading-5">
+                            {round.ordinal}. {round.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          </details>
+
+          <div
+            aria-label="Selected scope"
+            className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {selectedLeagues.length ? (
+              selectedLeagues.map((league) => (
+                <button
+                  className="inline-flex h-8 max-w-56 shrink-0 items-center gap-1.5 rounded-full border border-lime-300/20 bg-lime-300/[0.07] pl-3 pr-2 text-xs text-lime-100 hover:border-lime-300/40"
+                  key={league.id}
+                  onClick={() => toggleLeague(league.id)}
+                  title={`Remove ${league.name}`}
+                  type="button"
+                >
+                  <span className="truncate">{league.name}</span>
+                  <X aria-hidden="true" className="size-3 shrink-0" />
+                </button>
+              ))
+            ) : (
+              <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-white/10 px-3 text-xs text-zinc-400">
+                All leagues
+              </span>
+            )}
+            {selectedRounds.map((round) => (
+              <button
+                className="inline-flex h-8 max-w-52 shrink-0 items-center gap-1.5 rounded-full border border-violet-300/20 bg-violet-300/[0.07] pl-3 pr-2 text-xs text-violet-100 hover:border-violet-300/40"
+                key={round.id}
+                onClick={() => toggleRound(round.id)}
+                title={`Remove ${round.name}`}
+                type="button"
+              >
+                <span className="truncate">
+                  R{round.ordinal} · {round.name}
+                </span>
+                <X aria-hidden="true" className="size-3 shrink-0" />
+              </button>
             ))}
+            {!selectedRounds.length ? (
+              <span className="inline-flex h-8 shrink-0 items-center rounded-full border border-white/10 px-3 text-xs text-zinc-500">
+                All rounds
+              </span>
+            ) : null}
           </div>
-        </fieldset>
-        <fieldset className="min-w-0 rounded-xl border border-white/10 bg-black/15 p-3">
-          <legend className="px-1 text-xs font-medium text-zinc-400">
-            Rounds
-          </legend>
-          <div className="mt-2 max-h-36 space-y-2 overflow-y-auto pr-1">
-            <button
-              className="rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:border-lime-300/40 hover:text-lime-200"
-              onClick={() => setRoundIds([])}
-              type="button"
-            >
-              All visible rounds
-            </button>
-            {options.leagues.map((league) => {
-              const leagueRounds = visibleRounds.filter(
-                (round) => round.leagueId === league.id,
-              );
-              return leagueRounds.length ? (
-                <div key={league.id}>
-                  <p className="mb-1 text-[11px] font-medium text-zinc-600">
-                    {league.name}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {leagueRounds.map((round) => (
-                      <label
-                        className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-300 has-[:checked]:border-lime-300/40 has-[:checked]:text-lime-200"
-                        key={round.id}
-                      >
-                        <input
-                          checked={roundIds.includes(round.id)}
-                          className="size-3 accent-lime-300"
-                          onChange={() => toggleRound(round.id)}
-                          type="checkbox"
-                        />
-                        <span>
-                          {round.ordinal}. {round.name}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              ) : null;
-            })}
-          </div>
-        </fieldset>
+
+          <button
+            className="h-9 shrink-0 rounded-full border border-lime-300/20 px-3 text-xs font-medium text-lime-200 transition hover:border-lime-300/40 disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={pending || !scopeChanged}
+            onClick={applyScope}
+            type="button"
+          >
+            Apply
+          </button>
+        </div>
       </div>
       <span className="sr-only" aria-live="polite">
         {pending ? "Updating analytics" : "Analytics updated"}
