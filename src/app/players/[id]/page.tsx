@@ -11,8 +11,10 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
 import { VoteDistributions } from "@/components/analytics/vote-distributions";
 import { Container } from "@/components/layout/container";
@@ -27,8 +29,8 @@ import {
 } from "@/components/ui/card";
 import {
   buildAnalyticsHref,
-  getFilterOptions,
-  getPlayerProfileData,
+  getCachedFilterOptions,
+  getCachedPlayerProfileData,
   loadAnalytics,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
@@ -43,8 +45,6 @@ import {
 export const metadata: Metadata = {
   title: "Player profile",
 };
-
-export const dynamic = "force-dynamic";
 
 function metric(value: number | null | undefined, digits = 2): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
@@ -184,7 +184,21 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
   );
 }
 
-export default async function PlayerProfilePage({
+export default function PlayerProfilePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
+  return (
+    <Suspense fallback={<AnalyticsLoadingShell />}>
+      <PlayerProfileContent params={params} searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function PlayerProfileContent({
   params,
   searchParams,
 }: {
@@ -193,9 +207,13 @@ export default async function PlayerProfilePage({
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const result = await loadAnalytics(async () => {
-    const options = await getFilterOptions();
+    const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(query), options);
-    const profile = await getPlayerProfileData(id, filter);
+    const profile = await getCachedPlayerProfileData(
+      id,
+      filter.leagueId,
+      filter.roundId,
+    );
     return { filter, options, profile };
   });
 
@@ -334,7 +352,8 @@ export default async function PlayerProfilePage({
           <CardTitle>Point distributions</CardTitle>
           <CardDescription>
             Active ballots include inferred zeroes for omitted eligible songs.
-            Toggle each view between counts and its own distribution ratio.
+            Bars and ratios are weighted by represented points; vote counts are
+            shown as supporting context.
           </CardDescription>
         </CardHeader>
         <CardContent>

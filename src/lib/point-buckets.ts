@@ -1,6 +1,7 @@
 export type PointBucket = {
   label: "0" | "1" | "2" | "3" | "4" | "5" | "5+";
   count: number;
+  pointTotal: number;
 };
 
 export type PointBucketRange = "standard" | "extended";
@@ -17,12 +18,19 @@ export function createPointDistribution(
   rows: Array<{ points: number; count?: number }>,
 ): PointBucket[] {
   const labels: PointBucket["label"][] = ["0", "1", "2", "3", "4", "5", "5+"];
-  const totals = new Map(labels.map((label) => [label, 0]));
+  const counts = new Map(labels.map((label) => [label, 0]));
+  const pointTotals = new Map(labels.map((label) => [label, 0]));
   for (const row of rows) {
     const label = pointBucket(row.points);
-    totals.set(label, (totals.get(label) ?? 0) + (row.count ?? 1));
+    const count = row.count ?? 1;
+    counts.set(label, (counts.get(label) ?? 0) + count);
+    pointTotals.set(label, (pointTotals.get(label) ?? 0) + row.points * count);
   }
-  return labels.map((label) => ({ label, count: totals.get(label) ?? 0 }));
+  return labels.map((label) => ({
+    label,
+    count: counts.get(label) ?? 0,
+    pointTotal: pointTotals.get(label) ?? 0,
+  }));
 }
 
 export function filterPointBuckets(

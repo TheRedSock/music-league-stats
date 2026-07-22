@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { competitors } from "@/db/schema";
+import { revalidateAnalyticsCache } from "@/lib/analytics";
 import {
   AdminRequestError,
   adminErrorResponse,
@@ -38,6 +39,7 @@ export async function PUT(
       throw new AdminRequestError("Player not found.", 404);
     }
 
+    revalidateAnalyticsCache();
     revalidatePath("/");
     revalidatePath("/songs");
     revalidatePath("/players");

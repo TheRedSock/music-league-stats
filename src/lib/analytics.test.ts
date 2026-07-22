@@ -48,10 +48,21 @@ describe("analytics metric helpers", () => {
     expect(safeRatio(Number.NaN, 2)).toBeNull();
   });
 
-  it("expresses support relative to an equal round share", () => {
-    expect(supportIndex(20, 100, 5)).toBe(1);
-    expect(supportIndex(40, 100, 5)).toBe(2);
-    expect(supportIndex(0, 0, 5)).toBeNull();
+  it("expresses support relative to expected eligible ballot points", () => {
+    expect(supportIndex(20, 20)).toBe(1);
+    expect(supportIndex(40, 20)).toBe(2);
+    expect(supportIndex(0, 0)).toBeNull();
+  });
+
+  it("keeps average songs at 1.0 across different ballot budgets", () => {
+    const oneSubmissionExpected = 4 * (4 / 4);
+    const twoSubmissionExpected = 4 * (6 / 8);
+
+    expect(supportIndex(oneSubmissionExpected, oneSubmissionExpected)).toBe(1);
+    expect(supportIndex(twoSubmissionExpected, twoSubmissionExpected)).toBe(1);
+    expect(supportIndex(twoSubmissionExpected * 1.5, twoSubmissionExpected)).toBe(
+      1.5,
+    );
   });
 
   it("keeps explicit zero and overflow point buckets", () => {
@@ -63,13 +74,13 @@ describe("analytics metric helpers", () => {
         { points: 8, count: 4 },
       ]),
     ).toEqual([
-      { label: "0", count: 3 },
-      { label: "1", count: 2 },
-      { label: "2", count: 0 },
-      { label: "3", count: 0 },
-      { label: "4", count: 0 },
-      { label: "5", count: 1 },
-      { label: "5+", count: 4 },
+      { label: "0", count: 3, pointTotal: 0 },
+      { label: "1", count: 2, pointTotal: 2 },
+      { label: "2", count: 0, pointTotal: 0 },
+      { label: "3", count: 0, pointTotal: 0 },
+      { label: "4", count: 0, pointTotal: 0 },
+      { label: "5", count: 1, pointTotal: 5 },
+      { label: "5+", count: 4, pointTotal: 32 },
     ]);
   });
 
@@ -82,11 +93,11 @@ describe("analytics metric helpers", () => {
     ]);
 
     expect(filterPointBuckets(buckets, "standard")).toEqual([
-      { label: "1", count: 2 },
-      { label: "2", count: 0 },
-      { label: "3", count: 0 },
-      { label: "4", count: 0 },
-      { label: "5", count: 1 },
+      { label: "1", count: 2, pointTotal: 2 },
+      { label: "2", count: 0, pointTotal: 0 },
+      { label: "3", count: 0, pointTotal: 0 },
+      { label: "4", count: 0, pointTotal: 0 },
+      { label: "5", count: 1, pointTotal: 5 },
     ]);
     expect(filterPointBuckets(buckets, "extended")).toEqual(buckets);
   });

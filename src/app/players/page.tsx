@@ -1,8 +1,10 @@
 import { Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -30,8 +32,8 @@ import {
 import {
   buildAnalyticsHref,
   defaultPlayerSortDirection,
-  getFilterOptions,
-  getPlayersData,
+  getCachedFilterOptions,
+  getCachedPlayersData,
   loadAnalytics,
   parseAnalyticsFilters,
   parsePlayerSort,
@@ -47,8 +49,6 @@ export const metadata: Metadata = {
   title: "Players",
   description: "Compare Music League players with round-local performance metrics.",
 };
-
-export const dynamic = "force-dynamic";
 
 const sortLabels = {
   performance: "Round-adjusted performance",
@@ -67,7 +67,19 @@ function value(value: number | null, digits = 2): string {
   return value === null ? "—" : value.toFixed(digits);
 }
 
-export default async function PlayersPage({
+export default function PlayersPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  return (
+    <Suspense fallback={<AnalyticsLoadingShell />}>
+      <PlayersContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function PlayersContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -78,14 +90,16 @@ export default async function PlayersPage({
   const direction = parsePlayerSortDirection(params.dir, sort);
   const minimumRounds = parsePositiveInteger(params.min, 3, 20);
   const result = await loadAnalytics(async () => {
-    const options = await getFilterOptions();
+    const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
-    const data = await getPlayersData(filter, {
+    const data = await getCachedPlayersData(
+      filter.leagueId,
+      filter.roundId,
       search,
       sort,
-      direction,
       minimumRounds,
-    });
+      direction,
+    );
     return { data, filter, options };
   });
 
@@ -130,9 +144,11 @@ export default async function PlayersPage({
             className="grid gap-3 sm:grid-cols-[1fr_15rem_9rem_auto]"
             method="get"
           >
-            {filter.leagueId ? (
-              <input name="league" type="hidden" value={filter.leagueId} />
-            ) : null}
+            <input
+              name="league"
+              type="hidden"
+              value={filter.leagueId ?? "all"}
+            />
             {filter.roundId ? (
               <input name="round" type="hidden" value={filter.roundId} />
             ) : null}
@@ -229,7 +245,7 @@ export default async function PlayersPage({
                 <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultPlayerSortDirection("points-per-voter")} params={currentParams} path="/players" sortKey="points-per-voter" title="Eligible points received divided by eligible vote opportunities.">
                   Pts / voter
                 </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[12%]" defaultDirection={defaultPlayerSortDirection("performance")} params={currentParams} path="/players" sortKey="performance" title="Average of round-local point share divided by equal entrant share; 1.0 is round average.">
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[12%]" defaultDirection={defaultPlayerSortDirection("performance")} params={currentParams} path="/players" sortKey="performance" title="Average of round-local actual points divided by expected points from eligible ballot budgets.">
                   Avg round index
                 </SortableTableHead>
                 <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[10%] 2xl:table-cell" defaultDirection={defaultPlayerSortDirection("percentile")} params={currentParams} path="/players" sortKey="percentile">

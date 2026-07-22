@@ -13,6 +13,7 @@ import {
   ImportCommitError,
   markImportFailed,
 } from "@/lib/import-commit";
+import { revalidateAnalyticsCache } from "@/lib/analytics";
 
 export async function POST(
   request: NextRequest,
@@ -26,6 +27,10 @@ export async function POST(
       throw new AdminRequestError("Invalid import batch ID.", 400);
     }
     const summary = await commitImportBatch(batchId);
+    revalidateAnalyticsCache();
+    revalidatePath("/");
+    revalidatePath("/songs");
+    revalidatePath("/players");
     revalidatePath("/admin");
     return NextResponse.json({ status: "completed", summary });
   } catch (error) {

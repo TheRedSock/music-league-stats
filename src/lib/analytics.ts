@@ -1,4 +1,5 @@
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
+import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 
 import { db } from "@/db";
 import { competitors, leagues, rounds } from "@/db/schema";
@@ -6,6 +7,8 @@ import {
   createPointDistribution,
   type PointBucket,
 } from "@/lib/point-buckets";
+
+const ANALYTICS_CACHE_TAG = "analytics";
 
 export {
   createPointDistribution,
@@ -98,6 +101,7 @@ export type SongAnalyticsRow = {
   roundOrdinal: number;
   submittedAt: string;
   points: number;
+  expectedPoints: number;
   eligibleRows: number;
   positiveRows: number;
   pointsPerEligibleVoter: number | null;
@@ -355,11 +359,9 @@ export function safeRatio(
 
 export function supportIndex(
   songPoints: number,
-  roundPoints: number,
-  slateSize: number,
+  expectedPoints: number,
 ): number | null {
-  const share = safeRatio(songPoints, roundPoints);
-  return share === null || slateSize <= 0 ? null : share * slateSize;
+  return safeRatio(songPoints, expectedPoints);
 }
 
 export function percentileRank(values: number[], value: number): number | null {
@@ -594,11 +596,21 @@ function songStatsCtes(filter: AnalyticsFilter): SQL {
       select
         s.id as submission_id,
         coalesce(sum(ev.points), 0)::int as points,
+        coalesce(sum(
+          case
+            when bt.eligible_opportunities > 0
+              then bt.ballot_points / bt.eligible_opportunities
+            else null
+          end
+        ), 0)::double precision as expected_points,
         count(ev.submission_id)::int as eligible_rows,
         count(ev.submission_id) filter (where ev.points > 0)::int as positive_rows
       from selected_rounds sr
       join submissions s on s.round_id = sr.id
       left join effective_votes ev on ev.submission_id = s.id
+      left join ballot_totals bt
+        on bt.round_id = ev.round_id
+       and bt.voter_id = ev.voter_id
       group by s.id
     ),
     song_stats as (
@@ -615,6 +627,7 @@ function songStatsCtes(filter: AnalyticsFilter): SQL {
         sr.ordinal as round_ordinal,
         sr.name as round_name,
         svs.points,
+        svs.expected_points,
         svs.eligible_rows,
         svs.positive_rows,
         rst.slate_count,
@@ -625,8 +638,8 @@ function songStatsCtes(filter: AnalyticsFilter): SQL {
           then svs.positive_rows::double precision / svs.eligible_rows else null end as positive_reach,
         case when rvt.round_points > 0
           then svs.points::double precision / rvt.round_points else null end as round_point_share,
-        case when rvt.round_points > 0 and rst.slate_count > 0
-          then (svs.points::double precision / rvt.round_points) * rst.slate_count else null end as support_index
+        case when svs.expected_points > 0
+          then svs.points::double precision / svs.expected_points else null end as support_index
       from selected_rounds sr
       join submissions s on s.round_id = sr.id
       join submission_vote_stats svs on svs.submission_id = s.id
@@ -642,6 +655,12 @@ type DashboardSummaryRow = {
   playerCount: number;
   songCount: number;
   pointCount: number;
+};
+
+type DashboardCoreQueryRow = DashboardSummaryRow & {
+  leaderboard: unknown;
+  topSongs: unknown;
+  distribution: unknown;
 };
 
 type LeaderboardQueryRow = {
@@ -667,6 +686,7 @@ type SongQueryRow = {
   roundOrdinal: number;
   submittedAt: Date | string;
   points: number;
+  expectedPoints: number;
   eligibleRows: number;
   positiveRows: number;
   pointsPerEligibleVoter: number | null;
@@ -675,6 +695,16 @@ type SongQueryRow = {
   supportIndex: number | null;
   performancePercentile: number | null;
 };
+
+type SongQueryRowWithTotal = SongQueryRow & {
+  totalCount: number;
+};
+
+function jsonRows<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value === "string") return JSON.parse(value) as T[];
+  return [];
+}
 
 function mapSong(row: SongQueryRow): SongAnalyticsRow {
   return {
@@ -701,6 +731,7 @@ function songSelect(): SQL {
       ss.round_ordinal as "roundOrdinal",
       ss.submitted_at as "submittedAt",
       ss.points,
+      ss.expected_points as "expectedPoints",
       ss.eligible_rows as "eligibleRows",
       ss.positive_rows as "positiveRows",
       ss.points_per_eligible_voter as "pointsPerEligibleVoter",
@@ -717,7 +748,13 @@ function songSelect(): SQL {
   `;
 }
 
-function alignmentComparisonCtes(filter: AnalyticsFilter): SQL {
+function alignmentComparisonCtes(
+  filter: AnalyticsFilter,
+  playerId?: string,
+): SQL {
+  const pairScopeFilter = playerId
+    ? sql`where lm1.competitor_id = ${playerId} or lm2.competitor_id = ${playerId}`
+    : sql``;
   return sql`
     ${voteOpportunityCtes(filter)},
     pair_scope as (
@@ -730,6 +767,7 @@ function alignmentComparisonCtes(filter: AnalyticsFilter): SQL {
       join league_members lm2
         on lm2.league_id = sr.league_id
        and lm2.competitor_id > lm1.competitor_id
+      ${pairScopeFilter}
       group by lm1.competitor_id, lm2.competitor_id
     ),
     shared_ballot_pairs as (
@@ -855,66 +893,88 @@ function alignmentComparisonCtes(filter: AnalyticsFilter): SQL {
 export async function getDashboardData(
   filter: AnalyticsFilter,
 ): Promise<DashboardData> {
-  const summaryPromise = db.execute<DashboardSummaryRow>(sql`
-    with ${voteOpportunityCtes(filter)}, ${selectedLeaguesCte(filter)}
-    select
-      (select count(*)::int from selected_leagues) as "leagueCount",
-      (select count(*)::int from selected_rounds) as "roundCount",
-      (select count(distinct lm.competitor_id)::int from league_members lm join selected_leagues sl on sl.id = lm.league_id) as "playerCount",
-      (select count(s.id)::int from submissions s join selected_rounds sr on sr.id = s.round_id) as "songCount",
-      (select coalesce(sum(ev.points), 0)::int from effective_votes ev) as "pointCount"
-  `);
-
-  const leaderboardPromise = db.execute<LeaderboardQueryRow>(sql`
-    with ${songStatsCtes(filter)},
-    round_entrants as (
-      select
-        round_id,
-        count(distinct submitter_id)::int as entrants
-      from song_stats
-      group by round_id
-    ),
+  const rows = await db.execute<DashboardCoreQueryRow>(sql`
+    with ${songStatsCtes(filter)}, ${selectedLeaguesCte(filter)},
     player_round as (
       select
         submitter_id,
         round_id,
         sum(points)::int as points,
-        max(round_points)::double precision as round_points
+        sum(expected_points)::double precision as expected_points
       from song_stats
       group by submitter_id, round_id
+    ),
+    leaderboard_rows as (
+      select
+        c.id,
+        ${competitorDisplayName("c")} as name,
+        sum(pr.points)::int as "totalPoints",
+        avg(case when pr.expected_points > 0
+          then pr.points::double precision / pr.expected_points else null end) as "normalizedIndex",
+        count(*)::int as "enteredRounds"
+      from player_round pr
+      join competitors c on c.id = pr.submitter_id
+      group by c.id, c.name_override, c.name
+      order by "totalPoints" desc, name asc
+      limit 100
+    ),
+    ranked_songs as (${songSelect()}),
+    top_song_rows as (
+      select * from ranked_songs
+      order by "supportIndex" desc nulls last, points desc, title asc
+      limit 8
+    ),
+    distribution_rows as (
+      select ev.points, count(*)::int as count
+      from effective_votes ev
+      group by ev.points
+      order by ev.points
     )
     select
-      c.id,
-      ${competitorDisplayName("c")} as name,
-      sum(pr.points)::int as "totalPoints",
-      avg(case when pr.round_points > 0 and re.entrants > 0
-        then (pr.points::double precision / pr.round_points) * re.entrants else null end) as "normalizedIndex",
-      count(*)::int as "enteredRounds"
-    from player_round pr
-    join round_entrants re on re.round_id = pr.round_id
-    join competitors c on c.id = pr.submitter_id
-    group by c.id, c.name_override, c.name
-    order by "totalPoints" desc, name asc
-    limit 100
+      (select count(*)::int from selected_leagues) as "leagueCount",
+      (select count(*)::int from selected_rounds) as "roundCount",
+      (select count(distinct lm.competitor_id)::int from league_members lm join selected_leagues sl on sl.id = lm.league_id) as "playerCount",
+      (select count(s.id)::int from submissions s join selected_rounds sr on sr.id = s.round_id) as "songCount",
+      (select coalesce(sum(ev.points), 0)::int from effective_votes ev) as "pointCount",
+      (select coalesce(json_agg(to_jsonb(leaderboard_rows) order by "totalPoints" desc, name asc), '[]'::json) from leaderboard_rows) as leaderboard,
+      (select coalesce(json_agg(to_jsonb(top_song_rows) order by "supportIndex" desc nulls last, points desc, title asc), '[]'::json) from top_song_rows) as "topSongs",
+      (select coalesce(json_agg(to_jsonb(distribution_rows) order by points), '[]'::json) from distribution_rows) as distribution
   `);
+  const row = rows[0] ?? {
+    leagueCount: 0,
+    roundCount: 0,
+    playerCount: 0,
+    songCount: 0,
+    pointCount: 0,
+    leaderboard: [],
+    topSongs: [],
+    distribution: [],
+  };
+  const leaderboard = jsonRows<LeaderboardQueryRow>(row.leaderboard);
+  const topSongs = jsonRows<SongQueryRow>(row.topSongs);
+  const distribution = jsonRows<{ points: number; count: number }>(
+    row.distribution,
+  );
 
-  const topSongsPromise = db.execute<SongQueryRow>(sql`
-    with ${songStatsCtes(filter)},
-    ranked_songs as (${songSelect()})
-    select * from ranked_songs
-    order by "supportIndex" desc nulls last, points desc, title asc
-    limit 8
-  `);
+  return {
+    summary: {
+      leagues: row.leagueCount,
+      rounds: row.roundCount,
+      players: row.playerCount,
+      songs: row.songCount,
+      points: row.pointCount,
+    },
+    leaderboard,
+    topSongs: topSongs.map(mapSong),
+    pointDistribution: createPointDistribution(distribution),
+    alignment: null,
+  };
+}
 
-  const distributionPromise = db.execute<{ points: number; count: number }>(sql`
-    with ${voteOpportunityCtes(filter)}
-    select ev.points, count(*)::int as count
-    from effective_votes ev
-    group by ev.points
-    order by ev.points
-  `);
-
-  const alignmentPromise = db.execute<{
+export async function getDashboardAlignmentData(
+  filter: AnalyticsFilter,
+): Promise<DashboardData["alignment"]> {
+  const alignments = await db.execute<{
     leftId: string;
     leftName: string;
     rightId: string;
@@ -941,36 +1001,7 @@ export async function getDashboardData(
     order by alignment desc
     limit 1
   `);
-
-  const [summaryRows, leaderboard, topSongs, distribution, alignments] =
-    await Promise.all([
-      summaryPromise,
-      leaderboardPromise,
-      topSongsPromise,
-      distributionPromise,
-      alignmentPromise,
-    ]);
-  const summary = summaryRows[0] ?? {
-    leagueCount: 0,
-    roundCount: 0,
-    playerCount: 0,
-    songCount: 0,
-    pointCount: 0,
-  };
-
-  return {
-    summary: {
-      leagues: summary.leagueCount,
-      rounds: summary.roundCount,
-      players: summary.playerCount,
-      songs: summary.songCount,
-      points: summary.pointCount,
-    },
-    leaderboard,
-    topSongs: topSongs.map(mapSong),
-    pointDistribution: createPointDistribution(distribution),
-    alignment: alignments[0] ?? null,
-  };
+  return alignments[0] ?? null;
 }
 
 function songSearchPredicate(search: string): SQL {
@@ -1030,24 +1061,31 @@ export async function getSongsData(
 ): Promise<SongsData> {
   const ctes = sql`${songStatsCtes(filter)}, ranked_songs as (${songSelect()})`;
   const predicate = songSearchPredicate(search);
-  const [countRows, rows] = await Promise.all([
-    db.execute<{ count: number }>(sql`
-      with ${ctes}
-      select count(*)::int as count from ranked_songs
-      where ${predicate}
-    `),
-    db.execute<SongQueryRow>(sql`
-      with ${ctes}
+  const rows = await db.execute<SongQueryRowWithTotal>(sql`
+    with ${ctes},
+    filtered_songs as (
       select * from ranked_songs
       where ${predicate}
-      order by ${songOrder(sort, direction)}
-      limit ${pageSize} offset ${(page - 1) * pageSize}
-    `),
-  ]);
+    )
+    select *, count(*) over()::int as "totalCount"
+    from filtered_songs
+    order by ${songOrder(sort, direction)}
+    limit ${pageSize} offset ${(page - 1) * pageSize}
+  `);
+  const fallbackCount =
+    rows.length || page <= 1
+      ? 0
+      : (
+          await db.execute<{ count: number }>(sql`
+            with ${ctes}
+            select count(*)::int as count from ranked_songs
+            where ${predicate}
+          `)
+        )[0]?.count ?? 0;
 
   return {
     rows: rows.map(mapSong),
-    total: countRows[0]?.count ?? 0,
+    total: rows[0]?.totalCount ?? fallbackCount,
     page,
     pageSize,
     search,
@@ -1059,10 +1097,6 @@ export async function getSongsData(
 function playerStatsCtes(filter: AnalyticsFilter): SQL {
   return sql`
     ${songStatsCtes(filter)},
-    round_entrants as (
-      select round_id, count(distinct submitter_id)::int as entrants
-      from song_stats group by round_id
-    ),
     player_round as (
       select
         submitter_id,
@@ -1070,6 +1104,7 @@ function playerStatsCtes(filter: AnalyticsFilter): SQL {
         sum(points)::int as points,
         count(*)::int as submissions,
         sum(eligible_rows)::int as eligible_rows,
+        sum(expected_points)::double precision as expected_points,
         max(round_points)::double precision as round_points
       from song_stats
       group by submitter_id, round_id
@@ -1077,22 +1112,21 @@ function playerStatsCtes(filter: AnalyticsFilter): SQL {
     player_round_indexed as (
       select
         pr.*,
-        case when pr.round_points > 0 and re.entrants > 0
-          then (pr.points::double precision / pr.round_points) * re.entrants else null end as round_index,
+        case when pr.expected_points > 0
+          then pr.points::double precision / pr.expected_points else null end as round_index,
         case
           when count(*) over (partition by pr.round_id) = 1 then 100::double precision
           else percent_rank() over (
             partition by pr.round_id
             order by case
-              when pr.round_points > 0 and re.entrants > 0
-                then (pr.points::double precision / pr.round_points) * re.entrants
+              when pr.expected_points > 0
+                then pr.points::double precision / pr.expected_points
               else null
             end asc nulls first
           ) * 100
         end as round_percentile,
         rank() over (partition by pr.round_id order by pr.points desc) as round_rank
       from player_round pr
-      join round_entrants re on re.round_id = pr.round_id
     ),
     player_aggregates as (
       select
@@ -1233,12 +1267,26 @@ export async function getPlayerProfileData(
   const player = playerRows[0];
   if (!player) return null;
 
-  const directoryPromise = getPlayersData(filter, {
-    search: "",
-    sort: "performance",
-    direction: "desc",
-    minimumRounds,
-  });
+  const overviewPromise = db.execute<PlayerQueryRow>(sql`
+    with ${playerStatsCtes(filter)}
+    select
+      c.id,
+      ${competitorDisplayName("c")} as name,
+      pa.total_points as "totalPoints",
+      pa.submissions,
+      pa.entered_rounds as "enteredRounds",
+      case when pa.submissions > 0 then pa.total_points::double precision / pa.submissions else null end as "pointsPerSubmission",
+      case when pa.eligible_rows > 0 then pa.total_points::double precision / pa.eligible_rows else null end as "pointsPerEligibleVoter",
+      pa.average_round_index as "averageRoundIndex",
+      pa.average_round_percentile as "averageRoundPercentile",
+      pa.round_wins as "roundWins",
+      case when pa.entered_rounds > 0 then pa.top_quartile_rounds::double precision / pa.entered_rounds else null end as "topQuartileRate",
+      null::int as "performanceRank"
+    from player_aggregates pa
+    join competitors c on c.id = pa.submitter_id
+    where c.id = ${playerId}
+    limit 1
+  `);
   const submissionsPromise = db.execute<SongQueryRow>(sql`
     with ${songStatsCtes(filter)}, ranked_songs as (${songSelect()})
     select * from ranked_songs
@@ -1371,7 +1419,7 @@ export async function getPlayerProfileData(
     sharedRounds: number;
     scopeRounds: number;
   }>(sql`
-    with ${alignmentComparisonCtes(filter)}
+    with ${alignmentComparisonCtes(filter, playerId)}
     select
       case
         when pc.left_id = ${playerId} then pc.right_id
@@ -1460,7 +1508,7 @@ export async function getPlayerProfileData(
   `);
 
   const [
-    directory,
+    overviewRows,
     submissionRows,
     distributionRows,
     relationships,
@@ -1468,7 +1516,7 @@ export async function getPlayerProfileData(
     alignments,
     timingRows,
   ] = await Promise.all([
-    directoryPromise,
+    overviewPromise,
     submissionsPromise,
     distributionsPromise,
     relationshipsPromise,
@@ -1479,7 +1527,12 @@ export async function getPlayerProfileData(
 
   return {
     player,
-    overview: directory.rows.find(({ id }) => id === playerId) ?? null,
+    overview: overviewRows[0]
+      ? {
+          ...overviewRows[0],
+          provisional: overviewRows[0].enteredRounds < minimumRounds,
+        }
+      : null,
     submissions: submissionRows.map(mapSong),
     receivedDistribution: createPointDistribution(
       distributionRows.filter(({ direction }) => direction === "received"),
@@ -1495,6 +1548,97 @@ export async function getPlayerProfileData(
       castAt: row.castAt ? isoTimestamp(row.castAt) : null,
     })),
   };
+}
+
+function analyticsFilter(leagueId: string | null, roundId: string | null) {
+  return { leagueId, roundId };
+}
+
+export function revalidateAnalyticsCache() {
+  revalidateTag(ANALYTICS_CACHE_TAG, { expire: 0 });
+}
+
+export async function getCachedFilterOptions(): Promise<FilterOptions> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  return getFilterOptions();
+}
+
+export async function getCachedDashboardData(
+  leagueId: string | null,
+  roundId: string | null,
+): Promise<DashboardData> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  return getDashboardData(analyticsFilter(leagueId, roundId));
+}
+
+export async function getCachedDashboardAlignmentData(
+  leagueId: string | null,
+  roundId: string | null,
+): Promise<DashboardData["alignment"]> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  return getDashboardAlignmentData(analyticsFilter(leagueId, roundId));
+}
+
+export async function getCachedSongsData(
+  leagueId: string | null,
+  roundId: string | null,
+  page: number,
+  pageSize: number,
+  search: string,
+  sort: SongSort,
+  direction: SortDirection,
+): Promise<SongsData> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  return getSongsData(analyticsFilter(leagueId, roundId), {
+    direction,
+    page,
+    pageSize,
+    search,
+    sort,
+  });
+}
+
+export async function getCachedPlayersData(
+  leagueId: string | null,
+  roundId: string | null,
+  search: string,
+  sort: PlayerSort,
+  minimumRounds: number,
+  direction: SortDirection,
+): Promise<PlayersData> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  return getPlayersData(analyticsFilter(leagueId, roundId), {
+    direction,
+    minimumRounds,
+    search,
+    sort,
+  });
+}
+
+export async function getCachedPlayerProfileData(
+  playerId: string,
+  leagueId: string | null,
+  roundId: string | null,
+  minimumRounds = 3,
+): Promise<PlayerProfileData | null> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  return getPlayerProfileData(
+    playerId,
+    analyticsFilter(leagueId, roundId),
+    minimumRounds,
+  );
 }
 
 export function filterOptionsForLeague(

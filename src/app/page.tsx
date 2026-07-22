@@ -8,8 +8,10 @@ import {
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -26,16 +28,15 @@ import {
 } from "@/components/ui/card";
 import {
   buildAnalyticsHref,
-  getDashboardData,
-  getFilterOptions,
+  getCachedDashboardAlignmentData,
+  getCachedDashboardData,
+  getCachedFilterOptions,
   loadAnalytics,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
   selectedFilterLabel,
   type SearchParams,
 } from "@/lib/analytics";
-
-export const dynamic = "force-dynamic";
 
 const summaryMetadata = [
   { key: "leagues", label: "Leagues", icon: Layers3 },
@@ -45,16 +46,114 @@ const summaryMetadata = [
   { key: "points", label: "Eligible points", icon: Sparkles },
 ] as const;
 
-export default async function HomePage({
+function AlignmentPanel({
+  alignment,
+}: {
+  alignment: Awaited<ReturnType<typeof getCachedDashboardAlignmentData>>;
+}) {
+  return (
+    <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
+      <CardContent className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+        <span className="grid size-12 place-items-center rounded-2xl border border-violet-300/20 bg-violet-300/10 text-violet-200">
+          <Gauge aria-hidden="true" className="size-6" />
+        </span>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-200">
+            Vote-pattern alignment
+          </p>
+          {alignment ? (
+            <>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                {alignment.leftName} &amp; {alignment.rightName}
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+                Their budget-normalized point vectors have{" "}
+                {(alignment.alignment * 100).toFixed(0)}% alignment across{" "}
+                {alignment.comparableFeatures} comparable features in{" "}
+                {alignment.sharedRounds}/{alignment.scopeRounds} rounds. This
+                describes vote patterns, not personal relationships or causality.
+              </p>
+            </>
+          ) : (
+            <>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                More shared ratings needed
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                Alignment appears after two voters have enough comparable ballot
+                features and shared voted rounds in at least half of the
+                selected scope.
+              </p>
+            </>
+          )}
+        </div>
+        <Trophy
+          aria-hidden="true"
+          className="hidden size-10 text-lime-300/60 lg:block"
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function AlignmentFallback() {
+  return (
+    <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
+      <CardContent className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center">
+        <span className="grid size-12 animate-pulse place-items-center rounded-2xl border border-violet-300/20 bg-violet-300/10 text-violet-200">
+          <Gauge aria-hidden="true" className="size-6" />
+        </span>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-200">
+            Vote-pattern alignment
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-white">
+            Calculating alignment
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+            Comparing scoped ballot patterns separately from the main dashboard.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+async function DashboardAlignmentCard({
+  filter,
+}: {
+  filter: { leagueId: string | null; roundId: string | null };
+}) {
+  const result = await loadAnalytics(() =>
+    getCachedDashboardAlignmentData(filter.leagueId, filter.roundId),
+  );
+  return (
+    <AlignmentPanel alignment={result.status === "ready" ? result.data : null} />
+  );
+}
+
+export default function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  return (
+    <Suspense fallback={<AnalyticsLoadingShell />}>
+      <DashboardContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function DashboardContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
   const result = await loadAnalytics(async () => {
-    const options = await getFilterOptions();
+    const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
-    const data = await getDashboardData(filter);
+    const data = await getCachedDashboardData(filter.leagueId, filter.roundId);
     return { data, filter, options };
   });
 
@@ -138,9 +237,9 @@ export default async function HomePage({
                       Top round-adjusted songs
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      Support index compares a song&apos;s share of eligible
-                      round points with an equal share of that round&apos;s
-                      slate. 1.0 is round average.
+                      Support index compares the song&apos;s points with the
+                      points expected from the eligible ballot budgets that
+                      could reach it. 1.0 is expected support.
                     </CardDescription>
                   </div>
                   <Link
@@ -211,49 +310,9 @@ export default async function HomePage({
               </Card>
             </section>
 
-            <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
-              <CardContent className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center">
-                <span className="grid size-12 place-items-center rounded-2xl border border-violet-300/20 bg-violet-300/10 text-violet-200">
-                  <Gauge aria-hidden="true" className="size-6" />
-                </span>
-                <div>
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-200">
-                    Vote-pattern alignment
-                  </p>
-                  {data.alignment ? (
-                    <>
-                      <h2 className="mt-2 text-xl font-semibold text-white">
-                        {data.alignment.leftName} &amp;{" "}
-                        {data.alignment.rightName}
-                      </h2>
-                      <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-                        Their budget-normalized point vectors have{" "}
-                        {(data.alignment.alignment * 100).toFixed(0)}%
-                        alignment across {data.alignment.comparableFeatures}{" "}
-                        comparable features in {data.alignment.sharedRounds}/
-                        {data.alignment.scopeRounds} rounds. This describes
-                        vote patterns, not personal relationships or causality.
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <h2 className="mt-2 text-xl font-semibold text-white">
-                        More shared ratings needed
-                      </h2>
-                      <p className="mt-2 text-sm leading-6 text-zinc-400">
-                        Alignment appears after two voters have enough
-                        comparable ballot features and shared voted rounds in
-                        at least half of the selected scope.
-                      </p>
-                    </>
-                  )}
-                </div>
-                <Trophy
-                  aria-hidden="true"
-                  className="hidden size-10 text-lime-300/60 lg:block"
-                />
-              </CardContent>
-            </Card>
+            <Suspense fallback={<AlignmentFallback />}>
+              <DashboardAlignmentCard filter={filter} />
+            </Suspense>
           </>
         )}
       </div>

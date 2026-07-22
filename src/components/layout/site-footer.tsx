@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { Container } from "@/components/layout/container";
 
 export function SiteFooter() {
@@ -20,6 +22,9 @@ export function SiteFooter() {
         >
           GitHub
         </a>
+        <Link className="transition-colors hover:text-zinc-200" href="/faq">
+          FAQ
+        </Link>
         <span className="sm:ml-auto">
           Made by{" "}
           <a

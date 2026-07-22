@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { leagues } from "@/db/schema";
+import { revalidateAnalyticsCache } from "@/lib/analytics";
 import {
   AdminRequestError,
   adminErrorResponse,
@@ -43,6 +44,10 @@ export async function PUT(
     if (!league) {
       throw new AdminRequestError("League not found.", 404);
     }
+    revalidateAnalyticsCache();
+    revalidatePath("/");
+    revalidatePath("/songs");
+    revalidatePath("/players");
     revalidatePath("/admin");
     return NextResponse.json({ league });
   } catch (error) {

@@ -56,10 +56,10 @@ export function LeaderboardPanel({
             Player leaderboard
           </h2>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
-            Raw points reward volume. The round index first compares each
-            player&apos;s point share with an equal entrant share in that round;
-            1.0 is round average. Ratio rankings require three entered rounds
-            when the selected scope contains enough history.
+            Raw points reward volume. The round index compares each
+            player&apos;s points with the expected points for their submitted songs
+            from that round&apos;s eligible ballot budgets. Ratio rankings require
+            three entered rounds when the selected scope contains enough history.
           </p>
         </div>
         <div

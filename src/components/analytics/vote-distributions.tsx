@@ -22,11 +22,18 @@ function Distribution({
 }) {
   const [mode, setMode] = useState<Mode>("total");
   const visibleBuckets = filterPointBuckets(buckets, range);
-  const total = visibleBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
+  const total = visibleBuckets.reduce(
+    (sum, bucket) => sum + bucket.pointTotal,
+    0,
+  );
   const maximum = Math.max(
     1,
     ...visibleBuckets.map((bucket) =>
-      mode === "total" ? bucket.count : total ? bucket.count / total : 0,
+      mode === "total"
+        ? bucket.pointTotal
+        : total
+          ? bucket.pointTotal / total
+          : 0,
     ),
   );
 
@@ -69,9 +76,9 @@ function Distribution({
         {visibleBuckets.map((bucket) => {
           const value =
             mode === "total"
-              ? bucket.count
+              ? bucket.pointTotal
               : total
-                ? bucket.count / total
+                ? bucket.pointTotal / total
                 : 0;
           return (
             <div className="min-w-0 text-center" key={bucket.label} role="listitem">
@@ -87,8 +94,11 @@ function Distribution({
               </p>
               <p className="mt-0.5 truncate text-[11px] text-zinc-500">
                 {mode === "total"
-                  ? bucket.count.toLocaleString()
+                  ? `${bucket.pointTotal.toLocaleString()} pts`
                   : `${(value * 100).toFixed(0)}%`}
+              </p>
+              <p className="mt-0.5 truncate text-[10px] text-zinc-600">
+                {bucket.count.toLocaleString()} votes
               </p>
             </div>
           );
@@ -96,7 +106,10 @@ function Distribution({
       </div>
       <p className="sr-only">
         {visibleBuckets
-          .map((bucket) => `${bucket.label} points: ${bucket.count} votes`)
+          .map(
+            (bucket) =>
+              `${bucket.label} points: ${bucket.pointTotal} represented points across ${bucket.count} votes`,
+          )
           .join("; ")}
       </p>
     </section>

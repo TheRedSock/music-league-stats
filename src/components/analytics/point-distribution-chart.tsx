@@ -16,7 +16,10 @@ export function PointDistributionChart({
 }) {
   const [range, setRange] = useState<PointBucketRange>("standard");
   const visibleBuckets = filterPointBuckets(buckets, range);
-  const maximum = Math.max(1, ...visibleBuckets.map(({ count }) => count));
+  const maximum = Math.max(
+    1,
+    ...visibleBuckets.map(({ pointTotal }) => pointTotal),
+  );
 
   return (
     <div>
@@ -44,7 +47,10 @@ export function PointDistributionChart({
       </div>
       <div
         aria-label={visibleBuckets
-          .map(({ count, label }) => `${label}: ${count}`)
+          .map(
+            ({ count, label, pointTotal }) =>
+              `${label}: ${pointTotal} points across ${count} votes`,
+          )
           .join(", ")}
         className={
           range === "extended"
@@ -61,8 +67,8 @@ export function PointDistributionChart({
                 className="w-full rounded-t-md bg-gradient-to-t from-violet-500/70 to-lime-300/80"
                 style={{
                   height: `${Math.max(
-                    bucket.count ? 3 : 0,
-                    (bucket.count / maximum) * 100,
+                    bucket.pointTotal ? 3 : 0,
+                    (bucket.pointTotal / maximum) * 100,
                   )}%`,
                 }}
               />
@@ -71,7 +77,10 @@ export function PointDistributionChart({
               {bucket.label}
             </p>
             <p className="mt-0.5 text-[10px] text-zinc-600">
-              {bucket.count.toLocaleString()}
+              {bucket.pointTotal.toLocaleString()} pts
+            </p>
+            <p className="mt-0.5 text-[10px] text-zinc-700">
+              {bucket.count.toLocaleString()} votes
             </p>
           </div>
         ))}

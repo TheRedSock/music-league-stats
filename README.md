@@ -47,9 +47,9 @@ a new sync; retrying an identical completed export returns its existing result.
 
 ## Public analytics
 
-All public data pages are rendered dynamically and show a setup or unavailable
-state when the database cannot be queried. URL parameters keep analytics views
-shareable:
+Public data pages stream a static shell immediately, then load cached scoped
+analytics from the database. They show a setup or unavailable state when the
+database cannot be queried. URL parameters keep analytics views shareable:
 
 - `/` — summary, round-adjusted leaderboard, leading songs, eligible point
   distribution, and vote-pattern alignment
@@ -57,9 +57,11 @@ shareable:
 - `/players` — player directory with a configurable provisional threshold
 - `/players/[id]` — cross-league player profile, directional vote patterns,
   alignment, and relative ballot order
-- `league=<uuid>` and `round=<uuid>` scope every route. A round is accepted only
-  when it belongs to the selected league; with all leagues selected, one round
-  can still be selected directly.
+- `/faq` — plain-language metric explanations
+- `league=<uuid>` and `round=<uuid>` scope every route. With no scope
+  parameters, pages default to the latest league. Use `league=all` for the full
+  cross-league view. A round is accepted only when it belongs to the selected
+  league; with all leagues selected, one round can still be selected directly.
 
 ### Metric definitions and limitations
 
@@ -72,14 +74,15 @@ shareable:
 - Eligible point totals and positive reach are calculated from those query-time
   eligible opportunities, with self-votes excluded from both numerators and
   denominators. Imported vote rows are not rewritten or expanded.
-- A song's support index is its share of the round's eligible point pool divided
-  by the equal-song-share baseline (`1 / visible round slate size`). `1.0` is
-  the round average. Song percentiles are calculated within the complete round
-  before search and pagination.
-- Player round index uses the player's share of eligible round points divided by
-  an equal entrant share, then averages those round-local values. The default
-  non-provisional threshold is three entered rounds. These are league outcomes,
-  not objective measures of musical quality.
+- A song's support index is its received points divided by the expected points
+  from the actual eligible ballot budgets that could reach it. `1.0` means the
+  song met expected support for that round context. Song percentiles are
+  calculated within the complete round before search and pagination.
+- Player round index uses the same expected-points model, summing expected
+  points for all of the player's submitted songs in each round, then averaging
+  those round-local values. The default non-provisional threshold is three
+  entered rounds. These are league outcomes, not objective measures of musical
+  quality.
 - Vote-pattern alignment is displayed as a percentage. It compares
   budget-normalized full-ballot vectors in the selected scope, includes inferred
   zeroes for active voters, and represents songs submitted by either player as a
@@ -91,6 +94,10 @@ shareable:
   uses each voter's latest exported `castAt` in a round and displays its
   percentile among observed ballot timestamps. Submitted rounds with no
   exported vote row are shown as did not vote.
+- Point-distribution charts group vote rows by point bucket but scale bars by
+  represented points, so a two-point vote contributes twice the bar weight of a
+  one-point vote. Zero buckets remain visible in extended mode but add no point
+  weight.
 - CSV exports do not include listening behavior or reliable deadline context.
   The app therefore does not claim friendship, causality, or early/late
   submission against a deadline.

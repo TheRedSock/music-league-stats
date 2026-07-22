@@ -2,8 +2,10 @@ import { ArrowLeft, ArrowRight, ExternalLink, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -29,8 +31,8 @@ import {
 import {
   buildAnalyticsHref,
   defaultSongSortDirection,
-  getFilterOptions,
-  getSongsData,
+  getCachedFilterOptions,
+  getCachedSongsData,
   loadAnalytics,
   parseAnalyticsFilters,
   parsePositiveInteger,
@@ -46,8 +48,6 @@ export const metadata: Metadata = {
   title: "Songs",
   description: "Explore every imported song with round-adjusted Music League metrics.",
 };
-
-export const dynamic = "force-dynamic";
 
 const sortLabels = {
   title: "Song title",
@@ -66,7 +66,19 @@ function percent(value: number | null): string {
   return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 }
 
-export default async function SongsPage({
+export default function SongsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  return (
+    <Suspense fallback={<AnalyticsLoadingShell />}>
+      <SongsContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function SongsContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -77,9 +89,17 @@ export default async function SongsPage({
   const sort = parseSongSort(params.sort);
   const direction = parseSongSortDirection(params.dir, sort);
   const result = await loadAnalytics(async () => {
-    const options = await getFilterOptions();
+    const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
-    const data = await getSongsData(filter, { direction, page, search, sort });
+    const data = await getCachedSongsData(
+      filter.leagueId,
+      filter.roundId,
+      page,
+      25,
+      search,
+      sort,
+      direction,
+    );
     return { data, filter, options };
   });
 
@@ -127,9 +147,11 @@ export default async function SongsPage({
             className="grid gap-3 sm:grid-cols-[1fr_15rem_auto]"
             method="get"
           >
-            {filter.leagueId ? (
-              <input name="league" type="hidden" value={filter.leagueId} />
-            ) : null}
+            <input
+              name="league"
+              type="hidden"
+              value={filter.leagueId ?? "all"}
+            />
             {filter.roundId ? (
               <input name="round" type="hidden" value={filter.roundId} />
             ) : null}
@@ -240,7 +262,7 @@ export default async function SongsPage({
                 <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultSongSortDirection("round-share")} params={currentParams} path="/songs" sortKey="round-share" title="Song points divided by all eligible points in its round.">
                   Round share
                 </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("normalized-index")} params={currentParams} path="/songs" sortKey="normalized-index" title="Round point share divided by the equal-share slate baseline; 1.0 is round average.">
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("normalized-index")} params={currentParams} path="/songs" sortKey="normalized-index" title="Points received divided by expected points from the eligible ballot budgets that could reach the song.">
                   Support index
                 </SortableTableHead>
                 <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] 2xl:table-cell" defaultDirection={defaultSongSortDirection("percentile")} params={currentParams} path="/songs" sortKey="percentile">
@@ -379,8 +401,9 @@ export default async function SongsPage({
             Active voters create eligible opportunities for visible songs they
             did not submit. Omitted eligible opportunities count as zero; rounds
             where a submitter did not vote do not create zeroes for that player.
-            Support index and percentile are computed against the full round
-            before search and pagination are applied.
+            Support index compares actual song points with expected points from
+            eligible ballot budgets. Index and percentile are computed against
+            the full round before search and pagination are applied.
           </CardDescription>
         </CardHeader>
       </Card>

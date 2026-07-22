@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 
 import { leagues } from "@/db/schema";
 import { db } from "@/db";
+import { revalidateAnalyticsCache } from "@/lib/analytics";
 import {
   AdminRequestError,
   adminErrorResponse,
@@ -35,6 +36,10 @@ export async function POST(request: NextRequest) {
         sourceLeagueId: `manual:${randomUUID()}`,
       })
       .returning();
+    revalidateAnalyticsCache();
+    revalidatePath("/");
+    revalidatePath("/songs");
+    revalidatePath("/players");
     revalidatePath("/admin");
     return NextResponse.json({ league }, { status: 201 });
   } catch (error) {
