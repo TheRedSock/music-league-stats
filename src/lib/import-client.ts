@@ -108,7 +108,6 @@ export function parseImportFile(
       header: true,
       worker: true,
       skipEmptyLines: "greedy",
-      beforeFirstChunk: (chunk) => chunk.replace(/^\uFEFF/, ""),
       complete: async (result) => {
         try {
           const errors = result.errors.filter(
