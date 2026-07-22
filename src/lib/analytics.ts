@@ -173,6 +173,7 @@ export type DirectionalRelationship = {
   points: number;
   encounters: number;
   sharedRounds: number;
+  scopeRounds: number;
   pointsPerEncounter: number;
   positiveRate: number;
 };
@@ -183,6 +184,7 @@ export type MutualRelationship = {
   points: number;
   opportunities: number;
   sharedRounds: number;
+  scopeRounds: number;
   pointsPerOpportunity: number;
   positiveRate: number;
   ballotPointShare: number;
@@ -813,7 +815,8 @@ function alignmentComparisonCtes(filter: AnalyticsFilter): SQL {
       group by cf.left_id, cf.right_id
       having count(*) >= case when max(cf.scope_rounds) <= 1 then 5 else 20 end
          and count(distinct cf.round_id) >= least(3, max(cf.scope_rounds))
-         and count(distinct cf.round_id)::double precision / nullif(max(cf.scope_rounds), 0) >= 0.25
+         and count(distinct cf.round_id)::double precision
+           / nullif((select count(*) from selected_rounds), 0) >= 0.5
     )
   `;
 }
@@ -899,7 +902,7 @@ export async function getDashboardData(
       pc.dot / nullif(pc.magnitude, 0) as alignment,
       pc.comparable_features as "comparableFeatures",
       pc.shared_rounds as "sharedRounds",
-      pc.scope_rounds as "scopeRounds"
+      (select count(*)::int from selected_rounds) as "scopeRounds"
     from pair_comparisons pc
     join competitors left_player on left_player.id = pc.left_id
     join competitors right_player on right_player.id = pc.right_id
@@ -1259,10 +1262,13 @@ export async function getPlayerProfileData(
       rr.points,
       rr.encounters,
       rr.shared_rounds as "sharedRounds",
+      (select count(*)::int from selected_rounds) as "scopeRounds",
       rr.points::double precision / rr.encounters as "pointsPerEncounter",
       rr.positives::double precision / rr.encounters as "positiveRate"
     from relationship_rows rr
     join competitors c on c.id = rr.competitor_id
+    where rr.shared_rounds::double precision
+      / nullif((select count(*) from selected_rounds), 0) >= 0.5
     order by rr.direction, "pointsPerEncounter" desc, rr.encounters desc
   `);
   const mutualRelationshipsPromise = db.execute<MutualRelationship>(sql`
@@ -1311,13 +1317,17 @@ export async function getPlayerProfileData(
       mr.points,
       mr.opportunities,
       mr.shared_rounds as "sharedRounds",
+      (select count(*)::int from selected_rounds) as "scopeRounds",
       mr.points::double precision / mr.opportunities as "pointsPerOpportunity",
       mr.positives::double precision / mr.opportunities as "positiveRate",
       mr.points::double precision / nullif(mb.eligible_ballot_points, 0) as "ballotPointShare"
     from mutual_rows mr
     join mutual_budgets mb on mb.competitor_id = mr.competitor_id
     join competitors c on c.id = mr.competitor_id
-    where mr.opportunities > 0 and mb.eligible_ballot_points > 0
+    where mr.opportunities > 0
+      and mb.eligible_ballot_points > 0
+      and mr.shared_rounds::double precision
+        / nullif((select count(*) from selected_rounds), 0) >= 0.5
     order by "pointsPerOpportunity" desc, mr.opportunities desc
   `);
   const alignmentsPromise = db.execute<{
@@ -1338,7 +1348,7 @@ export async function getPlayerProfileData(
       pc.dot / nullif(pc.magnitude, 0) as alignment,
       pc.comparable_features as "comparableFeatures",
       pc.shared_rounds as "sharedRounds",
-      pc.scope_rounds as "scopeRounds"
+      (select count(*)::int from selected_rounds) as "scopeRounds"
     from pair_comparisons pc
     join competitors c
       on c.id = case

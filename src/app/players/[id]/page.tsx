@@ -356,7 +356,7 @@ export default async function PlayerProfilePage({
                           </Link>
                           <p className="mt-0.5 text-[11px] text-zinc-600">
                             {row.encounters} opportunities ·{" "}
-                            {row.sharedRounds} rounds ·{" "}
+                            {row.sharedRounds}/{row.scopeRounds} rounds ·{" "}
                             {(row.positiveRate * 100).toFixed(0)}% positive
                           </p>
                         </div>
@@ -371,14 +371,14 @@ export default async function PlayerProfilePage({
               {!groups.most.length ? (
                 <p className="text-sm leading-6 text-zinc-500 sm:col-span-2">
                   No comparison reaches 10 eligible opportunities across three
-                  rounds in this scope.
+                  rounds and at least half of the selected scope.
                 </p>
               ) : (
                 <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
                   The displayed rate is points per eligible opportunity,
                   including inferred zeroes. Comparisons require at least 10
-                  opportunities across three
-                  rounds so very small samples do not lead the ratio ranking.
+                  opportunities across three rounds and coverage of at least
+                  half the selected scope.
                 </p>
               )}
             </CardContent>
@@ -393,7 +393,8 @@ export default async function PlayerProfilePage({
           <CardDescription>
             Combined points between {player.name} and another player in both
             directions, shown both as totals and as the share of eligible ballot
-            points allocated to each other.
+            points allocated to each other. Comparisons must cover at least half
+            of the selected scope.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-7 sm:grid-cols-2 xl:grid-cols-4">
@@ -445,7 +446,7 @@ export default async function PlayerProfilePage({
                       <p className="mt-0.5 text-[11px] text-zinc-600">
                         {row.pointsPerOpportunity.toFixed(2)} pts/opportunity ·{" "}
                         {(row.positiveRate * 100).toFixed(0)}% positive ·{" "}
-                        {row.sharedRounds} rounds
+                        {row.sharedRounds}/{row.scopeRounds} rounds
                       </p>
                     </div>
                     <p className="shrink-0 font-mono text-sm text-lime-200">
@@ -459,7 +460,7 @@ export default async function PlayerProfilePage({
           {!mutual.mostPoints.length ? (
             <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
               No mutual comparison reaches 10 eligible opportunities across
-              three rounds in this scope.
+              three rounds and at least half of the selected scope.
             </p>
           ) : null}
         </CardContent>
@@ -535,7 +536,8 @@ export default async function PlayerProfilePage({
               </div>
             ) : (
               <p className="text-sm leading-6 text-zinc-500">
-                No comparison reaches the minimum shared sample in this scope.
+                No comparison has enough features and shared voted rounds
+                across at least half of the selected scope.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">

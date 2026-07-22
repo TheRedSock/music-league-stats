@@ -15,6 +15,7 @@ import {
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
 import { LeaderboardPanel } from "@/components/analytics/leaderboard-panel";
+import { PointDistributionChart } from "@/components/analytics/point-distribution-chart";
 import { Container } from "@/components/layout/container";
 import {
   Card,
@@ -70,10 +71,6 @@ export default async function HomePage({
     league: filter.leagueId,
     round: filter.roundId,
   };
-  const distributionMaximum = Math.max(
-    1,
-    ...data.pointDistribution.map(({ count }) => count),
-  );
 
   return (
     <Container className="py-10 sm:py-14">
@@ -209,36 +206,7 @@ export default async function HomePage({
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div
-                    aria-label={data.pointDistribution
-                      .map(({ count, label }) => `${label}: ${count}`)
-                      .join(", ")}
-                    className="grid h-52 grid-cols-7 items-end gap-2"
-                    role="img"
-                  >
-                    {data.pointDistribution.map((bucket) => (
-                      <div className="text-center" key={bucket.label}>
-                        <div className="flex h-36 items-end rounded-lg bg-white/[0.035]">
-                          <div
-                            aria-hidden="true"
-                            className="w-full rounded-t-md bg-gradient-to-t from-violet-500/70 to-lime-300/80"
-                            style={{
-                              height: `${Math.max(
-                                bucket.count ? 3 : 0,
-                                (bucket.count / distributionMaximum) * 100,
-                              )}%`,
-                            }}
-                          />
-                        </div>
-                        <p className="mt-2 font-mono text-xs text-zinc-300">
-                          {bucket.label}
-                        </p>
-                        <p className="mt-0.5 text-[10px] text-zinc-600">
-                          {bucket.count}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                  <PointDistributionChart buckets={data.pointDistribution} />
                 </CardContent>
               </Card>
             </section>
@@ -274,8 +242,8 @@ export default async function HomePage({
                       </h2>
                       <p className="mt-2 text-sm leading-6 text-zinc-400">
                         Alignment appears after two voters have enough
-                        comparable selected-scope ballot features and shared
-                        voted rounds.
+                        comparable ballot features and shared voted rounds in
+                        at least half of the selected scope.
                       </p>
                     </>
                   )}
