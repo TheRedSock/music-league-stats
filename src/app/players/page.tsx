@@ -1,12 +1,12 @@
 import { Search } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
+import { PendingLink } from "@/components/analytics/pending-link";
 import { SortableTableHead } from "@/components/analytics/sortable-table-head";
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
@@ -257,21 +257,26 @@ export default async function PlayersPage({
                         : String(player.performanceRank).padStart(2, "0")}
                     </TableCell>
                     <TableCell>
-                      <Link
-                        className="block truncate font-medium text-zinc-100 hover:text-lime-200"
-                        href={buildAnalyticsHref(
-                          `/players/${player.id}`,
-                          currentParams,
-                          { dir: null, q: null, sort: null, min: null },
-                        )}
-                      >
-                        <TruncatedCell title={player.name}>{player.name}</TruncatedCell>
-                      </Link>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <PendingLink
+                          className="truncate font-medium text-zinc-100 hover:text-lime-200"
+                          href={buildAnalyticsHref(
+                            `/players/${player.id}`,
+                            currentParams,
+                            { dir: null, q: null, sort: null, min: null },
+                          )}
+                          pendingLabel={`Loading ${player.name}`}
+                        >
+                          <TruncatedCell title={player.name}>
+                            {player.name}
+                          </TruncatedCell>
+                        </PendingLink>
                       {player.provisional ? (
-                        <Badge className="mt-1" variant="muted">
+                        <Badge className="shrink-0" variant="muted">
                           Provisional
                         </Badge>
                       ) : null}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right font-mono text-white">
                       {player.totalPoints.toLocaleString()}

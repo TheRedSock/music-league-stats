@@ -2,12 +2,13 @@
 
 import { Check, ChevronDown, Filter, LoaderCircle, X } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import type {
   AnalyticsFilter,
   FilterOptions,
 } from "@/lib/analytics";
+import { cn } from "@/lib/utils";
 
 export function AnalyticsFilterBar({
   filter,
@@ -37,6 +38,8 @@ function AnalyticsFilterBarContent({
   const [pending, startTransition] = useTransition();
   const [leagueIds, setLeagueIds] = useState(filter.leagueIds);
   const [roundIds, setRoundIds] = useState(filter.roundIds);
+  const [openMenu, setOpenMenu] = useState<"leagues" | "rounds" | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const visibleRounds = useMemo(
     () =>
       leagueIds.length
@@ -44,6 +47,17 @@ function AnalyticsFilterBarContent({
         : options.rounds,
     [leagueIds, options.rounds],
   );
+
+  useEffect(() => {
+    if (!openMenu) return;
+    function handlePointerDown(event: PointerEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpenMenu(null);
+      }
+    }
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [openMenu]);
 
   function toggleLeague(id: string) {
     setLeagueIds((current) => {
@@ -58,6 +72,8 @@ function AnalyticsFilterBarContent({
             ),
           ),
         );
+      } else {
+        setRoundIds([]);
       }
       return next;
     });
@@ -103,6 +119,7 @@ function AnalyticsFilterBarContent({
     <div
       aria-label="Analytics filters"
       className="rounded-2xl border border-white/[0.08] bg-zinc-950/70 p-2.5 shadow-2xl shadow-black/10"
+      ref={rootRef}
       role="group"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -118,21 +135,37 @@ function AnalyticsFilterBarContent({
           Scope
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <details className="group relative shrink-0">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-lime-300/40 [&::-webkit-details-marker]:hidden">
+          <div className="relative shrink-0">
+            <button
+              aria-expanded={openMenu === "leagues"}
+              className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-lime-300/40"
+              onClick={() =>
+                setOpenMenu((current) =>
+                  current === "leagues" ? null : "leagues",
+                )
+              }
+              type="button"
+            >
               Leagues
               <span className="font-mono text-[10px] text-lime-300">
                 {leagueIds.length || "All"}
               </span>
               <ChevronDown
                 aria-hidden="true"
-                className="size-3.5 text-zinc-500 transition-transform group-open:rotate-180"
+                className={cn(
+                  "size-3.5 text-zinc-500 transition-transform",
+                  openMenu === "leagues" && "rotate-180",
+                )}
               />
-            </summary>
+            </button>
+            {openMenu === "leagues" ? (
             <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-80 max-w-[80vw] rounded-2xl border border-white/10 bg-zinc-950 p-2 shadow-2xl shadow-black/60">
               <button
                 className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white"
-                onClick={() => setLeagueIds([])}
+                onClick={() => {
+                  setLeagueIds([]);
+                  setRoundIds([]);
+                }}
                 type="button"
               >
                 All leagues
@@ -158,19 +191,31 @@ function AnalyticsFilterBarContent({
                 ))}
               </div>
             </div>
-          </details>
+            ) : null}
+          </div>
 
-          <details className="group relative shrink-0">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-lime-300/40 [&::-webkit-details-marker]:hidden">
+          <div className="relative shrink-0">
+            <button
+              aria-expanded={openMenu === "rounds"}
+              className="flex h-9 items-center gap-2 rounded-xl border border-white/10 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 outline-none transition hover:border-white/20 focus-visible:ring-2 focus-visible:ring-lime-300/40"
+              onClick={() =>
+                setOpenMenu((current) => (current === "rounds" ? null : "rounds"))
+              }
+              type="button"
+            >
               Rounds
               <span className="font-mono text-[10px] text-lime-300">
                 {roundIds.length || "All"}
               </span>
               <ChevronDown
                 aria-hidden="true"
-                className="size-3.5 text-zinc-500 transition-transform group-open:rotate-180"
+                className={cn(
+                  "size-3.5 text-zinc-500 transition-transform",
+                  openMenu === "rounds" && "rotate-180",
+                )}
               />
-            </summary>
+            </button>
+            {openMenu === "rounds" ? (
             <div className="absolute right-0 top-[calc(100%+0.5rem)] z-50 w-96 max-w-[85vw] rounded-2xl border border-white/10 bg-zinc-950 p-2 shadow-2xl shadow-black/60">
               <button
                 className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-sm text-zinc-300 hover:bg-white/[0.06] hover:text-white"
@@ -214,7 +259,8 @@ function AnalyticsFilterBarContent({
                 })}
               </div>
             </div>
-          </details>
+            ) : null}
+          </div>
 
           <div
             aria-label="Selected scope"

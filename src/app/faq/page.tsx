@@ -55,6 +55,14 @@ const sections = [
     title: "What is mutual ballot share?",
     body: "Mutual ballot share looks at points two players gave to each other's songs and divides them by the eligible ballot points involved. It is budget-aware, so a large ballot and a small ballot can be compared more fairly.",
   },
+  {
+    title: "What is the Compare page?",
+    body: "Compare is the full-table version of the player profile relationship panels. Profile section titles link there with the current scope, focused player, and matching sort already selected.",
+  },
+  {
+    title: "What is the Facts page?",
+    body: "Facts groups submissions to surface dataset-level patterns, such as repeated artists, repeat songs, prolific submitters, and dense rounds. It uses the same league and round scope filter as the analytics pages.",
+  },
 ];
 
 const glossary = [

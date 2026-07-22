@@ -57,6 +57,10 @@ database cannot be queried. URL parameters keep analytics views shareable:
 - `/players` — player directory with a configurable provisional threshold
 - `/players/[id]` — cross-league player profile, directional vote patterns,
   alignment, and relative ballot order
+- `/relationships` — full tables for player-to-player relationship metrics,
+  optionally focused from a player profile section
+- `/facts` — submission-level facts such as repeated artists, repeated tracks,
+  prolific submitters, and dense rounds
 - `/faq` — plain-language metric explanations
 - Repeated `league=<uuid>` and `round=<uuid>` parameters scope every route. With
   no scope parameters, pages default to the latest league. Use `league=all` for
@@ -70,11 +74,12 @@ database cannot be queried. URL parameters keep analytics views shareable:
 ### Metric definitions and limitations
 
 - An active ballot is any participant with at least one exported vote row in a
-  round, including an explicit zero-point row. For active ballots, every visible
-  submission not owned by that voter is an eligible opportunity; omitted rows
-  are counted as zero in analytics. Submitters who never voted in a round are
-  shown as did not vote and do not create zeroes. People with neither a vote nor
-  a submission in a round are not treated as participants in that round.
+  round, including an explicit zero-point row. For active ballots, every scored
+  submission not owned by that voter is an eligible opportunity; scored means it
+  was visible to voters or has exported vote rows. Omitted rows are counted as
+  zero in analytics. Submitters who never voted in a round are shown as did not
+  vote and do not create zeroes. People with neither a vote nor a submission in
+  a round are not treated as participants in that round.
 - Eligible point totals and positive reach are calculated from those query-time
   eligible opportunities, with self-votes excluded from both numerators and
   denominators. Imported vote rows are not rewritten or expanded.

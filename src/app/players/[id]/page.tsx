@@ -1,12 +1,10 @@
 import {
-  ArrowLeft,
   Clock3,
   ExternalLink,
   Gauge,
   Info,
   Medal,
   Network,
-  UserRound,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -17,8 +15,6 @@ import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
 import { VoteDistributions } from "@/components/analytics/vote-distributions";
 import { Container } from "@/components/layout/container";
-import { Badge } from "@/components/ui/badge";
-import { buttonStyles } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -234,8 +230,18 @@ export default async function PlayerProfilePage({
   const { filter, options, profile } = result.data;
   const { overview, player } = profile;
   const filterParams = scopeQueryParams(filter);
-  const high = profile.submissions.slice(0, 5);
-  const low = [...profile.submissions].reverse().slice(0, 5);
+  const rankedSubmissions = profile.submissions.filter(
+    (song) => song.supportIndex !== null,
+  );
+  const high = rankedSubmissions.slice(0, 5);
+  const low = [...rankedSubmissions]
+    .sort(
+      (left, right) =>
+        left.supportIndex! - right.supportIndex! ||
+        left.points - right.points ||
+        left.title.localeCompare(right.title),
+    )
+    .slice(0, 5);
   const received = relationshipExtremes(profile.relationships, "received");
   const given = relationshipExtremes(profile.relationships, "given");
   const mutual = mutualExtremes(profile.mutualRelationships);
@@ -269,30 +275,25 @@ export default async function PlayerProfilePage({
           : `${overview.averageRoundPercentile.toFixed(0)}th`,
     },
   ];
+  const compareHref = (
+    tab: "received" | "given" | "mutual" | "alignment" | "timing",
+    sort: string,
+    dir = "desc",
+  ) =>
+    buildAnalyticsHref("/relationships", filterParams, {
+      dir,
+      focus: player.id,
+      sort,
+      tab,
+    });
 
   return (
     <Container className="py-10 sm:py-14">
-      <Link
-        className={buttonStyles({ variant: "ghost", size: "sm", className: "-ml-3" })}
-        href={buildAnalyticsHref("/players", filterParams, {})}
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        All players
-      </Link>
-
-      <div className="mt-6 flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <Badge variant={overview?.provisional ? "muted" : "success"}>
-            <UserRound aria-hidden="true" className="mr-1.5 size-3" />
-            {overview?.provisional ? "Provisional sample" : "Player profile"}
-          </Badge>
-          <h1 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-white sm:text-6xl">
+          <h1 className="text-4xl font-semibold tracking-[-0.045em] text-white sm:text-6xl">
             {player.name}
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
-            Stable player identity combined across leagues, with every
-            comparison normalized inside its original round.
-          </p>
         </div>
         <div className="w-full lg:max-w-3xl">
           <AnalyticsFilterBar filter={filter} options={options} />
@@ -384,7 +385,14 @@ export default async function PlayerProfilePage({
           <Card key={direction}>
             <CardHeader>
               <Network aria-hidden="true" className="mb-2 size-5 text-violet-300" />
-              <CardTitle>{title}</CardTitle>
+              <CardTitle>
+                <Link
+                  className="hover:text-lime-200"
+                  href={compareHref(direction, "rate")}
+                >
+                  {title}
+                </Link>
+              </CardTitle>
               <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-7 sm:grid-cols-2">
@@ -448,7 +456,14 @@ export default async function PlayerProfilePage({
       <Card className="mt-6">
         <CardHeader>
           <Network aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-          <CardTitle>Mutual voting support</CardTitle>
+          <CardTitle>
+            <Link
+              className="hover:text-lime-200"
+              href={compareHref("mutual", "share")}
+            >
+              Mutual voting support
+            </Link>
+          </CardTitle>
           <CardDescription>
             Combined points between {player.name} and another player in both
             directions, shown both as totals and as the share of eligible ballot
@@ -530,7 +545,14 @@ export default async function PlayerProfilePage({
           <CardHeader>
             <Gauge aria-hidden="true" className="mb-2 size-5 text-lime-300" />
             <div className="flex items-center gap-2">
-              <CardTitle>Vote-pattern alignment</CardTitle>
+              <CardTitle>
+                <Link
+                  className="hover:text-lime-200"
+                  href={compareHref("alignment", "alignment")}
+                >
+                  Vote-pattern alignment
+                </Link>
+              </CardTitle>
               <details className="group relative">
                 <summary className="inline-flex cursor-help list-none rounded-sm text-zinc-500 outline-none hover:text-zinc-300 focus-visible:ring-2 focus-visible:ring-lime-300/40">
                   <Info aria-hidden="true" className="size-4" />
@@ -610,7 +632,14 @@ export default async function PlayerProfilePage({
         <Card>
           <CardHeader>
             <Clock3 aria-hidden="true" className="mb-2 size-5 text-violet-300" />
-            <CardTitle>Relative voting order</CardTitle>
+            <CardTitle>
+              <Link
+                className="hover:text-lime-200"
+                href={compareHref("timing", "timing")}
+              >
+                Relative voting order
+              </Link>
+            </CardTitle>
             <CardDescription>
               One ballot timestamp per voter and round (the latest exported
               cast time), ranked among observed voters in that same round.

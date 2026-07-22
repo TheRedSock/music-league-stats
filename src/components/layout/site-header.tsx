@@ -1,14 +1,11 @@
 import { Disc3, LockKeyhole } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { ScopedLink } from "@/components/analytics/scoped-link";
 import { Container } from "@/components/layout/container";
+import { SiteHeaderNav, StaticSiteHeaderNav } from "@/components/layout/site-header-nav";
 import { buttonStyles } from "@/components/ui/button";
-
-const navigation = [
-  { href: "/songs", label: "Songs" },
-  { href: "/players", label: "Players" },
-];
 
 export function SiteHeader() {
   return (
@@ -27,20 +24,9 @@ export function SiteHeader() {
           </span>
         </ScopedLink>
 
-        <nav aria-label="Main navigation" className="ml-auto">
-          <ul className="flex items-center gap-1">
-            {navigation.map((item) => (
-              <li key={item.href}>
-                <ScopedLink
-                  className="rounded-full px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3"
-                  href={item.href}
-                >
-                  {item.label}
-                </ScopedLink>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <Suspense fallback={<StaticSiteHeaderNav />}>
+          <SiteHeaderNav />
+        </Suspense>
 
         <Link
           className={buttonStyles({

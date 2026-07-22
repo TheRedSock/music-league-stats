@@ -5,12 +5,17 @@ import {
   cosineSimilarity,
   createPointDistribution,
   defaultPlayerSortDirection,
+  defaultRelationshipSortDirection,
   defaultSongSortDirection,
   filterPointBuckets,
   isoTimestamp,
   parseAnalyticsFilters,
+  parseFocusPlayerId,
   parsePlayerSort,
   parsePlayerSortDirection,
+  parseRelationshipSort,
+  parseRelationshipSortDirection,
+  parseRelationshipTab,
   parseSongSort,
   parseSongSortDirection,
   percentileRank,
@@ -218,6 +223,14 @@ describe("analytics filter helpers", () => {
     expect(defaultPlayerSortDirection("performance")).toBe("desc");
     expect(parseSongSortDirection(undefined, "title")).toBe("asc");
     expect(parsePlayerSortDirection("asc", "points")).toBe("asc");
+    expect(parseRelationshipTab("alignment")).toBe("alignment");
+    expect(parseRelationshipTab("nope")).toBe("received");
+    expect(parseRelationshipSort(undefined, "mutual")).toBe("share");
+    expect(parseRelationshipSort("features", "alignment")).toBe("features");
+    expect(defaultRelationshipSortDirection("player")).toBe("asc");
+    expect(parseRelationshipSortDirection(undefined, "timing")).toBe("desc");
+    expect(parseFocusPlayerId(leagueId)).toBe(leagueId);
+    expect(parseFocusPlayerId("nope")).toBeNull();
   });
 
   it("builds sortable header hrefs by clearing search and pagination", () => {
