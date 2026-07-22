@@ -15,6 +15,13 @@
       "when": 1784740544121,
       "tag": "0001_aspiring_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784750309567,
+      "tag": "0002_serious_puppet_master",
+      "breakpoints": true
     }
   ]
 }

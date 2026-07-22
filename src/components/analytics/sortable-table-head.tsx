@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { TableHead } from "@/components/ui/table";
 import {
   buildAnalyticsHref,
+  type QueryValue,
   type SortDirection,
 } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
@@ -26,7 +27,7 @@ export function SortableTableHead({
   children: ReactNode;
   className?: string;
   defaultDirection: SortDirection;
-  params: Record<string, string | number | null | undefined>;
+  params: Record<string, QueryValue>;
   path: string;
   sortKey: string;
   title?: string;

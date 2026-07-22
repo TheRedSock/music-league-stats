@@ -11,7 +11,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
+import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import {
   buildAnalyticsHref,
+  encodeScopeIds,
   getCachedDashboardAlignmentData,
   getCachedDashboardData,
   getCachedFilterOptions,
@@ -35,8 +36,10 @@ import {
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
   selectedFilterLabel,
+  scopeQueryParams,
   type SearchParams,
 } from "@/lib/analytics";
+import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 const summaryMetadata = [
   { key: "leagues", label: "Leagues", icon: Layers3 },
@@ -47,9 +50,11 @@ const summaryMetadata = [
 ] as const;
 
 function AlignmentPanel({
-  alignment,
+  alignments,
+  filterParams,
 }: {
-  alignment: Awaited<ReturnType<typeof getCachedDashboardAlignmentData>>;
+  alignments: Awaited<ReturnType<typeof getCachedDashboardAlignmentData>>;
+  filterParams: ReturnType<typeof scopeQueryParams>;
 }) {
   return (
     <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
@@ -61,17 +66,56 @@ function AlignmentPanel({
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-200">
             Vote-pattern alignment
           </p>
-          {alignment ? (
+          {alignments.length ? (
             <>
               <h2 className="mt-2 text-xl font-semibold text-white">
-                {alignment.leftName} &amp; {alignment.rightName}
+                Top aligned ballot patterns
               </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-                Their budget-normalized point vectors have{" "}
-                {(alignment.alignment * 100).toFixed(0)}% alignment across{" "}
-                {alignment.comparableFeatures} comparable features in{" "}
-                {alignment.sharedRounds}/{alignment.scopeRounds} rounds. This
-                describes vote patterns, not personal relationships or causality.
+              <ol className="mt-4 grid gap-3 lg:grid-cols-3">
+                {alignments.map((alignment, index) => (
+                  <li
+                    className="rounded-2xl border border-white/[0.08] bg-black/15 p-4"
+                    key={`${alignment.leftId}-${alignment.rightId}`}
+                  >
+                    <p className="font-mono text-xs text-zinc-600">
+                      {String(index + 1).padStart(2, "0")}
+                    </p>
+                    <h3 className="mt-2 truncate text-sm font-semibold text-white">
+                      <Link
+                        className="hover:text-lime-200"
+                        href={buildAnalyticsHref(
+                          `/players/${alignment.leftId}`,
+                          filterParams,
+                          {},
+                        )}
+                      >
+                        {alignment.leftName}
+                      </Link>{" "}
+                      &amp;{" "}
+                      <Link
+                        className="hover:text-lime-200"
+                        href={buildAnalyticsHref(
+                          `/players/${alignment.rightId}`,
+                          filterParams,
+                          {},
+                        )}
+                      >
+                        {alignment.rightName}
+                      </Link>
+                    </h3>
+                    <p className="mt-2 font-mono text-2xl text-violet-100">
+                      {(alignment.alignment * 100).toFixed(0)}%
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-zinc-500">
+                      {alignment.comparableFeatures} features ·{" "}
+                      {alignment.sharedRounds}/{alignment.scopeRounds} rounds
+                    </p>
+                  </li>
+                ))}
+              </ol>
+              <p className="mt-4 max-w-3xl text-sm leading-6 text-zinc-400">
+                Budget-normalized point-vector alignment describes vote
+                patterns, not personal relationships or causality.
               </p>
             </>
           ) : (
@@ -121,30 +165,26 @@ function AlignmentFallback() {
 
 async function DashboardAlignmentCard({
   filter,
+  filterParams,
 }: {
-  filter: { leagueId: string | null; roundId: string | null };
+  filter: { leagueIds: string[]; roundIds: string[] };
+  filterParams: ReturnType<typeof scopeQueryParams>;
 }) {
   const result = await loadAnalytics(() =>
-    getCachedDashboardAlignmentData(filter.leagueId, filter.roundId),
+    getCachedDashboardAlignmentData(
+      encodeScopeIds(filter.leagueIds),
+      encodeScopeIds(filter.roundIds),
+    ),
   );
   return (
-    <AlignmentPanel alignment={result.status === "ready" ? result.data : null} />
+    <AlignmentPanel
+      alignments={result.status === "ready" ? result.data : []}
+      filterParams={filterParams}
+    />
   );
 }
 
-export default function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  return (
-    <Suspense fallback={<AnalyticsLoadingShell />}>
-      <DashboardContent searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-async function DashboardContent({
+export default async function HomePage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -153,7 +193,10 @@ async function DashboardContent({
   const result = await loadAnalytics(async () => {
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
-    const data = await getCachedDashboardData(filter.leagueId, filter.roundId);
+    const data = await getCachedDashboardData(
+      encodeScopeIds(filter.leagueIds),
+      encodeScopeIds(filter.roundIds),
+    );
     return { data, filter, options };
   });
 
@@ -166,10 +209,10 @@ async function DashboardContent({
   }
 
   const { data, filter, options } = result.data;
-  const filterParams = {
-    league: filter.leagueId ?? "all",
-    round: filter.roundId,
-  };
+  const filterParams = scopeQueryParams(filter);
+  const summaryCards = filter.leagueIds.length
+    ? summaryMetadata.filter(({ key }) => key !== "leagues")
+    : summaryMetadata;
 
   return (
     <Container className="py-10 sm:py-14">
@@ -192,8 +235,14 @@ async function DashboardContent({
           <h2 className="sr-only" id="summary-heading">
             Scope summary
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            {summaryMetadata.map(({ icon: Icon, key, label }) => (
+          <div
+            className={
+              summaryCards.length === 5
+                ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
+                : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
+            }
+          >
+            {summaryCards.map(({ icon: Icon, key, label }) => (
               <Card className="overflow-hidden" key={key}>
                 <CardContent className="relative p-5">
                   <Icon
@@ -274,11 +323,21 @@ async function DashboardContent({
                               </a>
                             ) : (
                               song.title
-                            )}
+                            )}{" "}
+                            <span className="font-normal text-zinc-500">
+                              - {song.artist}
+                            </span>
                           </p>
                           <p className="mt-0.5 truncate text-xs text-zinc-500">
-                            {song.artist} · {song.leagueName}, R
-                            {song.roundOrdinal}
+                            <MusicLeagueLink
+                              href={musicLeagueUrl(
+                                song.leagueMusicLeagueId,
+                                song.sourceRoundId,
+                              )}
+                            >
+                              {song.leagueName} · R{song.roundOrdinal} ·{" "}
+                              {song.roundName}
+                            </MusicLeagueLink>
                           </p>
                         </div>
                         <div className="text-right">
@@ -311,7 +370,10 @@ async function DashboardContent({
             </section>
 
             <Suspense fallback={<AlignmentFallback />}>
-              <DashboardAlignmentCard filter={filter} />
+              <DashboardAlignmentCard
+                filter={filter}
+                filterParams={filterParams}
+              />
             </Suspense>
           </>
         )}

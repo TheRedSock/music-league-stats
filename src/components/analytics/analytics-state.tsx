@@ -1,6 +1,6 @@
 import { DatabaseZap, UploadCloud } from "lucide-react";
-import Link from "next/link";
 
+import { ScopedLink } from "@/components/analytics/scoped-link";
 import { buttonStyles } from "@/components/ui/button";
 import {
   Card,
@@ -35,9 +35,9 @@ export function AnalyticsUnavailable({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Link className={buttonStyles({ variant: "secondary" })} href="/">
+        <ScopedLink className={buttonStyles({ variant: "secondary" })} href="/">
           Return to dashboard
-        </Link>
+        </ScopedLink>
       </CardContent>
     </Card>
   );

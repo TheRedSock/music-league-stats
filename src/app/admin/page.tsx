@@ -69,6 +69,7 @@ export default async function AdminPage() {
         id: importBatches.id,
         leagueId: importBatches.leagueId,
         leagueName: leagues.name,
+        leagueMusicLeagueId: leagues.musicLeagueId,
         status: importBatches.status,
         receivedRows: importBatches.receivedRows,
         receivedChunks: importBatches.receivedChunks,
@@ -103,6 +104,7 @@ export default async function AdminPage() {
   const adminLeagues: AdminLeague[] = leagueRows.map((league) => ({
     id: league.id,
     name: league.name,
+    musicLeagueId: league.musicLeagueId,
     slug: league.slug,
     totalRounds: league.totalRounds,
     maxPlayers: league.maxPlayers,

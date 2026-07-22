@@ -1,10 +1,8 @@
 import { Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -32,6 +30,7 @@ import {
 import {
   buildAnalyticsHref,
   defaultPlayerSortDirection,
+  encodeScopeIds,
   getCachedFilterOptions,
   getCachedPlayersData,
   loadAnalytics,
@@ -42,6 +41,7 @@ import {
   parseSearch,
   resolveAnalyticsFilter,
   selectedFilterLabel,
+  scopeQueryParams,
   type SearchParams,
 } from "@/lib/analytics";
 
@@ -67,19 +67,7 @@ function value(value: number | null, digits = 2): string {
   return value === null ? "—" : value.toFixed(digits);
 }
 
-export default function PlayersPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  return (
-    <Suspense fallback={<AnalyticsLoadingShell />}>
-      <PlayersContent searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-async function PlayersContent({
+export default async function PlayersPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -93,8 +81,8 @@ async function PlayersContent({
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
     const data = await getCachedPlayersData(
-      filter.leagueId,
-      filter.roundId,
+      encodeScopeIds(filter.leagueIds),
+      encodeScopeIds(filter.roundIds),
       search,
       sort,
       minimumRounds,
@@ -113,8 +101,7 @@ async function PlayersContent({
 
   const { data, filter, options } = result.data;
   const currentParams = {
-    league: filter.leagueId ?? "all",
-    round: filter.roundId,
+    ...scopeQueryParams(filter),
     q: search || null,
     sort,
     dir: direction,
@@ -144,14 +131,16 @@ async function PlayersContent({
             className="grid gap-3 sm:grid-cols-[1fr_15rem_9rem_auto]"
             method="get"
           >
-            <input
-              name="league"
-              type="hidden"
-              value={filter.leagueId ?? "all"}
-            />
-            {filter.roundId ? (
-              <input name="round" type="hidden" value={filter.roundId} />
-            ) : null}
+            {filter.leagueIds.length ? (
+              filter.leagueIds.map((leagueId) => (
+                <input key={leagueId} name="league" type="hidden" value={leagueId} />
+              ))
+            ) : (
+              <input name="league" type="hidden" value="all" />
+            )}
+            {filter.roundIds.map((roundId) => (
+              <input key={roundId} name="round" type="hidden" value={roundId} />
+            ))}
             <label className="relative">
               <span className="sr-only">Search players</span>
               <Search

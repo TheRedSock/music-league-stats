@@ -1,6 +1,7 @@
 export type AdminLeague = {
   id: string;
   name: string;
+  musicLeagueId: string | null;
   slug: string;
   totalRounds: number;
   maxPlayers: number;
@@ -14,6 +15,7 @@ export type AdminImportBatch = {
   id: string;
   leagueId: string;
   leagueName: string;
+  leagueMusicLeagueId: string | null;
   status: "pending" | "processing" | "completed" | "failed";
   receivedRows: number;
   receivedChunks: number;

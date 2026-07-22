@@ -17,6 +17,7 @@ import {
   resolveAnalyticsFilter,
   safeRatio,
   supportIndex,
+  timingMidpointPercentile,
   type FilterOptions,
 } from "@/lib/analytics";
 
@@ -27,14 +28,21 @@ const roundId = "33333333-3333-4333-8333-333333333333";
 const options: FilterOptions = {
   defaultLeagueId: leagueId,
   leagues: [
-    { id: leagueId, name: "League A", slug: "league-a" },
-    { id: otherLeagueId, name: "League B", slug: "league-b" },
+    { id: leagueId, name: "League A", slug: "league-a", musicLeagueId: null },
+    {
+      id: otherLeagueId,
+      name: "League B",
+      slug: "league-b",
+      musicLeagueId: null,
+    },
   ],
   rounds: [
     {
       id: roundId,
       leagueId,
       leagueName: "League A",
+      leagueMusicLeagueId: null,
+      sourceRoundId: "source-round-1",
       name: "Round one",
       ordinal: 1,
     },
@@ -110,6 +118,28 @@ describe("analytics metric helpers", () => {
     expect(cosineSimilarity([0, 0], [0, 0])).toBeNull();
   });
 
+  it("calculates tie-aware midpoint timing percentiles", () => {
+    expect(
+      timingMidpointPercentile({ ballotRank: 1, observedVoters: 5 }),
+    ).toBe(0.1);
+    expect(
+      timingMidpointPercentile({ ballotRank: 5, observedVoters: 5 }),
+    ).toBe(0.9);
+    expect(
+      timingMidpointPercentile({
+        ballotRank: 1,
+        observedVoters: 5,
+        tieCount: 2,
+      }),
+    ).toBe(0.2);
+    expect(
+      timingMidpointPercentile({ ballotRank: 1, observedVoters: 1 }),
+    ).toBe(0.5);
+    expect(
+      timingMidpointPercentile({ ballotRank: 0, observedVoters: 5 }),
+    ).toBeNull();
+  });
+
   it("normalizes database timestamps returned as dates or strings", () => {
     const timestamp = "2026-07-22T14:30:00.000Z";
     expect(isoTimestamp(timestamp)).toBe(timestamp);
@@ -121,53 +151,60 @@ describe("analytics metric helpers", () => {
 describe("analytics filter helpers", () => {
   it("accepts UUID filters and rejects arbitrary query values", () => {
     expect(parseAnalyticsFilters({ league: leagueId, round: roundId })).toEqual({
-      leagueId,
-      roundId,
+      leagueIds: [leagueId],
+      roundIds: [roundId],
       useDefaultLeague: false,
     });
     expect(parseAnalyticsFilters({ league: "nope", round: "also-nope" })).toEqual({
-      leagueId: null,
-      roundId: null,
+      leagueIds: [],
+      roundIds: [],
+      useDefaultLeague: false,
+    });
+    expect(
+      parseAnalyticsFilters({ league: [otherLeagueId, leagueId], round: [roundId] }),
+    ).toEqual({
+      leagueIds: [leagueId, otherLeagueId],
+      roundIds: [roundId],
       useDefaultLeague: false,
     });
   });
 
   it("defaults an omitted scope to the latest league but preserves explicit all", () => {
     expect(resolveAnalyticsFilter(parseAnalyticsFilters({}), options)).toEqual({
-      leagueId,
-      roundId: null,
+      leagueIds: [leagueId],
+      roundIds: [],
     });
     expect(
       resolveAnalyticsFilter(parseAnalyticsFilters({ league: "all" }), options),
     ).toEqual({
-      leagueId: null,
-      roundId: null,
+      leagueIds: [],
+      roundIds: [],
     });
   });
 
-  it("drops a round that does not belong to the selected league", () => {
+  it("intersects selected rounds with selected leagues", () => {
     expect(
       resolveAnalyticsFilter(
-        { leagueId: otherLeagueId, roundId, useDefaultLeague: false },
+        { leagueIds: [otherLeagueId], roundIds: [roundId], useDefaultLeague: false },
         options,
       ),
-    ).toEqual({ leagueId: otherLeagueId, roundId: null });
+    ).toEqual({ leagueIds: [otherLeagueId], roundIds: [] });
     expect(
       resolveAnalyticsFilter(
-        { leagueId: null, roundId, useDefaultLeague: false },
+        { leagueIds: [], roundIds: [roundId], useDefaultLeague: false },
         options,
       ),
-    ).toEqual({ leagueId: null, roundId });
+    ).toEqual({ leagueIds: [], roundIds: [roundId] });
   });
 
   it("preserves current query state while applying overrides", () => {
     expect(
       buildAnalyticsHref(
         "/songs",
-        { league: leagueId, q: "disco", page: 3 },
+        { league: [leagueId, otherLeagueId], q: "disco", page: 3 },
         { page: 1, q: null },
       ),
-    ).toBe(`/songs?league=${leagueId}&page=1`);
+    ).toBe(`/songs?league=${leagueId}&league=${otherLeagueId}&page=1`);
   });
 
   it("parses sort keys and uses natural default directions", () => {

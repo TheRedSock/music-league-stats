@@ -26,6 +26,7 @@ export function LeagueForm({ league }: { league?: AdminLeague }) {
     setMessage(null);
     const body = {
       name: form.get("name"),
+      musicLeagueId: form.get("musicLeagueId"),
       slug: form.get("slug"),
       totalRounds: Number(form.get("totalRounds")),
       maxPlayers: Number(form.get("maxPlayers")),
@@ -94,6 +95,23 @@ export function LeagueForm({ league }: { league?: AdminLeague }) {
           pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
           placeholder="spring-2026"
           required
+        />
+      </div>
+      <div className="sm:col-span-2">
+        <label
+          className={labelClass}
+          htmlFor={`music-league-id-${league?.id ?? "new"}`}
+        >
+          Music League ID
+        </label>
+        <input
+          className={inputClass}
+          defaultValue={league?.musicLeagueId ?? ""}
+          id={`music-league-id-${league?.id ?? "new"}`}
+          maxLength={120}
+          name="musicLeagueId"
+          pattern="[A-Za-z0-9_-]+"
+          placeholder="ID from https://app.musicleague.com/l/..."
         />
       </div>
       {[

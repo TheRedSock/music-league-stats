@@ -58,10 +58,14 @@ database cannot be queried. URL parameters keep analytics views shareable:
 - `/players/[id]` — cross-league player profile, directional vote patterns,
   alignment, and relative ballot order
 - `/faq` — plain-language metric explanations
-- `league=<uuid>` and `round=<uuid>` scope every route. With no scope
-  parameters, pages default to the latest league. Use `league=all` for the full
-  cross-league view. A round is accepted only when it belongs to the selected
-  league; with all leagues selected, one round can still be selected directly.
+- Repeated `league=<uuid>` and `round=<uuid>` parameters scope every route. With
+  no scope parameters, pages default to the latest league. Use `league=all` for
+  the full cross-league view. Selected rounds are an optional subset of the
+  selected leagues; with no rounds selected, all rounds in the selected leagues
+  are included.
+- Admins can optionally store the Music League app league ID. When present,
+  league and round labels link to `app.musicleague.com` using the imported round
+  IDs from `rounds.csv`.
 
 ### Metric definitions and limitations
 
@@ -91,9 +95,9 @@ database cannot be queried. URL parameters keep analytics views shareable:
 - Directional and mutual vote figures include points per eligible opportunity
   and positive-opportunity rates. Mutual support also shows total points and the
   share of eligible ballot points allocated to each other. Relative voting order
-  uses each voter's latest exported `castAt` in a round and displays its
-  percentile among observed ballot timestamps. Submitted rounds with no
-  exported vote row are shown as did not vote.
+  uses each voter's latest exported `castAt` in a round and displays a
+  tie-aware midpoint percentile among observed ballot timestamps. Submitted
+  rounds with no exported vote row are shown as did not vote.
 - Point-distribution charts group vote rows by point bucket but scale bars by
   represented points, so a two-point vote contributes twice the bar weight of a
   one-point vote. Zero buckets remain visible in extended mode but add no point

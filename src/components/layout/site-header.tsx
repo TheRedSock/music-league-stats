@@ -1,6 +1,7 @@
 import { Disc3, LockKeyhole } from "lucide-react";
 import Link from "next/link";
 
+import { ScopedLink } from "@/components/analytics/scoped-link";
 import { Container } from "@/components/layout/container";
 import { buttonStyles } from "@/components/ui/button";
 
@@ -13,7 +14,7 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-zinc-950/75 backdrop-blur-xl">
       <Container className="flex h-16 items-center justify-between gap-2 sm:gap-6">
-        <Link
+        <ScopedLink
           className="flex shrink-0 items-center gap-2.5"
           href="/"
           aria-label="Music League Tracker home"
@@ -24,18 +25,18 @@ export function SiteHeader() {
           <span className="text-sm font-semibold tracking-tight text-white sm:text-base">
             Music League Tracker
           </span>
-        </Link>
+        </ScopedLink>
 
         <nav aria-label="Main navigation" className="ml-auto">
           <ul className="flex items-center gap-1">
             {navigation.map((item) => (
               <li key={item.href}>
-                <Link
+                <ScopedLink
                   className="rounded-full px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3"
                   href={item.href}
                 >
                   {item.label}
-                </Link>
+                </ScopedLink>
               </li>
             ))}
           </ul>

@@ -1,7 +1,7 @@
 import { ArrowLeft, HelpCircle } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 
+import { ScopedLink } from "@/components/analytics/scoped-link";
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
@@ -41,7 +41,7 @@ const sections = [
   },
   {
     title: "What is a percentile?",
-    body: "A percentile says where a song or player landed inside the round. Higher is better for performance percentiles. For relative voting order, lower means the ballot was completed earlier than more of the observed voters.",
+    body: "A percentile says where a song or player landed inside the round. Higher is better for performance percentiles. For relative voting order, lower means the ballot was completed earlier than more observed voters; ties use the middle of the tied positions.",
   },
   {
     title: "What is top quartile?",
@@ -69,13 +69,13 @@ const glossary = [
 export default function FaqPage() {
   return (
     <Container className="py-10 sm:py-14">
-      <Link
+      <ScopedLink
         className={buttonStyles({ variant: "ghost", size: "sm", className: "-ml-3" })}
         href="/"
       >
         <ArrowLeft aria-hidden="true" className="size-4" />
         Dashboard
-      </Link>
+      </ScopedLink>
 
       <div className="mt-6 max-w-3xl">
         <Badge variant="success">

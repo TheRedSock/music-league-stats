@@ -11,10 +11,9 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
+import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
 import { VoteDistributions } from "@/components/analytics/vote-distributions";
 import { Container } from "@/components/layout/container";
@@ -29,18 +28,21 @@ import {
 } from "@/components/ui/card";
 import {
   buildAnalyticsHref,
+  encodeScopeIds,
   getCachedFilterOptions,
   getCachedPlayerProfileData,
   loadAnalytics,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
   selectedFilterLabel,
+  scopeQueryParams,
   type DirectionalRelationship,
   type MutualRelationship,
   type SearchParams,
   type SongAnalyticsRow,
   type TimingRow,
 } from "@/lib/analytics";
+import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 export const metadata: Metadata = {
   title: "Player profile",
@@ -129,7 +131,15 @@ function SubmissionList({
                 )}
               </p>
               <p className="mt-0.5 truncate text-xs text-zinc-500">
-                {song.artist} · {song.leagueName}, R{song.roundOrdinal}
+                {song.artist} ·{" "}
+                <MusicLeagueLink
+                  href={musicLeagueUrl(
+                    song.leagueMusicLeagueId,
+                    song.sourceRoundId,
+                  )}
+                >
+                  {song.leagueName}, R{song.roundOrdinal}
+                </MusicLeagueLink>
               </p>
             </div>
             <div className="shrink-0 text-right">
@@ -159,7 +169,14 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
           >
             <div className="min-w-0">
               <p className="truncate text-sm text-zinc-200">
-                {row.leagueName} · R{row.ordinal} {row.roundName}
+                <MusicLeagueLink
+                  href={musicLeagueUrl(
+                    row.leagueMusicLeagueId,
+                    row.sourceRoundId,
+                  )}
+                >
+                  {row.leagueName} · R{row.ordinal} {row.roundName}
+                </MusicLeagueLink>
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
                 <div
@@ -174,7 +191,9 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
                 {percentileLabel(row.relativeOrder)}
               </p>
               <p className="text-[10px] text-zinc-600">
-                {row.observedVoters} voters
+                {row.ballotRank && row.tieCount
+                  ? `${row.ballotRank}${row.tieCount > 1 ? `-${row.ballotRank + row.tieCount - 1}` : ""} of ${row.observedVoters}`
+                  : `${row.observedVoters} voters`}
               </p>
             </div>
           </li>
@@ -184,21 +203,7 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
   );
 }
 
-export default function PlayerProfilePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<SearchParams>;
-}) {
-  return (
-    <Suspense fallback={<AnalyticsLoadingShell />}>
-      <PlayerProfileContent params={params} searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-async function PlayerProfileContent({
+export default async function PlayerProfilePage({
   params,
   searchParams,
 }: {
@@ -211,8 +216,8 @@ async function PlayerProfileContent({
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(query), options);
     const profile = await getCachedPlayerProfileData(
       id,
-      filter.leagueId,
-      filter.roundId,
+      encodeScopeIds(filter.leagueIds),
+      encodeScopeIds(filter.roundIds),
     );
     return { filter, options, profile };
   });
@@ -228,10 +233,7 @@ async function PlayerProfileContent({
 
   const { filter, options, profile } = result.data;
   const { overview, player } = profile;
-  const filterParams = {
-    league: filter.leagueId ?? "all",
-    round: filter.roundId,
-  };
+  const filterParams = scopeQueryParams(filter);
   const high = profile.submissions.slice(0, 5);
   const low = [...profile.submissions].reverse().slice(0, 5);
   const received = relationshipExtremes(profile.relationships, "received");
@@ -640,8 +642,10 @@ async function PlayerProfileContent({
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">
               A lower percentile means the recorded ballot completion preceded
-              more observed ballots. The lists show the three highest and three
-              lowest recorded percentiles.
+              more observed ballots. Percentiles use a midpoint rank within the
+              round, so tied earliest ballots no longer display as 0th
+              percentile. The lists show the three highest and three lowest
+              recorded percentiles.
               {missedBallots
                 ? ` ${missedBallots} submitted ${missedBallots === 1 ? "round has" : "rounds have"} no exported ballot and ${missedBallots === 1 ? "is" : "are"} excluded.`
                 : ""}

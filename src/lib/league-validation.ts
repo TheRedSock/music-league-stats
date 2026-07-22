@@ -8,9 +8,23 @@ const optionalDate = z
   ])
   .transform((value) => value || null);
 
+const optionalMusicLeagueId = z
+  .union([
+    z.literal(""),
+    z.null(),
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .regex(/^[A-Za-z0-9_-]+$/, "Use the ID from the Music League URL"),
+  ])
+  .transform((value) => value || null);
+
 export const leagueInputSchema = z
   .object({
     name: z.string().trim().min(1).max(120),
+    musicLeagueId: optionalMusicLeagueId,
     slug: z
       .string()
       .trim()

@@ -21,6 +21,12 @@ function databaseCode(error: unknown): string | undefined {
     : undefined;
 }
 
+function databaseConstraint(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "constraint" in error
+    ? String(error.constraint)
+    : undefined;
+}
+
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
@@ -52,8 +58,14 @@ export async function PUT(
     return NextResponse.json({ league });
   } catch (error) {
     if (databaseCode(error) === "23505") {
+      const constraint = databaseConstraint(error);
       return NextResponse.json(
-        { error: "That slug is already in use." },
+        {
+          error:
+            constraint === "leagues_music_league_id_unique"
+              ? "That Music League ID is already in use."
+              : "That slug is already in use.",
+        },
         { status: 409 },
       );
     }

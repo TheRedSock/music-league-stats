@@ -21,26 +21,29 @@ export type { PointBucket, PointBucketRange } from "@/lib/point-buckets";
 export type SearchParams = Record<string, string | string[] | undefined>;
 
 export type AnalyticsFilterRequest = {
-  leagueId: string | null;
-  roundId: string | null;
+  leagueIds: string[];
+  roundIds: string[];
   useDefaultLeague: boolean;
 };
 
 export type AnalyticsFilter = {
-  leagueId: string | null;
-  roundId: string | null;
+  leagueIds: string[];
+  roundIds: string[];
 };
 
 export type LeagueOption = {
   id: string;
   name: string;
   slug: string;
+  musicLeagueId: string | null;
 };
 
 export type RoundOption = {
   id: string;
   leagueId: string;
   leagueName: string;
+  leagueMusicLeagueId: string | null;
+  sourceRoundId: string;
   name: string;
   ordinal: number;
 };
@@ -73,7 +76,7 @@ export type DashboardData = {
   }>;
   topSongs: SongAnalyticsRow[];
   pointDistribution: PointBucket[];
-  alignment: {
+  alignment: Array<{
     leftId: string;
     leftName: string;
     rightId: string;
@@ -82,7 +85,7 @@ export type DashboardData = {
     comparableFeatures: number;
     sharedRounds: number;
     scopeRounds: number;
-  } | null;
+  }>;
 };
 
 export type SongAnalyticsRow = {
@@ -96,7 +99,9 @@ export type SongAnalyticsRow = {
   submitterName: string;
   leagueId: string;
   leagueName: string;
+  leagueMusicLeagueId: string | null;
   roundId: string;
+  sourceRoundId: string;
   roundName: string;
   roundOrdinal: number;
   submittedAt: string;
@@ -203,9 +208,13 @@ export type TimingRow = {
   roundId: string;
   roundName: string;
   leagueName: string;
+  leagueMusicLeagueId: string | null;
+  sourceRoundId: string;
   ordinal: number;
   castAt: string | null;
   relativeOrder: number | null;
+  ballotRank: number | null;
+  tieCount: number | null;
   observedVoters: number;
   participation: "voted" | "did_not_vote";
 };
@@ -231,25 +240,36 @@ export type PlayerProfileData = {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SCOPE_KEY_SEPARATOR = ",";
 
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function allParams(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) return value;
+  return value === undefined ? [] : [value];
 }
 
 export function isUuid(value: string | undefined | null): value is string {
   return Boolean(value && UUID_PATTERN.test(value));
 }
 
+export function canonicalIds(values: Iterable<string>): string[] {
+  return [...new Set([...values].filter(isUuid))].sort();
+}
+
 export function parseAnalyticsFilters(
   params: SearchParams,
 ): AnalyticsFilterRequest {
-  const league = firstParam(params.league);
-  const round = firstParam(params.round);
+  const leagueValues = allParams(params.league);
+  const roundValues = allParams(params.round);
+  const explicitAllLeagues = leagueValues.includes("all");
 
   return {
-    leagueId: isUuid(league) ? league : null,
-    roundId: isUuid(round) ? round : null,
-    useDefaultLeague: league === undefined && round === undefined,
+    leagueIds: explicitAllLeagues ? [] : canonicalIds(leagueValues),
+    roundIds: canonicalIds(roundValues),
+    useDefaultLeague: leagueValues.length === 0 && roundValues.length === 0,
   };
 }
 
@@ -257,19 +277,21 @@ export function resolveAnalyticsFilter(
   request: AnalyticsFilterRequest,
   options: FilterOptions,
 ): AnalyticsFilter {
-  const requestedLeagueId = request.useDefaultLeague
-    ? options.defaultLeagueId
-    : request.leagueId;
-  const leagueId = options.leagues.some(({ id }) => id === requestedLeagueId)
-    ? requestedLeagueId
-    : null;
-  const requestedRound = options.rounds.find(({ id }) => id === request.roundId);
-  const roundId =
-    requestedRound && (!leagueId || requestedRound.leagueId === leagueId)
-      ? requestedRound.id
-      : null;
+  const optionLeagueIds = new Set(options.leagues.map(({ id }) => id));
+  const optionRounds = new Map(options.rounds.map((round) => [round.id, round]));
+  const leagueIds = request.useDefaultLeague
+    ? canonicalIds(options.defaultLeagueId ? [options.defaultLeagueId] : [])
+    : canonicalIds(request.leagueIds.filter((id) => optionLeagueIds.has(id)));
+  const roundIds = canonicalIds(
+    request.roundIds.filter((id) => {
+      const round = optionRounds.get(id);
+      return Boolean(
+        round && (!leagueIds.length || leagueIds.includes(round.leagueId)),
+      );
+    }),
+  );
 
-  return { leagueId, roundId };
+  return { leagueIds, roundIds };
 }
 
 export function parseSongSort(value: string | string[] | undefined): SongSort {
@@ -331,19 +353,47 @@ export function parseSearch(value: string | string[] | undefined): string {
   return (firstParam(value) ?? "").trim().slice(0, 100);
 }
 
+export type QueryValue =
+  | string
+  | number
+  | null
+  | undefined
+  | readonly (string | number)[];
+
 export function buildAnalyticsHref(
   path: string,
-  current: Record<string, string | number | null | undefined>,
-  overrides: Record<string, string | number | null | undefined>,
+  current: Record<string, QueryValue>,
+  overrides: Record<string, QueryValue>,
 ): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries({ ...current, ...overrides })) {
-    if (value !== null && value !== undefined && value !== "") {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item !== "") query.append(key, String(item));
+      }
+    } else if (value !== null && value !== undefined && value !== "") {
       query.set(key, String(value));
     }
   }
   const serialized = query.toString();
   return serialized ? `${path}?${serialized}` : path;
+}
+
+export function scopeQueryParams(
+  filter: AnalyticsFilter,
+): Pick<Record<string, QueryValue>, "league" | "round"> {
+  return {
+    league: filter.leagueIds.length ? filter.leagueIds : "all",
+    round: filter.roundIds,
+  };
+}
+
+export function encodeScopeIds(ids: readonly string[]): string {
+  return canonicalIds(ids).join(SCOPE_KEY_SEPARATOR);
+}
+
+function decodeScopeIds(key: string): string[] {
+  return canonicalIds(key ? key.split(SCOPE_KEY_SEPARATOR) : []);
 }
 
 export function safeRatio(
@@ -370,6 +420,29 @@ export function percentileRank(values: number[], value: number): number | null {
   if (finiteValues.length === 1) return 100;
   const belowOrEqual = finiteValues.filter((candidate) => candidate <= value).length;
   return ((belowOrEqual - 1) / (finiteValues.length - 1)) * 100;
+}
+
+export function timingMidpointPercentile({
+  ballotRank,
+  observedVoters,
+  tieCount = 1,
+}: {
+  ballotRank: number;
+  observedVoters: number;
+  tieCount?: number;
+}): number | null {
+  if (
+    !Number.isFinite(ballotRank) ||
+    !Number.isFinite(observedVoters) ||
+    !Number.isFinite(tieCount) ||
+    observedVoters <= 0 ||
+    ballotRank <= 0 ||
+    tieCount <= 0
+  ) {
+    return null;
+  }
+  if (observedVoters === 1) return 0.5;
+  return (ballotRank - 1 + tieCount / 2) / observedVoters;
 }
 
 export function cosineSimilarity(
@@ -437,7 +510,12 @@ export async function loadAnalytics<T>(
 export async function getFilterOptions(): Promise<FilterOptions> {
   const [leagueRows, roundRows] = await Promise.all([
     db
-      .select({ id: leagues.id, name: leagues.name, slug: leagues.slug })
+      .select({
+        id: leagues.id,
+        name: leagues.name,
+        slug: leagues.slug,
+        musicLeagueId: leagues.musicLeagueId,
+      })
       .from(leagues)
       .orderBy(
         sql`${leagues.startDate} desc nulls last`,
@@ -449,6 +527,8 @@ export async function getFilterOptions(): Promise<FilterOptions> {
         id: rounds.id,
         leagueId: rounds.leagueId,
         leagueName: leagues.name,
+        leagueMusicLeagueId: leagues.musicLeagueId,
+        sourceRoundId: rounds.sourceRoundId,
         name: rounds.name,
         ordinal: rounds.ordinal,
       })
@@ -466,20 +546,38 @@ export async function getFilterOptions(): Promise<FilterOptions> {
   };
 }
 
+function inCondition(column: SQL, values: readonly string[]): SQL | null {
+  const ids = canonicalIds(values);
+  return ids.length
+    ? sql`(${sql.join(
+        ids.map((id) => sql`${column} = ${id}`),
+        sql` or `,
+      )})`
+    : null;
+}
+
 function scopePredicate(filter: AnalyticsFilter, alias: "r" | "rounds" = "r"): SQL {
   const leagueColumn =
     alias === "r" ? sql`r.league_id` : sql`rounds.league_id`;
   const roundColumn = alias === "r" ? sql`r.id` : sql`rounds.id`;
   const conditions: SQL[] = [];
-  if (filter.leagueId) conditions.push(sql`${leagueColumn} = ${filter.leagueId}`);
-  if (filter.roundId) conditions.push(sql`${roundColumn} = ${filter.roundId}`);
+  const leagueCondition = inCondition(leagueColumn, filter.leagueIds);
+  const roundCondition = inCondition(roundColumn, filter.roundIds);
+  if (leagueCondition) conditions.push(leagueCondition);
+  if (roundCondition) conditions.push(roundCondition);
   return conditions.length ? sql.join(conditions, sql` and `) : sql`true`;
 }
 
 function selectedRoundsCte(filter: AnalyticsFilter): SQL {
   return sql`
     selected_rounds as (
-      select r.id, r.league_id, r.ordinal, r.name, r.source_created_at
+      select
+        r.id,
+        r.league_id,
+        r.source_round_id,
+        r.ordinal,
+        r.name,
+        r.source_created_at
       from rounds r
       where ${scopePredicate(filter)}
     )
@@ -488,10 +586,11 @@ function selectedRoundsCte(filter: AnalyticsFilter): SQL {
 
 function selectedLeaguesCte(filter: AnalyticsFilter): SQL {
   const conditions: SQL[] = [];
-  if (filter.leagueId) conditions.push(sql`l.id = ${filter.leagueId}`);
-  if (filter.roundId) {
+  const leagueCondition = inCondition(sql`l.id`, filter.leagueIds);
+  if (leagueCondition) conditions.push(leagueCondition);
+  if (filter.roundIds.length) {
     conditions.push(
-      sql`exists (select 1 from rounds scope_round where scope_round.id = ${filter.roundId} and scope_round.league_id = l.id)`,
+      sql`exists (select 1 from selected_rounds scope_round where scope_round.league_id = l.id)`,
     );
   }
   return sql`
@@ -625,6 +724,7 @@ function songStatsCtes(filter: AnalyticsFilter): SQL {
         s.album_name,
         s.submitted_at,
         sr.ordinal as round_ordinal,
+        sr.source_round_id,
         sr.name as round_name,
         svs.points,
         svs.expected_points,
@@ -681,7 +781,9 @@ type SongQueryRow = {
   submitterName: string;
   leagueId: string;
   leagueName: string;
+  leagueMusicLeagueId: string | null;
   roundId: string;
+  sourceRoundId: string;
   roundName: string;
   roundOrdinal: number;
   submittedAt: Date | string;
@@ -726,7 +828,9 @@ function songSelect(): SQL {
       ${competitorDisplayName("c")} as "submitterName",
       ss.league_id as "leagueId",
       l.name as "leagueName",
+      l.music_league_id as "leagueMusicLeagueId",
       ss.round_id as "roundId",
+      ss.source_round_id as "sourceRoundId",
       ss.round_name as "roundName",
       ss.round_ordinal as "roundOrdinal",
       ss.submitted_at as "submittedAt",
@@ -922,7 +1026,7 @@ export async function getDashboardData(
     top_song_rows as (
       select * from ranked_songs
       order by "supportIndex" desc nulls last, points desc, title asc
-      limit 8
+      limit 10
     ),
     distribution_rows as (
       select ev.points, count(*)::int as count
@@ -967,7 +1071,7 @@ export async function getDashboardData(
     leaderboard,
     topSongs: topSongs.map(mapSong),
     pointDistribution: createPointDistribution(distribution),
-    alignment: null,
+    alignment: [],
   };
 }
 
@@ -999,9 +1103,9 @@ export async function getDashboardAlignmentData(
     join competitors right_player on right_player.id = pc.right_id
     where pc.magnitude > 0
     order by alignment desc
-    limit 1
+    limit 3
   `);
-  return alignments[0] ?? null;
+  return alignments;
 }
 
 function songSearchPredicate(search: string): SQL {
@@ -1444,9 +1548,13 @@ export async function getPlayerProfileData(
     roundId: string;
     roundName: string;
     leagueName: string;
+    leagueMusicLeagueId: string | null;
+    sourceRoundId: string;
     ordinal: number;
     castAt: Date | string | null;
     relativeOrder: number | null;
+    ballotRank: number | null;
+    tieCount: number | null;
     observedVoters: number;
     participation: "voted" | "did_not_vote";
   }>(sql`
@@ -1456,16 +1564,30 @@ export async function getPlayerProfileData(
       from active_ballots
       group by round_id
     ),
-    ranked_ballots as (
+    ballot_positions as (
       select
         active_ballots.*,
         rbc.observed_voters,
-        case
-          when rbc.observed_voters = 1 then 0.5::double precision
-          else percent_rank() over (partition by active_ballots.round_id order by active_ballots.cast_at)
-        end as relative_order
+        rank() over (
+          partition by active_ballots.round_id
+          order by active_ballots.cast_at
+        )::int as ballot_rank,
+        count(*) over (
+          partition by active_ballots.round_id, active_ballots.cast_at
+        )::int as tie_count
       from active_ballots
       join round_ballot_counts rbc on rbc.round_id = active_ballots.round_id
+    ),
+    ranked_ballots as (
+      select
+        ballot_positions.*,
+        case
+          when observed_voters = 1 then 0.5::double precision
+          else (
+            ballot_rank::double precision - 1 + tie_count::double precision / 2
+          ) / observed_voters
+        end as relative_order
+      from ballot_positions
     ),
     player_submission_rounds as (
       select distinct s.round_id
@@ -1478,6 +1600,8 @@ export async function getPlayerProfileData(
         sr.id as round_id,
         rb.cast_at,
         rb.relative_order,
+        rb.ballot_rank,
+        rb.tie_count,
         coalesce(rb.observed_voters, rbc.observed_voters, 0)::int as observed_voters,
         case when rb.voter_id is null then 'did_not_vote' else 'voted' end as participation
       from selected_rounds sr
@@ -1496,9 +1620,13 @@ export async function getPlayerProfileData(
       pp.round_id as "roundId",
       sr.name as "roundName",
       l.name as "leagueName",
+      l.music_league_id as "leagueMusicLeagueId",
+      sr.source_round_id as "sourceRoundId",
       sr.ordinal,
       pp.cast_at as "castAt",
       pp.relative_order as "relativeOrder",
+      pp.ballot_rank as "ballotRank",
+      pp.tie_count as "tieCount",
       pp.observed_voters as "observedVoters",
       pp.participation as "participation"
     from player_participation pp
@@ -1550,8 +1678,11 @@ export async function getPlayerProfileData(
   };
 }
 
-function analyticsFilter(leagueId: string | null, roundId: string | null) {
-  return { leagueId, roundId };
+function analyticsFilter(leagueKey: string, roundKey: string): AnalyticsFilter {
+  return {
+    leagueIds: decodeScopeIds(leagueKey),
+    roundIds: decodeScopeIds(roundKey),
+  };
 }
 
 export function revalidateAnalyticsCache() {
@@ -1566,28 +1697,28 @@ export async function getCachedFilterOptions(): Promise<FilterOptions> {
 }
 
 export async function getCachedDashboardData(
-  leagueId: string | null,
-  roundId: string | null,
+  leagueKey: string,
+  roundKey: string,
 ): Promise<DashboardData> {
   "use cache";
   cacheLife("hours");
   cacheTag(ANALYTICS_CACHE_TAG);
-  return getDashboardData(analyticsFilter(leagueId, roundId));
+  return getDashboardData(analyticsFilter(leagueKey, roundKey));
 }
 
 export async function getCachedDashboardAlignmentData(
-  leagueId: string | null,
-  roundId: string | null,
+  leagueKey: string,
+  roundKey: string,
 ): Promise<DashboardData["alignment"]> {
   "use cache";
   cacheLife("hours");
   cacheTag(ANALYTICS_CACHE_TAG);
-  return getDashboardAlignmentData(analyticsFilter(leagueId, roundId));
+  return getDashboardAlignmentData(analyticsFilter(leagueKey, roundKey));
 }
 
 export async function getCachedSongsData(
-  leagueId: string | null,
-  roundId: string | null,
+  leagueKey: string,
+  roundKey: string,
   page: number,
   pageSize: number,
   search: string,
@@ -1597,7 +1728,7 @@ export async function getCachedSongsData(
   "use cache";
   cacheLife("hours");
   cacheTag(ANALYTICS_CACHE_TAG);
-  return getSongsData(analyticsFilter(leagueId, roundId), {
+  return getSongsData(analyticsFilter(leagueKey, roundKey), {
     direction,
     page,
     pageSize,
@@ -1607,8 +1738,8 @@ export async function getCachedSongsData(
 }
 
 export async function getCachedPlayersData(
-  leagueId: string | null,
-  roundId: string | null,
+  leagueKey: string,
+  roundKey: string,
   search: string,
   sort: PlayerSort,
   minimumRounds: number,
@@ -1617,7 +1748,7 @@ export async function getCachedPlayersData(
   "use cache";
   cacheLife("hours");
   cacheTag(ANALYTICS_CACHE_TAG);
-  return getPlayersData(analyticsFilter(leagueId, roundId), {
+  return getPlayersData(analyticsFilter(leagueKey, roundKey), {
     direction,
     minimumRounds,
     search,
@@ -1627,8 +1758,8 @@ export async function getCachedPlayersData(
 
 export async function getCachedPlayerProfileData(
   playerId: string,
-  leagueId: string | null,
-  roundId: string | null,
+  leagueKey: string,
+  roundKey: string,
   minimumRounds = 3,
 ): Promise<PlayerProfileData | null> {
   "use cache";
@@ -1636,17 +1767,17 @@ export async function getCachedPlayerProfileData(
   cacheTag(ANALYTICS_CACHE_TAG);
   return getPlayerProfileData(
     playerId,
-    analyticsFilter(leagueId, roundId),
+    analyticsFilter(leagueKey, roundKey),
     minimumRounds,
   );
 }
 
 export function filterOptionsForLeague(
   options: FilterOptions,
-  leagueId: string | null,
+  leagueIds: string[],
 ): RoundOption[] {
-  return leagueId
-    ? options.rounds.filter((round) => round.leagueId === leagueId)
+  return leagueIds.length
+    ? options.rounds.filter((round) => leagueIds.includes(round.leagueId))
     : options.rounds;
 }
 
@@ -1654,12 +1785,17 @@ export function selectedFilterLabel(
   options: FilterOptions,
   filter: AnalyticsFilter,
 ): string {
-  const round = options.rounds.find(({ id }) => id === filter.roundId);
-  if (round) return `${round.leagueName} · Round ${round.ordinal}: ${round.name}`;
-  return (
-    options.leagues.find(({ id }) => id === filter.leagueId)?.name ??
-    "All leagues"
-  );
+  const rounds = options.rounds.filter(({ id }) => filter.roundIds.includes(id));
+  if (rounds.length === 1) {
+    const [round] = rounds;
+    return `${round.leagueName} · Round ${round.ordinal}: ${round.name}`;
+  }
+  if (rounds.length > 1) return `${rounds.length} selected rounds`;
+
+  const leagues = options.leagues.filter(({ id }) => filter.leagueIds.includes(id));
+  if (leagues.length === 1) return leagues[0].name;
+  if (leagues.length > 1) return `${leagues.length} selected leagues`;
+  return "All leagues";
 }
 
 export function mergeFilterConditions(

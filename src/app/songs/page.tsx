@@ -2,10 +2,9 @@ import { ArrowLeft, ArrowRight, ExternalLink, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
+import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -31,6 +30,7 @@ import {
 import {
   buildAnalyticsHref,
   defaultSongSortDirection,
+  encodeScopeIds,
   getCachedFilterOptions,
   getCachedSongsData,
   loadAnalytics,
@@ -41,8 +41,10 @@ import {
   parseSongSortDirection,
   resolveAnalyticsFilter,
   selectedFilterLabel,
+  scopeQueryParams,
   type SearchParams,
 } from "@/lib/analytics";
+import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 export const metadata: Metadata = {
   title: "Songs",
@@ -66,19 +68,7 @@ function percent(value: number | null): string {
   return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
 }
 
-export default function SongsPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  return (
-    <Suspense fallback={<AnalyticsLoadingShell />}>
-      <SongsContent searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-async function SongsContent({
+export default async function SongsPage({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -92,8 +82,8 @@ async function SongsContent({
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
     const data = await getCachedSongsData(
-      filter.leagueId,
-      filter.roundId,
+      encodeScopeIds(filter.leagueIds),
+      encodeScopeIds(filter.roundIds),
       page,
       25,
       search,
@@ -114,8 +104,7 @@ async function SongsContent({
   const { data, filter, options } = result.data;
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const currentParams = {
-    league: filter.leagueId ?? "all",
-    round: filter.roundId,
+    ...scopeQueryParams(filter),
     q: search || null,
     sort,
     dir: direction,
@@ -147,14 +136,16 @@ async function SongsContent({
             className="grid gap-3 sm:grid-cols-[1fr_15rem_auto]"
             method="get"
           >
-            <input
-              name="league"
-              type="hidden"
-              value={filter.leagueId ?? "all"}
-            />
-            {filter.roundId ? (
-              <input name="round" type="hidden" value={filter.roundId} />
-            ) : null}
+            {filter.leagueIds.length ? (
+              filter.leagueIds.map((leagueId) => (
+                <input key={leagueId} name="league" type="hidden" value={leagueId} />
+              ))
+            ) : (
+              <input name="league" type="hidden" value="all" />
+            )}
+            {filter.roundIds.map((roundId) => (
+              <input key={roundId} name="round" type="hidden" value={roundId} />
+            ))}
             <label className="relative">
               <span className="sr-only">Search songs</span>
               <Search
@@ -314,11 +305,24 @@ async function SongsContent({
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <p className="truncate text-zinc-300" title={song.leagueName}>
-                      {song.leagueName}
+                    <p className="truncate text-zinc-300">
+                      <MusicLeagueLink
+                        href={musicLeagueUrl(song.leagueMusicLeagueId)}
+                        title={song.leagueName}
+                      >
+                        {song.leagueName}
+                      </MusicLeagueLink>
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-zinc-500" title={song.roundName}>
-                      R{song.roundOrdinal} · {song.roundName}
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                      <MusicLeagueLink
+                        href={musicLeagueUrl(
+                          song.leagueMusicLeagueId,
+                          song.sourceRoundId,
+                        )}
+                        title={song.roundName}
+                      >
+                        R{song.roundOrdinal} · {song.roundName}
+                      </MusicLeagueLink>
                     </p>
                   </TableCell>
                   <TableCell className="text-right font-mono text-white">

@@ -1,5 +1,4 @@
-import Link from "next/link";
-
+import { ScopedLink } from "@/components/analytics/scoped-link";
 import { Container } from "@/components/layout/container";
 
 export function SiteFooter() {
@@ -22,9 +21,9 @@ export function SiteFooter() {
         >
           GitHub
         </a>
-        <Link className="transition-colors hover:text-zinc-200" href="/faq">
+        <ScopedLink className="transition-colors hover:text-zinc-200" href="/faq">
           FAQ
-        </Link>
+        </ScopedLink>
         <span className="sm:ml-auto">
           Made by{" "}
           <a

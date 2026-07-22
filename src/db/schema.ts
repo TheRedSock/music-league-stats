@@ -45,6 +45,7 @@ export const leagues = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     sourceLeagueId: text("source_league_id").notNull(),
+    musicLeagueId: text("music_league_id"),
     slug: text("slug").notNull(),
     name: text("name").notNull(),
     totalRounds: integer("total_rounds").notNull(),
@@ -57,6 +58,7 @@ export const leagues = pgTable(
   },
   (table) => [
     uniqueIndex("leagues_source_id_unique").on(table.sourceLeagueId),
+    uniqueIndex("leagues_music_league_id_unique").on(table.musicLeagueId),
     uniqueIndex("leagues_slug_unique").on(table.slug),
     index("leagues_status_idx").on(table.status),
     check("leagues_total_rounds_positive", sql`${table.totalRounds} > 0`),

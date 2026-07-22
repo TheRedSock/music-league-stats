@@ -4,6 +4,7 @@ import { LogOut, Plus, RefreshCw, UserRoundCog } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import { ImportPanel } from "@/components/admin/import-panel";
 import { LeagueForm } from "@/components/admin/league-form";
 import { PlayerNameEditor } from "@/components/admin/player-name-editor";
@@ -30,6 +31,7 @@ import {
   TableRow,
   TruncatedCell,
 } from "@/components/ui/table";
+import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 export function AdminDashboard({
   leagues,
@@ -99,7 +101,16 @@ export function AdminDashboard({
               <Card key={league.id}>
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
-                    <CardTitle>{league.name}</CardTitle>
+                    <div className="min-w-0">
+                      <CardTitle>
+                        <MusicLeagueLink href={musicLeagueUrl(league.musicLeagueId)}>
+                          {league.name}
+                        </MusicLeagueLink>
+                      </CardTitle>
+                      <CardDescription className="mt-1">
+                        Music League ID: {league.musicLeagueId ?? "Not set"}
+                      </CardDescription>
+                    </div>
                     <Badge
                       variant={
                         league.status === "active" ? "success" : "muted"
@@ -172,8 +183,9 @@ export function AdminDashboard({
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[24%]">Created</TableHead>
-                  <TableHead className="w-[26%]">League</TableHead>
-                  <TableHead className="w-[16%]">Status</TableHead>
+                  <TableHead className="w-[24%]">League</TableHead>
+                  <TableHead className="w-[16%]">Music League ID</TableHead>
+                  <TableHead className="w-[14%]">Status</TableHead>
                   <TableHead>Progress / result</TableHead>
                 </TableRow>
               </TableHeader>
@@ -185,7 +197,16 @@ export function AdminDashboard({
                     </TableCell>
                     <TableCell>
                       <TruncatedCell title={batch.leagueName}>
-                        {batch.leagueName}
+                        <MusicLeagueLink
+                          href={musicLeagueUrl(batch.leagueMusicLeagueId)}
+                        >
+                          {batch.leagueName}
+                        </MusicLeagueLink>
+                      </TruncatedCell>
+                    </TableCell>
+                    <TableCell>
+                      <TruncatedCell title={batch.leagueMusicLeagueId ?? "Not set"}>
+                        {batch.leagueMusicLeagueId ?? "Not set"}
                       </TruncatedCell>
                     </TableCell>
                     <TableCell>
