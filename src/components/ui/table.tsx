@@ -1,5 +1,6 @@
 import type {
   HTMLAttributes,
+  ReactNode,
   TableHTMLAttributes,
   TdHTMLAttributes,
   ThHTMLAttributes,
@@ -12,7 +13,7 @@ export function Table({
   ...props
 }: TableHTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto">
+    <div className="w-full overflow-x-auto lg:overflow-visible">
       <table
         className={cn("w-full caption-bottom text-sm", className)}
         {...props}
@@ -84,5 +85,21 @@ export function TableCell({
       className={cn("px-4 py-3.5 align-middle text-zinc-300", className)}
       {...props}
     />
+  );
+}
+
+export function TruncatedCell({
+  children,
+  className,
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  title: string;
+}) {
+  return (
+    <span className={cn("block truncate", className)} title={title}>
+      {children}
+    </span>
   );
 }

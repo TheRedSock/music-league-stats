@@ -78,6 +78,7 @@ export const competitors = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     sourceCompetitorId: text("source_competitor_id").notNull(),
     name: text("name").notNull(),
+    nameOverride: text("name_override"),
     ...timestamps,
   },
   (table) => [

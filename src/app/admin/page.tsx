@@ -1,4 +1,4 @@
-import { asc, desc, eq } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 import { TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -7,6 +7,7 @@ import { AdminLogin } from "@/components/admin/admin-login";
 import type {
   AdminImportBatch,
   AdminLeague,
+  AdminPlayer,
 } from "@/components/admin/types";
 import { Container } from "@/components/layout/container";
 import {
@@ -17,7 +18,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/db";
-import { importBatches, leagues } from "@/db/schema";
+import { competitors, importBatches, leagueMembers, leagues } from "@/db/schema";
 import {
   getAdminConfig,
   isAdminAuthenticated,
@@ -63,7 +64,7 @@ export default async function AdminPage() {
     );
   }
 
-  const [leagueRows, historyRows] = await Promise.all([
+  const [leagueRows, historyRows, playerRows] = await Promise.all([
     db.select().from(leagues).orderBy(asc(leagues.name)),
     db
       .select({
@@ -82,6 +83,24 @@ export default async function AdminPage() {
       .innerJoin(leagues, eq(importBatches.leagueId, leagues.id))
       .orderBy(desc(importBatches.createdAt))
       .limit(25),
+    db
+      .select({
+        id: competitors.id,
+        sourceCompetitorId: competitors.sourceCompetitorId,
+        importedName: competitors.name,
+        nameOverride: competitors.nameOverride,
+        displayName: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
+        leagueCount: sql<number>`count(${leagueMembers.leagueId})::int`,
+      })
+      .from(competitors)
+      .leftJoin(leagueMembers, eq(leagueMembers.competitorId, competitors.id))
+      .groupBy(
+        competitors.id,
+        competitors.sourceCompetitorId,
+        competitors.name,
+        competitors.nameOverride,
+      )
+      .orderBy(sql`coalesce(${competitors.nameOverride}, ${competitors.name}) asc`),
   ]);
   const adminLeagues: AdminLeague[] = leagueRows.map((league) => ({
     id: league.id,
@@ -99,10 +118,11 @@ export default async function AdminPage() {
     createdAt: batch.createdAt.toISOString(),
     completedAt: batch.completedAt?.toISOString() ?? null,
   }));
+  const players: AdminPlayer[] = playerRows;
 
   return (
     <Container className="py-12">
-      <AdminDashboard history={history} leagues={adminLeagues} />
+      <AdminDashboard history={history} leagues={adminLeagues} players={players} />
     </Container>
   );
 }

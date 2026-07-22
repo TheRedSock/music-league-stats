@@ -1,14 +1,16 @@
 "use client";
 
-import { LogOut, Plus, RefreshCw } from "lucide-react";
+import { LogOut, Plus, RefreshCw, UserRoundCog } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ImportPanel } from "@/components/admin/import-panel";
 import { LeagueForm } from "@/components/admin/league-form";
+import { PlayerNameEditor } from "@/components/admin/player-name-editor";
 import type {
   AdminImportBatch,
   AdminLeague,
+  AdminPlayer,
 } from "@/components/admin/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,14 +28,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TruncatedCell,
 } from "@/components/ui/table";
 
 export function AdminDashboard({
   leagues,
   history,
+  players,
 }: {
   leagues: AdminLeague[];
   history: AdminImportBatch[];
+  players: AdminPlayer[];
 }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -133,6 +138,22 @@ export function AdminDashboard({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <UserRoundCog aria-hidden="true" className="size-4 text-lime-300" />
+            Player names
+          </CardTitle>
+          <CardDescription>
+            Set a global display-name override without changing the imported
+            source name.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PlayerNameEditor players={players} />
+        </CardContent>
+      </Card>
+
       <section aria-labelledby="import-history-heading">
         <div className="mb-4">
           <h2
@@ -147,12 +168,12 @@ export function AdminDashboard({
         </div>
         <Card className="overflow-hidden">
           {history.length ? (
-            <Table>
+            <Table className="table-fixed">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Created</TableHead>
-                  <TableHead>League</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[24%]">Created</TableHead>
+                  <TableHead className="w-[26%]">League</TableHead>
+                  <TableHead className="w-[16%]">Status</TableHead>
                   <TableHead>Progress / result</TableHead>
                 </TableRow>
               </TableHeader>
@@ -162,7 +183,11 @@ export function AdminDashboard({
                     <TableCell className="whitespace-nowrap">
                       {new Date(batch.createdAt).toLocaleString()}
                     </TableCell>
-                    <TableCell>{batch.leagueName}</TableCell>
+                    <TableCell>
+                      <TruncatedCell title={batch.leagueName}>
+                        {batch.leagueName}
+                      </TruncatedCell>
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -174,19 +199,23 @@ export function AdminDashboard({
                     </TableCell>
                     <TableCell>
                       {batch.summary ? (
-                        <span>
+                        <TruncatedCell
+                          title={`${batch.summary.submissions.toLocaleString()} songs, ${batch.summary.votes.toLocaleString()} votes`}
+                        >
                           {batch.summary.submissions.toLocaleString()} songs,{" "}
                           {batch.summary.votes.toLocaleString()} votes
-                        </span>
+                        </TruncatedCell>
                       ) : batch.errorMessage ? (
-                        <span className="text-red-300">
+                        <TruncatedCell className="text-red-300" title={batch.errorMessage}>
                           {batch.errorMessage}
-                        </span>
+                        </TruncatedCell>
                       ) : (
-                        <span>
+                        <TruncatedCell
+                          title={`${batch.receivedRows.toLocaleString()} rows in ${batch.receivedChunks.toLocaleString()} chunks`}
+                        >
                           {batch.receivedRows.toLocaleString()} rows in{" "}
                           {batch.receivedChunks.toLocaleString()} chunks
-                        </span>
+                        </TruncatedCell>
                       )}
                     </TableCell>
                   </TableRow>

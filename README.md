@@ -38,8 +38,9 @@ Uploads are staged by a checksum-backed batch. Repeating a chunk with the same
 hash is safe; changing an already-used chunk index is rejected. Commit verifies
 all rows, duplicates, checksums, and references before performing a single
 database transaction. Sync is cumulative: present rows are inserted or updated,
-but absent submissions and votes are never deleted or inferred as zero.
-Explicit zero-point vote rows are preserved.
+but absent submissions and votes are never deleted. Explicit zero-point vote
+rows are preserved; additional zeroes are inferred only at analytics query time
+for active voters who omitted eligible visible submissions.
 
 Failed validation is shown in import history. Correct the source file and start
 a new sync; retrying an identical completed export returns its existing result.
@@ -50,7 +51,7 @@ All public data pages are rendered dynamically and show a setup or unavailable
 state when the database cannot be queried. URL parameters keep analytics views
 shareable:
 
-- `/` — summary, round-adjusted leaderboard, leading songs, exported point
+- `/` — summary, round-adjusted leaderboard, leading songs, eligible point
   distribution, and vote-pattern alignment
 - `/songs` — searchable, sortable, paginated song explorer
 - `/players` — player directory with a configurable provisional threshold
@@ -62,28 +63,37 @@ shareable:
 
 ### Metric definitions and limitations
 
-- Exported points are sums of recorded vote rows. An explicit zero-point row is
-  data; an absent row is not fabricated as zero.
-- Eligible voter denominators count recorded rows and exclude the song
-  submitter where identity permits. Positive reach is positive recorded rows
-  divided by those recorded eligible rows.
-- A song's support index is its share of the round's exported point pool divided
-  by the equal-song-share baseline (`1 / round slate size`). `1.0` is the round
-  average. Song percentiles are also calculated within the complete round
+- An active ballot is any participant with at least one exported vote row in a
+  round, including an explicit zero-point row. For active ballots, every visible
+  submission not owned by that voter is an eligible opportunity; omitted rows
+  are counted as zero in analytics. Submitters who never voted in a round are
+  shown as did not vote and do not create zeroes. People with neither a vote nor
+  a submission in a round are not treated as participants in that round.
+- Eligible point totals and positive reach are calculated from those query-time
+  eligible opportunities, with self-votes excluded from both numerators and
+  denominators. Imported vote rows are not rewritten or expanded.
+- A song's support index is its share of the round's eligible point pool divided
+  by the equal-song-share baseline (`1 / visible round slate size`). `1.0` is
+  the round average. Song percentiles are calculated within the complete round
   before search and pagination.
-- Player round index uses the player's share of exported round points divided by
+- Player round index uses the player's share of eligible round points divided by
   an equal entrant share, then averages those round-local values. The default
   non-provisional threshold is three entered rounds. These are league outcomes,
   not objective measures of musical quality.
-- Vote-pattern alignment is cosine similarity over songs both voters rated,
-  excluding songs owned by either voter. It is suppressed below 20 common songs
-  across three rounds.
-- Directional vote figures are points per recorded encounter and positive-row
-  rates. Relative voting order uses each voter's latest exported `castAt` in a
-  round and ranks it among observed ballot timestamps in that round.
-- CSV exports do not include vote budgets, listening behavior, or reliable
-  deadline context. The app therefore does not claim percentage of all possible
-  votes, friendship, causality, or early/late submission against a deadline.
+- Vote-pattern alignment is displayed as a percentage. It compares
+  budget-normalized full-ballot vectors in the selected scope, includes inferred
+  zeroes for active voters, and represents songs submitted by either player as a
+  mutual-support bucket when both directions exist. It is suppressed below
+  selected-scope sample and coverage thresholds.
+- Directional and mutual vote figures include points per eligible opportunity
+  and positive-opportunity rates. Mutual support also shows total points and the
+  share of eligible ballot points allocated to each other. Relative voting order
+  uses each voter's latest exported `castAt` in a round and displays its
+  percentile among observed ballot timestamps. Submitted rounds with no
+  exported vote row are shown as did not vote.
+- CSV exports do not include listening behavior or reliable deadline context.
+  The app therefore does not claim friendship, causality, or early/late
+  submission against a deadline.
 
 ## Commands
 

@@ -4,8 +4,15 @@ import {
   buildAnalyticsHref,
   cosineSimilarity,
   createPointDistribution,
+  defaultPlayerSortDirection,
+  defaultSongSortDirection,
+  filterPointBuckets,
   isoTimestamp,
   parseAnalyticsFilters,
+  parsePlayerSort,
+  parsePlayerSortDirection,
+  parseSongSort,
+  parseSongSortDirection,
   percentileRank,
   resolveAnalyticsFilter,
   safeRatio,
@@ -65,6 +72,24 @@ describe("analytics metric helpers", () => {
     ]);
   });
 
+  it("filters point buckets to the default 1-5 range", () => {
+    const buckets = createPointDistribution([
+      { points: 0, count: 3 },
+      { points: 1, count: 2 },
+      { points: 5, count: 1 },
+      { points: 8, count: 4 },
+    ]);
+
+    expect(filterPointBuckets(buckets, "standard")).toEqual([
+      { label: "1", count: 2 },
+      { label: "2", count: 0 },
+      { label: "3", count: 0 },
+      { label: "4", count: 0 },
+      { label: "5", count: 1 },
+    ]);
+    expect(filterPointBuckets(buckets, "extended")).toEqual(buckets);
+  });
+
   it("calculates percentile and cosine helpers", () => {
     expect(percentileRank([1, 2, 3], 2)).toBe(50);
     expect(percentileRank([4], 4)).toBe(100);
@@ -113,5 +138,28 @@ describe("analytics filter helpers", () => {
         { page: 1, q: null },
       ),
     ).toBe(`/songs?league=${leagueId}&page=1`);
+  });
+
+  it("parses sort keys and uses natural default directions", () => {
+    expect(parseSongSort("title")).toBe("title");
+    expect(parseSongSort("nope")).toBe("points");
+    expect(parsePlayerSort("top-quartile")).toBe("top-quartile");
+    expect(parsePlayerSort("nope")).toBe("performance");
+    expect(defaultSongSortDirection("title")).toBe("asc");
+    expect(defaultSongSortDirection("points")).toBe("desc");
+    expect(defaultPlayerSortDirection("name")).toBe("asc");
+    expect(defaultPlayerSortDirection("performance")).toBe("desc");
+    expect(parseSongSortDirection(undefined, "title")).toBe("asc");
+    expect(parsePlayerSortDirection("asc", "points")).toBe("asc");
+  });
+
+  it("builds sortable header hrefs by clearing search and pagination", () => {
+    expect(
+      buildAnalyticsHref(
+        "/songs",
+        { league: leagueId, q: "disco", page: 4, sort: "points", dir: "desc" },
+        { sort: "title", dir: "asc", q: null, page: null },
+      ),
+    ).toBe(`/songs?league=${leagueId}&sort=title&dir=asc`);
   });
 });

@@ -3,22 +3,29 @@
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import type { PointBucket } from "@/lib/analytics";
+import {
+  filterPointBuckets,
+  type PointBucket,
+  type PointBucketRange,
+} from "@/lib/point-buckets";
 
 type Mode = "total" | "ratio";
 
 function Distribution({
   buckets,
+  range,
   title,
 }: {
   buckets: PointBucket[];
+  range: PointBucketRange;
   title: string;
 }) {
   const [mode, setMode] = useState<Mode>("total");
-  const total = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
+  const visibleBuckets = filterPointBuckets(buckets, range);
+  const total = visibleBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
   const maximum = Math.max(
     1,
-    ...buckets.map((bucket) =>
+    ...visibleBuckets.map((bucket) =>
       mode === "total" ? bucket.count : total ? bucket.count / total : 0,
     ),
   );
@@ -55,8 +62,11 @@ function Distribution({
           </Button>
         </div>
       </div>
-      <div className="mt-5 grid grid-cols-7 gap-2" role="list">
-        {buckets.map((bucket) => {
+      <div
+        className={range === "extended" ? "mt-5 grid grid-cols-7 gap-2" : "mt-5 grid grid-cols-5 gap-2"}
+        role="list"
+      >
+        {visibleBuckets.map((bucket) => {
           const value =
             mode === "total"
               ? bucket.count
@@ -85,7 +95,7 @@ function Distribution({
         })}
       </div>
       <p className="sr-only">
-        {buckets
+        {visibleBuckets
           .map((bucket) => `${bucket.label} points: ${bucket.count} votes`)
           .join("; ")}
       </p>
@@ -100,10 +110,35 @@ export function VoteDistributions({
   received: PointBucket[];
   given: PointBucket[];
 }) {
+  const [range, setRange] = useState<PointBucketRange>("standard");
   return (
-    <div className="grid gap-8 lg:grid-cols-2">
-      <Distribution buckets={received} title="Points received" />
-      <Distribution buckets={given} title="Points given" />
+    <div>
+      <div
+        aria-label="Point bucket range"
+        className="mb-6 inline-flex rounded-full border border-white/10 bg-black/20 p-0.5"
+        role="group"
+      >
+        <Button
+          aria-pressed={range === "standard"}
+          className="h-7 px-2.5 text-xs"
+          onClick={() => setRange("standard")}
+          variant={range === "standard" ? "primary" : "ghost"}
+        >
+          1-5
+        </Button>
+        <Button
+          aria-pressed={range === "extended"}
+          className="h-7 px-2.5 text-xs"
+          onClick={() => setRange("extended")}
+          variant={range === "extended" ? "primary" : "ghost"}
+        >
+          Include 0 &amp; 5+
+        </Button>
+      </div>
+      <div className="grid gap-8 lg:grid-cols-2">
+        <Distribution buckets={received} range={range} title="Points received" />
+        <Distribution buckets={given} range={range} title="Points given" />
+      </div>
     </div>
   );
 }

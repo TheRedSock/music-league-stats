@@ -8,6 +8,7 @@ import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
+import { SortableTableHead } from "@/components/analytics/sortable-table-head";
 import { Container } from "@/components/layout/container";
 import { buttonStyles } from "@/components/ui/button";
 import {
@@ -21,12 +22,13 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
+  TruncatedCell,
 } from "@/components/ui/table";
 import {
   buildAnalyticsHref,
+  defaultSongSortDirection,
   getFilterOptions,
   getSongsData,
   loadAnalytics,
@@ -34,6 +36,7 @@ import {
   parsePositiveInteger,
   parseSearch,
   parseSongSort,
+  parseSongSortDirection,
   resolveAnalyticsFilter,
   selectedFilterLabel,
   type SearchParams,
@@ -47,10 +50,15 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 const sortLabels = {
+  title: "Song title",
+  submitter: "Submitter",
+  scope: "League / round",
   points: "Total points",
-  "points-per-voter": "Points per recorded voter",
+  "points-per-voter": "Points per eligible voter",
   "positive-reach": "Positive vote reach",
+  "round-share": "Round share",
   "normalized-index": "Round-normalized index",
+  percentile: "Round percentile",
   newest: "Newest",
 } as const;
 
@@ -67,10 +75,11 @@ export default async function SongsPage({
   const page = parsePositiveInteger(params.page, 1, 100_000);
   const search = parseSearch(params.q);
   const sort = parseSongSort(params.sort);
+  const direction = parseSongSortDirection(params.dir, sort);
   const result = await loadAnalytics(async () => {
     const options = await getFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
-    const data = await getSongsData(filter, { page, search, sort });
+    const data = await getSongsData(filter, { direction, page, search, sort });
     return { data, filter, options };
   });
 
@@ -89,6 +98,7 @@ export default async function SongsPage({
     round: filter.roundId,
     q: search || null,
     sort,
+    dir: direction,
   };
   if (data.total > 0 && page > totalPages) {
     redirect(buildAnalyticsHref("/songs", currentParams, { page: totalPages }));
@@ -173,35 +183,76 @@ export default async function SongsPage({
 
       {data.rows.length ? (
         <Card className="mt-3 overflow-hidden">
-          <Table className="min-w-[1180px]">
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky left-0 z-10 min-w-64 bg-zinc-950/95">
+                <SortableTableHead
+                  activeDirection={direction}
+                  activeSort={sort}
+                  className="w-[24%]"
+                  defaultDirection={defaultSongSortDirection("title")}
+                  params={currentParams}
+                  path="/songs"
+                  sortKey="title"
+                >
                   Song
-                </TableHead>
-                <TableHead>Submitter</TableHead>
-                <TableHead>League / round</TableHead>
-                <TableHead className="text-right">Points</TableHead>
-                <TableHead className="text-right" title="Positive recorded eligible vote rows divided by all recorded eligible vote rows.">
+                </SortableTableHead>
+                <SortableTableHead
+                  activeDirection={direction}
+                  activeSort={sort}
+                  className="w-[12%]"
+                  defaultDirection={defaultSongSortDirection("submitter")}
+                  params={currentParams}
+                  path="/songs"
+                  sortKey="submitter"
+                >
+                  Submitter
+                </SortableTableHead>
+                <SortableTableHead
+                  activeDirection={direction}
+                  activeSort={sort}
+                  className="w-[14%]"
+                  defaultDirection={defaultSongSortDirection("scope")}
+                  params={currentParams}
+                  path="/songs"
+                  sortKey="scope"
+                >
+                  League / round
+                </SortableTableHead>
+                <SortableTableHead
+                  activeDirection={direction}
+                  activeSort={sort}
+                  align="right"
+                  className="w-[7%]"
+                  defaultDirection={defaultSongSortDirection("points")}
+                  params={currentParams}
+                  path="/songs"
+                  sortKey="points"
+                >
+                  Points
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("positive-reach")} params={currentParams} path="/songs" sortKey="positive-reach" title="Positive eligible opportunities divided by all eligible opportunities.">
                   Positive reach
-                </TableHead>
-                <TableHead className="text-right" title="Exported points divided by recorded eligible voter rows.">
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[9%]" defaultDirection={defaultSongSortDirection("points-per-voter")} params={currentParams} path="/songs" sortKey="points-per-voter" title="Eligible points divided by eligible voter opportunities.">
                   Pts / voter
-                </TableHead>
-                <TableHead className="text-right" title="Song points divided by all exported points in its round.">
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultSongSortDirection("round-share")} params={currentParams} path="/songs" sortKey="round-share" title="Song points divided by all eligible points in its round.">
                   Round share
-                </TableHead>
-                <TableHead className="text-right" title="Round point share divided by the equal-share slate baseline; 1.0 is round average.">
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("normalized-index")} params={currentParams} path="/songs" sortKey="normalized-index" title="Round point share divided by the equal-share slate baseline; 1.0 is round average.">
                   Support index
-                </TableHead>
-                <TableHead className="text-right">Round percentile</TableHead>
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] 2xl:table-cell" defaultDirection={defaultSongSortDirection("percentile")} params={currentParams} path="/songs" sortKey="percentile">
+                  Round percentile
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.rows.map((song) => (
                 <TableRow key={song.id}>
-                  <TableCell className="sticky left-0 z-10 bg-zinc-950/95">
-                    <div className="max-w-72">
+                  <TableCell>
+                    <div className="min-w-0">
                       <p className="truncate font-medium text-zinc-100">
                         {song.spotifyUrl ? (
                           <a
@@ -210,14 +261,16 @@ export default async function SongsPage({
                             rel="noreferrer"
                             target="_blank"
                           >
-                            <span className="truncate">{song.title}</span>
+                            <span className="truncate" title={song.title}>
+                              {song.title}
+                            </span>
                             <ExternalLink
                               aria-label="Open on Spotify"
                               className="size-3 shrink-0"
                             />
                           </a>
                         ) : (
-                          song.title
+                          <TruncatedCell title={song.title}>{song.title}</TruncatedCell>
                         )}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-zinc-500">
@@ -228,21 +281,21 @@ export default async function SongsPage({
                   </TableCell>
                   <TableCell>
                     <Link
-                      className="whitespace-nowrap text-zinc-200 hover:text-lime-200"
+                      className="block truncate text-zinc-200 hover:text-lime-200"
                       href={buildAnalyticsHref(
                         `/players/${song.submitterId}`,
                         currentParams,
-                        { q: null, sort: null },
+                        { dir: null, q: null, sort: null },
                       )}
                     >
-                      {song.submitterName}
+                      <span title={song.submitterName}>{song.submitterName}</span>
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <p className="whitespace-nowrap text-zinc-300">
+                    <p className="truncate text-zinc-300" title={song.leagueName}>
                       {song.leagueName}
                     </p>
-                    <p className="mt-0.5 max-w-52 truncate text-xs text-zinc-500">
+                    <p className="mt-0.5 truncate text-xs text-zinc-500" title={song.roundName}>
                       R{song.roundOrdinal} · {song.roundName}
                     </p>
                   </TableCell>
@@ -258,13 +311,13 @@ export default async function SongsPage({
                   <TableCell className="text-right font-mono">
                     {song.pointsPerEligibleVoter?.toFixed(2) ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className="hidden text-right font-mono xl:table-cell">
                     {percent(song.roundPointShare)}
                   </TableCell>
                   <TableCell className="text-right font-mono text-lime-200">
                     {song.supportIndex?.toFixed(2) ?? "—"}×
                   </TableCell>
-                  <TableCell className="text-right font-mono">
+                  <TableCell className="hidden text-right font-mono 2xl:table-cell">
                     {song.performancePercentile === null
                       ? "—"
                       : `${song.performancePercentile.toFixed(0)}th`}
@@ -323,11 +376,11 @@ export default async function SongsPage({
         <CardHeader>
           <CardTitle className="text-sm">How comparison works</CardTitle>
           <CardDescription>
-            Points and positive reach use only recorded eligible voter rows;
-            the submitter is excluded from those denominators where identifiable.
-            Missing rows are not zeros. Support index and percentile are
-            computed against the full round before search and pagination are
-            applied.
+            Active voters create eligible opportunities for visible songs they
+            did not submit. Omitted eligible opportunities count as zero; rounds
+            where a submitter did not vote do not create zeroes for that player.
+            Support index and percentile are computed against the full round
+            before search and pagination are applied.
           </CardDescription>
         </CardHeader>
       </Card>

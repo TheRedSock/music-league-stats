@@ -3,6 +3,7 @@ import {
   Clock3,
   ExternalLink,
   Gauge,
+  Info,
   Medal,
   Network,
   UserRound,
@@ -33,6 +34,7 @@ import {
   resolveAnalyticsFilter,
   selectedFilterLabel,
   type DirectionalRelationship,
+  type MutualRelationship,
   type SearchParams,
   type SongAnalyticsRow,
 } from "@/lib/analytics";
@@ -45,6 +47,21 @@ export const dynamic = "force-dynamic";
 
 function metric(value: number | null | undefined, digits = 2): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
+}
+
+function ordinal(value: number): string {
+  const rounded = Math.round(value);
+  const suffix =
+    rounded % 100 >= 11 && rounded % 100 <= 13
+      ? "th"
+      : ["th", "st", "nd", "rd"][rounded % 10] ?? "th";
+  return `${rounded}${suffix}`;
+}
+
+function percentileLabel(value: number | null | undefined): string {
+  return value === null || value === undefined
+    ? "—"
+    : `${ordinal(value * 100)} percentile`;
 }
 
 function relationshipExtremes(
@@ -61,6 +78,26 @@ function relationshipExtremes(
       .slice(0, 3),
     least: [...sampled]
       .sort((a, b) => a.pointsPerEncounter - b.pointsPerEncounter)
+      .slice(0, 3),
+  };
+}
+
+function mutualExtremes(relationships: MutualRelationship[]) {
+  const sampled = relationships.filter(
+    (row) => row.opportunities >= 10 && row.sharedRounds >= 3,
+  );
+  return {
+    mostPoints: [...sampled]
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 3),
+    leastPoints: [...sampled]
+      .sort((a, b) => a.points - b.points)
+      .slice(0, 3),
+    highestShare: [...sampled]
+      .sort((a, b) => b.ballotPointShare - a.ballotPointShare)
+      .slice(0, 3),
+    lowestShare: [...sampled]
+      .sort((a, b) => a.ballotPointShare - b.ballotPointShare)
       .slice(0, 3),
   };
 }
@@ -147,15 +184,17 @@ export default async function PlayerProfilePage({
   const low = [...profile.submissions].reverse().slice(0, 3);
   const received = relationshipExtremes(profile.relationships, "received");
   const given = relationshipExtremes(profile.relationships, "given");
+  const mutual = mutualExtremes(profile.mutualRelationships);
   const alignmentSplit = Math.ceil(profile.alignments.length / 2);
   const highestAlignments = profile.alignments
     .slice(0, Math.min(4, alignmentSplit));
   const lowestAlignments = profile.alignments
     .slice(Math.max(alignmentSplit, profile.alignments.length - 4))
     .reverse();
-  const averageTiming = profile.timing.length
-    ? profile.timing.reduce((sum, row) => sum + row.relativeOrder, 0) /
-      profile.timing.length
+  const votedTiming = profile.timing.filter((row) => row.relativeOrder !== null);
+  const averageTiming = votedTiming.length
+    ? votedTiming.reduce((sum, row) => sum + row.relativeOrder!, 0) /
+      votedTiming.length
     : null;
   const overviewCards = [
     { label: "Exported points", value: overview?.totalPoints.toLocaleString() ?? "—" },
@@ -256,8 +295,8 @@ export default async function PlayerProfilePage({
         <CardHeader>
           <CardTitle>Point distributions</CardTitle>
           <CardDescription>
-            Explicit exported vote rows only. Toggle each view between counts
-            and its own distribution ratio; missing ballots are not zeros.
+            Active ballots include inferred zeroes for omitted eligible songs.
+            Toggle each view between counts and its own distribution ratio.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -273,13 +312,13 @@ export default async function PlayerProfilePage({
           {
             direction: "received" as const,
             title: "Points received by voter",
-            description: `Who gave ${player.name}'s songs more or fewer points per recorded encounter.`,
+            description: `Who gave ${player.name}'s songs more or fewer points per eligible opportunity.`,
             groups: received,
           },
           {
             direction: "given" as const,
             title: "Points given by recipient",
-            description: `Whose songs ${player.name} gave more or fewer points per recorded encounter.`,
+            description: `Whose songs ${player.name} gave more or fewer points per eligible opportunity.`,
             groups: given,
           },
         ].map(({ description, direction, groups, title }) => (
@@ -316,7 +355,7 @@ export default async function PlayerProfilePage({
                             {row.competitorName}
                           </Link>
                           <p className="mt-0.5 text-[11px] text-zinc-600">
-                            {row.encounters} encounters ·{" "}
+                            {row.encounters} opportunities ·{" "}
                             {row.sharedRounds} rounds ·{" "}
                             {(row.positiveRate * 100).toFixed(0)}% positive
                           </p>
@@ -331,13 +370,14 @@ export default async function PlayerProfilePage({
               ))}
               {!groups.most.length ? (
                 <p className="text-sm leading-6 text-zinc-500 sm:col-span-2">
-                  No comparison reaches 10 recorded encounters across three
+                  No comparison reaches 10 eligible opportunities across three
                   rounds in this scope.
                 </p>
               ) : (
                 <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
-                  The displayed rate is points per recorded encounter.
-                  Comparisons require at least 10 encounters across three
+                  The displayed rate is points per eligible opportunity,
+                  including inferred zeroes. Comparisons require at least 10
+                  opportunities across three
                   rounds so very small samples do not lead the ratio ranking.
                 </p>
               )}
@@ -346,15 +386,109 @@ export default async function PlayerProfilePage({
         ))}
       </section>
 
+      <Card className="mt-6">
+        <CardHeader>
+          <Network aria-hidden="true" className="mb-2 size-5 text-lime-300" />
+          <CardTitle>Mutual voting support</CardTitle>
+          <CardDescription>
+            Combined points between {player.name} and another player in both
+            directions, shown both as totals and as the share of eligible ballot
+            points allocated to each other.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-7 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              label: "Most combined points",
+              rows: mutual.mostPoints,
+              value: (row: MutualRelationship) => `${row.points} pts`,
+            },
+            {
+              label: "Fewest combined points",
+              rows: mutual.leastPoints,
+              value: (row: MutualRelationship) => `${row.points} pts`,
+            },
+            {
+              label: "Highest ballot share",
+              rows: mutual.highestShare,
+              value: (row: MutualRelationship) =>
+                `${(row.ballotPointShare * 100).toFixed(1)}%`,
+            },
+            {
+              label: "Lowest ballot share",
+              rows: mutual.lowestShare,
+              value: (row: MutualRelationship) =>
+                `${(row.ballotPointShare * 100).toFixed(1)}%`,
+            },
+          ].map(({ label, rows, value }) => (
+            <div key={label}>
+              <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+                {label}
+              </h3>
+              <ol className="mt-2 divide-y divide-white/[0.06]">
+                {rows.map((row) => (
+                  <li
+                    className="flex items-center justify-between gap-3 py-3"
+                    key={row.competitorId}
+                  >
+                    <div className="min-w-0">
+                      <Link
+                        className="truncate text-sm font-medium text-zinc-100 hover:text-lime-200"
+                        href={buildAnalyticsHref(
+                          `/players/${row.competitorId}`,
+                          filterParams,
+                          {},
+                        )}
+                      >
+                        {row.competitorName}
+                      </Link>
+                      <p className="mt-0.5 text-[11px] text-zinc-600">
+                        {row.pointsPerOpportunity.toFixed(2)} pts/opportunity ·{" "}
+                        {(row.positiveRate * 100).toFixed(0)}% positive ·{" "}
+                        {row.sharedRounds} rounds
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-mono text-sm text-lime-200">
+                      {value(row)}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+          {!mutual.mostPoints.length ? (
+            <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
+              No mutual comparison reaches 10 eligible opportunities across
+              three rounds in this scope.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+
       <section className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <Gauge aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-            <CardTitle>Vote-pattern alignment</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>Vote-pattern alignment</CardTitle>
+              <details className="group relative">
+                <summary className="inline-flex cursor-help list-none rounded-sm text-zinc-500 outline-none hover:text-zinc-300 focus-visible:ring-2 focus-visible:ring-lime-300/40">
+                  <Info aria-hidden="true" className="size-4" />
+                  <span className="sr-only">Show alignment formula details</span>
+                </summary>
+                <p className="absolute left-0 top-6 z-20 w-72 rounded-xl border border-white/10 bg-zinc-950 p-3 text-xs font-normal leading-5 text-zinc-300 shadow-2xl">
+                  Compares inferred-zero full-ballot vectors only in the
+                  selected scope. Each ballot is normalized by its eligible
+                  point total. Songs submitted by either player become one
+                  mutual-support bucket when both directions exist, avoiding
+                  extra weight from submitting multiple songs.
+                </p>
+              </details>
+            </div>
             <CardDescription>
-              Cosine alignment on songs both voters rated, excluding songs
-              submitted by either person. Shown only at 20 common songs across
-              at least three rounds.
+              Budget-normalized cosine alignment on comparable selected-scope
+              ballot features. Shown only after the pair meets sample and
+              coverage thresholds.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -386,12 +520,12 @@ export default async function PlayerProfilePage({
                               {alignment.competitorName}
                             </Link>
                             <p className="mt-0.5 text-[11px] text-zinc-600">
-                              {alignment.commonSongs} songs ·{" "}
-                              {alignment.sharedRounds} rounds
+                              {alignment.comparableFeatures} features ·{" "}
+                              {alignment.sharedRounds}/{alignment.scopeRounds} rounds
                             </p>
                           </div>
                           <p className="font-mono text-sm text-lime-200">
-                            {alignment.alignment.toFixed(2)}
+                            {(alignment.alignment * 100).toFixed(0)}%
                           </p>
                         </li>
                       ))}
@@ -405,8 +539,9 @@ export default async function PlayerProfilePage({
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">
-              Alignment describes exported point patterns. It does not infer
-              friendship, listening behavior, or causality.
+              Alignment describes selected-scope vote patterns, including
+              inferred zeroes for active ballots. It does not infer friendship,
+              listening behavior, or causality.
             </p>
           </CardContent>
         </Card>
@@ -421,16 +556,18 @@ export default async function PlayerProfilePage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {averageTiming !== null ? (
+            {profile.timing.length ? (
               <>
-                <div className="mb-5">
-                  <p className="font-mono text-3xl font-semibold text-white">
-                    {(averageTiming * 100).toFixed(0)}%
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Average relative order position
-                  </p>
-                </div>
+                {averageTiming !== null ? (
+                  <div className="mb-5">
+                    <p className="font-mono text-3xl font-semibold text-white">
+                      {percentileLabel(averageTiming)}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Average relative voting order
+                    </p>
+                  </div>
+                ) : null}
                 <ol className="divide-y divide-white/[0.06]">
                   {profile.timing.slice(0, 8).map((row) => (
                     <li
@@ -441,17 +578,21 @@ export default async function PlayerProfilePage({
                         <p className="truncate text-sm text-zinc-200">
                           {row.leagueName} · R{row.ordinal} {row.roundName}
                         </p>
-                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-                          <div
-                            aria-hidden="true"
-                            className="h-full rounded-full bg-violet-300"
-                            style={{ width: `${row.relativeOrder * 100}%` }}
-                          />
-                        </div>
+                        {row.relativeOrder !== null ? (
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+                            <div
+                              aria-hidden="true"
+                              className="h-full rounded-full bg-violet-300"
+                              style={{ width: `${row.relativeOrder * 100}%` }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                       <div className="text-right">
                         <p className="font-mono text-sm text-violet-200">
-                          {(row.relativeOrder * 100).toFixed(0)}%
+                          {row.participation === "did_not_vote"
+                            ? "Did not vote"
+                            : percentileLabel(row.relativeOrder)}
                         </p>
                         <p className="text-[10px] text-zinc-600">
                           {row.observedVoters} voters
@@ -463,13 +604,13 @@ export default async function PlayerProfilePage({
               </>
             ) : (
               <p className="text-sm text-zinc-500">
-                No exported ballot timestamps in this scope.
+                No submitted or voted rounds in this scope.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">
-              A lower position means the recorded ballot completion preceded
-              more observed ballots. It says nothing about a deadline or why a
-              voter submitted at that time.
+              A lower percentile means the recorded ballot completion preceded
+              more observed ballots. Submitted rounds without any exported vote
+              row are shown as did not vote.
             </p>
           </CardContent>
         </Card>

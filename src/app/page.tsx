@@ -41,7 +41,7 @@ const summaryMetadata = [
   { key: "rounds", label: "Imported rounds", icon: BarChart3 },
   { key: "players", label: "Players", icon: UsersRound },
   { key: "songs", label: "Songs", icon: Music2 },
-  { key: "points", label: "Exported points", icon: Sparkles },
+  { key: "points", label: "Eligible points", icon: Sparkles },
 ] as const;
 
 export default async function HomePage({
@@ -141,7 +141,7 @@ export default async function HomePage({
                       Top round-adjusted songs
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      Support index compares a song&apos;s share of exported
+                      Support index compares a song&apos;s share of eligible
                       round points with an equal share of that round&apos;s
                       slate. 1.0 is round average.
                     </CardDescription>
@@ -201,10 +201,11 @@ export default async function HomePage({
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Exported vote points</CardTitle>
+                  <CardTitle>Eligible vote points</CardTitle>
                   <CardDescription>
-                    Counts only recorded vote rows. The zero bar is made from
-                    explicit exported zeros, not missing ballots.
+                    Active voters create eligible opportunities for every
+                    visible song they did not submit. Omitted opportunities are
+                    counted as zero.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -258,12 +259,12 @@ export default async function HomePage({
                         {data.alignment.rightName}
                       </h2>
                       <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-                        Their exported point vectors have cosine alignment{" "}
-                        {data.alignment.alignment.toFixed(2)} across{" "}
-                        {data.alignment.commonSongs} commonly rated songs in{" "}
-                        {data.alignment.sharedRounds} rounds. Songs submitted by
-                        either player are excluded. This describes vote
-                        patterns, not personal relationships or causality.
+                        Their budget-normalized point vectors have{" "}
+                        {(data.alignment.alignment * 100).toFixed(0)}%
+                        alignment across {data.alignment.comparableFeatures}{" "}
+                        comparable features in {data.alignment.sharedRounds}/
+                        {data.alignment.scopeRounds} rounds. This describes
+                        vote patterns, not personal relationships or causality.
                       </p>
                     </>
                   ) : (
@@ -272,8 +273,9 @@ export default async function HomePage({
                         More shared ratings needed
                       </h2>
                       <p className="mt-2 text-sm leading-6 text-zinc-400">
-                        Alignment appears after two voters share at least 20
-                        eligible song ratings across three rounds.
+                        Alignment appears after two voters have enough
+                        comparable selected-scope ballot features and shared
+                        voted rounds.
                       </p>
                     </>
                   )}

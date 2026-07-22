@@ -28,3 +28,12 @@ export type AdminImportBatch = {
   createdAt: string;
   completedAt: string | null;
 };
+
+export type AdminPlayer = {
+  id: string;
+  sourceCompetitorId: string;
+  importedName: string;
+  nameOverride: string | null;
+  displayName: string;
+  leagueCount: number;
+};

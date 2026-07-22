@@ -7,6 +7,7 @@ import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
+import { SortableTableHead } from "@/components/analytics/sortable-table-head";
 import { Container } from "@/components/layout/container";
 import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
@@ -24,14 +25,17 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  TruncatedCell,
 } from "@/components/ui/table";
 import {
   buildAnalyticsHref,
+  defaultPlayerSortDirection,
   getFilterOptions,
   getPlayersData,
   loadAnalytics,
   parseAnalyticsFilters,
   parsePlayerSort,
+  parsePlayerSortDirection,
   parsePositiveInteger,
   parseSearch,
   resolveAnalyticsFilter,
@@ -49,8 +53,14 @@ export const dynamic = "force-dynamic";
 const sortLabels = {
   performance: "Round-adjusted performance",
   points: "Total points",
+  songs: "Submitted songs",
   rounds: "Entered rounds",
   name: "Name",
+  "points-per-song": "Points per song",
+  "points-per-voter": "Points per eligible voter",
+  percentile: "Average percentile",
+  wins: "Round wins",
+  "top-quartile": "Top quartile rate",
 } as const;
 
 function value(value: number | null, digits = 2): string {
@@ -65,6 +75,7 @@ export default async function PlayersPage({
   const params = await searchParams;
   const search = parseSearch(params.q);
   const sort = parsePlayerSort(params.sort);
+  const direction = parsePlayerSortDirection(params.dir, sort);
   const minimumRounds = parsePositiveInteger(params.min, 3, 20);
   const result = await loadAnalytics(async () => {
     const options = await getFilterOptions();
@@ -72,6 +83,7 @@ export default async function PlayersPage({
     const data = await getPlayersData(filter, {
       search,
       sort,
+      direction,
       minimumRounds,
     });
     return { data, filter, options };
@@ -91,13 +103,9 @@ export default async function PlayersPage({
     round: filter.roundId,
     q: search || null,
     sort,
+    dir: direction,
     min: minimumRounds,
   };
-  const ranks = new Map(
-    data.rows
-      .filter((player) => !player.provisional)
-      .map((player, index) => [player.id, index + 1]),
-  );
 
   return (
     <Container className="py-10 sm:py-14">
@@ -191,51 +199,71 @@ export default async function PlayersPage({
 
       {data.rows.length ? (
         <Card className="mt-3 overflow-hidden">
-          <Table className="min-w-[1080px]">
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-14">Rank</TableHead>
-                <TableHead className="sticky left-0 z-10 min-w-52 bg-zinc-950/95">
+                <SortableTableHead
+                  activeDirection={direction}
+                  activeSort={sort}
+                  className="w-[18%]"
+                  defaultDirection={defaultPlayerSortDirection("name")}
+                  params={currentParams}
+                  path="/players"
+                  sortKey="name"
+                >
                   Player
-                </TableHead>
-                <TableHead className="text-right">Points</TableHead>
-                <TableHead className="text-right">Songs</TableHead>
-                <TableHead className="text-right">Rounds</TableHead>
-                <TableHead className="text-right" title="Exported points received divided by submitted songs.">
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[9%]" defaultDirection={defaultPlayerSortDirection("points")} params={currentParams} path="/players" sortKey="points">
+                  Points
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[8%]" defaultDirection={defaultPlayerSortDirection("songs")} params={currentParams} path="/players" sortKey="songs">
+                  Songs
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[8%]" defaultDirection={defaultPlayerSortDirection("rounds")} params={currentParams} path="/players" sortKey="rounds">
+                  Rounds
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultPlayerSortDirection("points-per-song")} params={currentParams} path="/players" sortKey="points-per-song" title="Eligible points received divided by submitted songs.">
                   Pts / song
-                </TableHead>
-                <TableHead className="text-right" title="Exported points received divided by recorded eligible vote rows.">
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultPlayerSortDirection("points-per-voter")} params={currentParams} path="/players" sortKey="points-per-voter" title="Eligible points received divided by eligible vote opportunities.">
                   Pts / voter
-                </TableHead>
-                <TableHead className="text-right" title="Average of round-local point share divided by equal entrant share; 1.0 is round average.">
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[12%]" defaultDirection={defaultPlayerSortDirection("performance")} params={currentParams} path="/players" sortKey="performance" title="Average of round-local point share divided by equal entrant share; 1.0 is round average.">
                   Avg round index
-                </TableHead>
-                <TableHead className="text-right">Avg percentile</TableHead>
-                <TableHead className="text-right">Wins</TableHead>
-                <TableHead className="text-right">Top quartile</TableHead>
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[10%] 2xl:table-cell" defaultDirection={defaultPlayerSortDirection("percentile")} params={currentParams} path="/players" sortKey="percentile">
+                  Avg percentile
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[7%]" defaultDirection={defaultPlayerSortDirection("wins")} params={currentParams} path="/players" sortKey="wins">
+                  Wins
+                </SortableTableHead>
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[10%] lg:table-cell" defaultDirection={defaultPlayerSortDirection("top-quartile")} params={currentParams} path="/players" sortKey="top-quartile">
+                  Top quartile
+                </SortableTableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.rows.map((player) => (
                   <TableRow key={player.id}>
                     <TableCell className="font-mono text-zinc-600">
-                      {player.provisional
+                      {player.performanceRank === null
                         ? "—"
-                        : String(ranks.get(player.id)).padStart(2, "0")}
+                        : String(player.performanceRank).padStart(2, "0")}
                     </TableCell>
-                    <TableCell className="sticky left-0 z-10 bg-zinc-950/95">
+                    <TableCell>
                       <Link
-                        className="font-medium text-zinc-100 hover:text-lime-200"
+                        className="block truncate font-medium text-zinc-100 hover:text-lime-200"
                         href={buildAnalyticsHref(
                           `/players/${player.id}`,
                           currentParams,
-                          { q: null, sort: null, min: null },
+                          { dir: null, q: null, sort: null, min: null },
                         )}
                       >
-                        {player.name}
+                        <TruncatedCell title={player.name}>{player.name}</TruncatedCell>
                       </Link>
                       {player.provisional ? (
-                        <Badge className="ml-2" variant="muted">
+                        <Badge className="mt-1" variant="muted">
                           Provisional
                         </Badge>
                       ) : null}
@@ -249,16 +277,16 @@ export default async function PlayersPage({
                     <TableCell className="text-right font-mono">
                       {player.enteredRounds}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="hidden text-right font-mono xl:table-cell">
                       {value(player.pointsPerSubmission)}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="hidden text-right font-mono xl:table-cell">
                       {value(player.pointsPerEligibleVoter)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-lime-200">
                       {value(player.averageRoundIndex)}×
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="hidden text-right font-mono 2xl:table-cell">
                       {player.averageRoundPercentile === null
                         ? "—"
                         : `${player.averageRoundPercentile.toFixed(0)}th`}
@@ -266,7 +294,7 @@ export default async function PlayersPage({
                     <TableCell className="text-right font-mono">
                       {player.roundWins}
                     </TableCell>
-                    <TableCell className="text-right font-mono">
+                    <TableCell className="hidden text-right font-mono lg:table-cell">
                       {player.topQuartileRate === null
                         ? "—"
                         : `${(player.topQuartileRate * 100).toFixed(0)}%`}
