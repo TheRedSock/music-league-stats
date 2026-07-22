@@ -304,26 +304,30 @@ export default async function SongsPage({
                       <span title={song.submitterName}>{song.submitterName}</span>
                     </Link>
                   </TableCell>
-                  <TableCell>
-                    <p className="truncate text-zinc-300">
-                      <MusicLeagueLink
-                        href={musicLeagueUrl(song.leagueMusicLeagueId)}
-                        title={song.leagueName}
-                      >
-                        {song.leagueName}
-                      </MusicLeagueLink>
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-zinc-500">
-                      <MusicLeagueLink
-                        href={musicLeagueUrl(
-                          song.leagueMusicLeagueId,
-                          song.sourceRoundId,
-                        )}
-                        title={song.roundName}
-                      >
-                        R{song.roundOrdinal} · {song.roundName}
-                      </MusicLeagueLink>
-                    </p>
+                  <TableCell className="max-w-0 min-w-0">
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="min-w-0">
+                        <MusicLeagueLink
+                          className="text-zinc-300"
+                          href={musicLeagueUrl(song.leagueMusicLeagueId)}
+                          title={song.leagueName}
+                        >
+                          {song.leagueName}
+                        </MusicLeagueLink>
+                      </div>
+                      <div className="min-w-0">
+                        <MusicLeagueLink
+                          className="text-xs text-zinc-500"
+                          href={musicLeagueUrl(
+                            song.leagueMusicLeagueId,
+                            song.sourceRoundId,
+                          )}
+                          title={song.roundName}
+                        >
+                          R{song.roundOrdinal} · {song.roundName}
+                        </MusicLeagueLink>
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-white">
                     {song.points}

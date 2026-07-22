@@ -16,7 +16,7 @@ export function MusicLeagueLink({
 }) {
   if (!href) {
     return (
-      <span className={className} title={title}>
+      <span className={cn("block truncate", className)} title={title}>
         {children}
       </span>
     );
@@ -24,13 +24,16 @@ export function MusicLeagueLink({
 
   return (
     <a
-      className={cn("inline-flex min-w-0 items-center gap-1 hover:text-lime-200", className)}
+      className={cn(
+        "inline-flex max-w-full min-w-0 items-center gap-1 hover:text-lime-200",
+        className,
+      )}
       href={href}
       rel="noreferrer"
       target="_blank"
       title={title}
     >
-      <span className="truncate">{children}</span>
+      <span className="min-w-0 truncate">{children}</span>
       <ExternalLink aria-hidden="true" className="size-3 shrink-0" />
     </a>
   );
