@@ -25,6 +25,7 @@ const otherLeagueId = "22222222-2222-4222-8222-222222222222";
 const roundId = "33333333-3333-4333-8333-333333333333";
 
 const options: FilterOptions = {
+  defaultLeagueId: leagueId,
   leagues: [
     { id: leagueId, name: "League A", slug: "league-a" },
     { id: otherLeagueId, name: "League B", slug: "league-b" },
@@ -111,8 +112,23 @@ describe("analytics filter helpers", () => {
     expect(parseAnalyticsFilters({ league: leagueId, round: roundId })).toEqual({
       leagueId,
       roundId,
+      useDefaultLeague: false,
     });
     expect(parseAnalyticsFilters({ league: "nope", round: "also-nope" })).toEqual({
+      leagueId: null,
+      roundId: null,
+      useDefaultLeague: false,
+    });
+  });
+
+  it("defaults an omitted scope to the latest league but preserves explicit all", () => {
+    expect(resolveAnalyticsFilter(parseAnalyticsFilters({}), options)).toEqual({
+      leagueId,
+      roundId: null,
+    });
+    expect(
+      resolveAnalyticsFilter(parseAnalyticsFilters({ league: "all" }), options),
+    ).toEqual({
       leagueId: null,
       roundId: null,
     });
@@ -121,12 +137,15 @@ describe("analytics filter helpers", () => {
   it("drops a round that does not belong to the selected league", () => {
     expect(
       resolveAnalyticsFilter(
-        { leagueId: otherLeagueId, roundId },
+        { leagueId: otherLeagueId, roundId, useDefaultLeague: false },
         options,
       ),
     ).toEqual({ leagueId: otherLeagueId, roundId: null });
     expect(
-      resolveAnalyticsFilter({ leagueId: null, roundId }, options),
+      resolveAnalyticsFilter(
+        { leagueId: null, roundId, useDefaultLeague: false },
+        options,
+      ),
     ).toEqual({ leagueId: null, roundId });
   });
 

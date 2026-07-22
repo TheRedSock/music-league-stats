@@ -68,7 +68,7 @@ export default async function HomePage({
 
   const { data, filter, options } = result.data;
   const filterParams = {
-    league: filter.leagueId,
+    league: filter.leagueId ?? "all",
     round: filter.roundId,
   };
 

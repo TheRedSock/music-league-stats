@@ -63,14 +63,16 @@ export function AnalyticsFilterBar({
             navigate({
               league,
               round:
-                selectedRound && league && selectedRound.leagueId !== league
+                selectedRound &&
+                league !== "all" &&
+                selectedRound.leagueId !== league
                   ? ""
                   : (filter.roundId ?? ""),
             });
           }}
-          value={filter.leagueId ?? ""}
+          value={filter.leagueId ?? "all"}
         >
-          <option value="">All leagues</option>
+          <option value="all">All leagues</option>
           {options.leagues.map((league) => (
             <option key={league.id} value={league.id}>
               {league.name}

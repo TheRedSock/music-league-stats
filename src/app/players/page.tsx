@@ -99,7 +99,7 @@ export default async function PlayersPage({
 
   const { data, filter, options } = result.data;
   const currentParams = {
-    league: filter.leagueId,
+    league: filter.leagueId ?? "all",
     round: filter.roundId,
     q: search || null,
     sort,

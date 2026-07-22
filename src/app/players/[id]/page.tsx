@@ -211,7 +211,7 @@ export default async function PlayerProfilePage({
   const { filter, options, profile } = result.data;
   const { overview, player } = profile;
   const filterParams = {
-    league: filter.leagueId,
+    league: filter.leagueId ?? "all",
     round: filter.roundId,
   };
   const high = profile.submissions.slice(0, 5);

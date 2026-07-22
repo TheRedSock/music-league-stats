@@ -20,9 +20,13 @@ export type SearchParams = Record<string, string | string[] | undefined>;
 export type AnalyticsFilterRequest = {
   leagueId: string | null;
   roundId: string | null;
+  useDefaultLeague: boolean;
 };
 
-export type AnalyticsFilter = AnalyticsFilterRequest;
+export type AnalyticsFilter = {
+  leagueId: string | null;
+  roundId: string | null;
+};
 
 export type LeagueOption = {
   id: string;
@@ -41,6 +45,7 @@ export type RoundOption = {
 export type FilterOptions = {
   leagues: LeagueOption[];
   rounds: RoundOption[];
+  defaultLeagueId: string | null;
 };
 
 export type AnalyticsLoad<T> =
@@ -240,6 +245,7 @@ export function parseAnalyticsFilters(
   return {
     leagueId: isUuid(league) ? league : null,
     roundId: isUuid(round) ? round : null,
+    useDefaultLeague: league === undefined && round === undefined,
   };
 }
 
@@ -247,8 +253,11 @@ export function resolveAnalyticsFilter(
   request: AnalyticsFilterRequest,
   options: FilterOptions,
 ): AnalyticsFilter {
-  const leagueId = options.leagues.some(({ id }) => id === request.leagueId)
-    ? request.leagueId
+  const requestedLeagueId = request.useDefaultLeague
+    ? options.defaultLeagueId
+    : request.leagueId;
+  const leagueId = options.leagues.some(({ id }) => id === requestedLeagueId)
+    ? requestedLeagueId
     : null;
   const requestedRound = options.rounds.find(({ id }) => id === request.roundId);
   const roundId =
@@ -428,7 +437,11 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     db
       .select({ id: leagues.id, name: leagues.name, slug: leagues.slug })
       .from(leagues)
-      .orderBy(asc(leagues.name)),
+      .orderBy(
+        sql`${leagues.startDate} desc nulls last`,
+        sql`${leagues.createdAt} desc`,
+        asc(leagues.name),
+      ),
     db
       .select({
         id: rounds.id,
@@ -442,7 +455,13 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       .orderBy(asc(leagues.name), asc(rounds.ordinal)),
   ]);
 
-  return { leagues: leagueRows, rounds: roundRows };
+  return {
+    defaultLeagueId: leagueRows[0]?.id ?? null,
+    leagues: [...leagueRows].sort((left, right) =>
+      left.name.localeCompare(right.name),
+    ),
+    rounds: roundRows,
+  };
 }
 
 function scopePredicate(filter: AnalyticsFilter, alias: "r" | "rounds" = "r"): SQL {

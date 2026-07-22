@@ -94,7 +94,7 @@ export default async function SongsPage({
   const { data, filter, options } = result.data;
   const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const currentParams = {
-    league: filter.leagueId,
+    league: filter.leagueId ?? "all",
     round: filter.roundId,
     q: search || null,
     sort,
