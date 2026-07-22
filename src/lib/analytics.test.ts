@@ -4,6 +4,7 @@ import {
   buildAnalyticsHref,
   cosineSimilarity,
   createPointDistribution,
+  isoTimestamp,
   parseAnalyticsFilters,
   percentileRank,
   resolveAnalyticsFilter,
@@ -70,6 +71,13 @@ describe("analytics metric helpers", () => {
     expect(cosineSimilarity([1, 2], [1, 2])).toBeCloseTo(1);
     expect(cosineSimilarity([1, 0], [0, 1])).toBe(0);
     expect(cosineSimilarity([0, 0], [0, 0])).toBeNull();
+  });
+
+  it("normalizes database timestamps returned as dates or strings", () => {
+    const timestamp = "2026-07-22T14:30:00.000Z";
+    expect(isoTimestamp(timestamp)).toBe(timestamp);
+    expect(isoTimestamp(new Date(timestamp))).toBe(timestamp);
+    expect(() => isoTimestamp("not-a-date")).toThrow("invalid timestamp");
   });
 });
 

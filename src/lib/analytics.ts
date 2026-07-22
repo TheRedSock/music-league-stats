@@ -329,6 +329,14 @@ export function spotifyTrackUrl(uri: string): string | null {
   return match ? `https://open.spotify.com/track/${match[1]}` : null;
 }
 
+export function isoTimestamp(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error("Analytics query returned an invalid timestamp.");
+  }
+  return date.toISOString();
+}
+
 export async function loadAnalytics<T>(
   loader: () => Promise<T>,
 ): Promise<AnalyticsLoad<T>> {
@@ -506,7 +514,7 @@ type SongQueryRow = {
   roundId: string;
   roundName: string;
   roundOrdinal: number;
-  submittedAt: Date;
+  submittedAt: Date | string;
   points: number;
   eligibleRows: number;
   positiveRows: number;
@@ -521,7 +529,7 @@ function mapSong(row: SongQueryRow): SongAnalyticsRow {
   return {
     ...row,
     spotifyUrl: spotifyTrackUrl(row.spotifyUri),
-    submittedAt: row.submittedAt.toISOString(),
+    submittedAt: isoTimestamp(row.submittedAt),
   };
 }
 
@@ -1008,7 +1016,7 @@ export async function getPlayerProfileData(
     roundName: string;
     leagueName: string;
     ordinal: number;
-    castAt: Date;
+    castAt: Date | string;
     relativeOrder: number;
     observedVoters: number;
   }>(sql`
@@ -1074,7 +1082,7 @@ export async function getPlayerProfileData(
     alignments,
     timing: timingRows.map((row) => ({
       ...row,
-      castAt: row.castAt.toISOString(),
+      castAt: isoTimestamp(row.castAt),
     })),
   };
 }
