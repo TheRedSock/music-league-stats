@@ -1113,6 +1113,37 @@ export async function startScopeMaterializationJob(
   };
 }
 
+/**
+ * Ensure a multi-league relationship combo cache exists, advancing one step
+ * per call. Intended to run from the relationships page load after a scope
+ * filter is applied — not via a dedicated public compute API.
+ */
+export async function progressScopeMaterialization(
+  leagueIds: string[],
+  database: Database = db,
+): Promise<ScopeMaterializationStatus> {
+  const ids = [...new Set(leagueIds)].filter(Boolean).sort();
+  const scopeKey = analyticsScopeKey(ids);
+  if (ids.length < 2) {
+    return {
+      analyticsRevision: ANALYTICS_REVISION,
+      job: null,
+      progress: null,
+      scopeKey,
+      status: "missing",
+    };
+  }
+  if (!(await hasFreshAllLeaguesMaterialization(database))) {
+    return getScopeMaterializationStatus(scopeKey, database);
+  }
+
+  const started = await startScopeMaterializationJob(ids, database);
+  if (started.status !== "processing" || !started.job) {
+    return started;
+  }
+  return advanceScopeMaterializationJob(started.job.id, database);
+}
+
 export async function advanceScopeMaterializationJob(
   jobId: string,
   database: Database = db,

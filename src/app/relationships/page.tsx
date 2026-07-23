@@ -28,6 +28,7 @@ import {
   encodeScopeIds,
   getCachedFilterOptions,
   getCachedRelationshipsTableData,
+  getRelationshipsTableData,
   loadAnalytics,
   parseAnalyticsFilters,
   parseFocusPlayerId,
@@ -115,6 +116,40 @@ export default async function RelationshipsPage({
   const result = await loadAnalytics(async () => {
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
+
+    // Multi-league relationship caches are built as a side effect of applying
+    // this page's scope filter — not via a dedicated public compute API.
+    let scopeProgressLabel: string | null = null;
+    let scopeError: string | null = null;
+    let scopeReady = true;
+    if (filter.leagueIds.length >= 2) {
+      const { progressScopeMaterialization } = await import(
+        "@/lib/analytics-materialize"
+      );
+      const scopeStatus = await progressScopeMaterialization(filter.leagueIds);
+      if (scopeStatus.status === "failed") {
+        scopeError =
+          scopeStatus.job?.errorMessage ?? "Scope materialization failed.";
+        scopeReady = false;
+      } else if (scopeStatus.status !== "completed") {
+        scopeReady = false;
+        const progress = scopeStatus.progress;
+        scopeProgressLabel = progress
+          ? `${progress.stepLabel} (${progress.stepIndex + 1}/${progress.stepCount})…`
+          : "Preparing league combination…";
+      }
+    }
+
+    if (!scopeReady && tab !== "timing") {
+      return {
+        data: null,
+        filter,
+        options,
+        scopeError,
+        scopeProgressLabel,
+      };
+    }
+
     const data = await getCachedRelationshipsTableData(
       encodeScopeIds(filter.leagueIds),
       encodeScopeIds(filter.roundIds),
@@ -123,7 +158,21 @@ export default async function RelationshipsPage({
       direction,
       focus,
     );
-    return { data, filter, options };
+    if (data.needsScopeMaterialization && filter.leagueIds.length >= 2) {
+      return {
+        data: await getRelationshipsTableData(filter, {
+          direction,
+          focusPlayerId: focus,
+          sort,
+          tab,
+        }),
+        filter,
+        options,
+        scopeError: null,
+        scopeProgressLabel: null,
+      };
+    }
+    return { data, filter, options, scopeError: null, scopeProgressLabel: null };
   });
 
   if (result.status !== "ready") {
@@ -137,8 +186,8 @@ export default async function RelationshipsPage({
     );
   }
 
-  const { data, filter, options } = result.data;
-  if (data.needsScopeMaterialization && data.scopeKey) {
+  const { data, filter, options, scopeError, scopeProgressLabel } = result.data;
+  if (!data) {
     const { ScopeMaterializationSplash } = await import(
       "@/components/analytics/analytics-building"
     );
@@ -148,8 +197,8 @@ export default async function RelationshipsPage({
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
         <ScopeMaterializationSplash
-          leagueIds={filter.leagueIds}
-          scopeKey={data.scopeKey}
+          errorMessage={scopeError}
+          progressLabel={scopeProgressLabel}
         />
       </Container>
     );
