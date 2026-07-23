@@ -73,7 +73,7 @@ const sections = [
   },
   {
     title: "What is the Facts page?",
-    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion via reach−share spread), round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Player appeal panels use the same ~1/3-of-scope participation floor as other rankings. It uses the same league scope filter as the analytics pages.",
+    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion via standardized reach vs share), round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Player appeal panels use the same ~1/3-of-scope participation floor as other rankings. It uses the same league scope filter as the analytics pages.",
   },
 ];
 

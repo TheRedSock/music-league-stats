@@ -3484,17 +3484,14 @@ export async function getSubmissionFactsData(
         join selected_rounds sr on sr.id = ss.round_id
         join submissions sub on sub.id = ss.id
       ),
-      player_appeal as (
+      player_appeal_base as (
         select
           ss.submitter_id as "playerId",
           min(ss.submitter_name) as "playerName",
           count(*)::int as songs,
           count(distinct ss.round_id)::int as "enteredRounds",
           avg(ss.positive_reach)::double precision as "avgPositiveReach",
-          avg(ss.round_point_share)::double precision as "avgRoundPointShare",
-          (
-            avg(ss.positive_reach) - avg(ss.round_point_share)
-          )::double precision as "appealSpread"
+          avg(ss.round_point_share)::double precision as "avgRoundPointShare"
         from scoped_songs ss
         where ss.positive_reach is not null
           and ss.round_point_share is not null
@@ -3503,21 +3500,37 @@ export async function getSubmissionFactsData(
         having count(*) >= 3
           and count(distinct ss.round_id) >= (select minimum_rounds from scope_meta)
       ),
+      player_appeal as (
+        select
+          base.*,
+          (
+            (
+              base."avgPositiveReach"
+              - avg(base."avgPositiveReach") over ()
+            ) / nullif(stddev_pop(base."avgPositiveReach") over (), 0)
+            -
+            (
+              base."avgRoundPointShare"
+              - avg(base."avgRoundPointShare") over ()
+            ) / nullif(stddev_pop(base."avgRoundPointShare") over (), 0)
+          )::double precision as "appealSpread"
+        from player_appeal_base base
+      ),
       crowd_pleaser_players as (
         select *
         from player_appeal
-        where "appealSpread" > 0
+        where "appealSpread" is not null and "appealSpread" > 0
         order by "appealSpread" desc, "avgPositiveReach" desc, "playerName" asc
         limit 100
       ),
       niche_devotion_players as (
         select *
         from player_appeal
-        where "appealSpread" < 0
+        where "appealSpread" is not null and "appealSpread" < 0
         order by "appealSpread" asc, "avgRoundPointShare" desc, "playerName" asc
         limit 100
       ),
-      song_appeal as (
+      song_appeal_base as (
         select
           ss.id as "songId",
           ss.song_title as title,
@@ -3532,26 +3545,39 @@ export async function getSubmissionFactsData(
           ss.round_ordinal as "roundOrdinal",
           ss.positive_reach as "positiveReach",
           ss.round_point_share as "roundPointShare",
-          (
-            ss.positive_reach - ss.round_point_share
-          )::double precision as "appealSpread",
           ss.points
         from scoped_songs ss
         where ss.positive_reach is not null
           and ss.round_point_share is not null
           and ss.eligible_rows >= 5
       ),
+      song_appeal as (
+        select
+          base.*,
+          (
+            (
+              base."positiveReach"
+              - avg(base."positiveReach") over ()
+            ) / nullif(stddev_pop(base."positiveReach") over (), 0)
+            -
+            (
+              base."roundPointShare"
+              - avg(base."roundPointShare") over ()
+            ) / nullif(stddev_pop(base."roundPointShare") over (), 0)
+          )::double precision as "appealSpread"
+        from song_appeal_base base
+      ),
       thin_spread_songs as (
         select *
         from song_appeal
-        where "appealSpread" > 0
+        where "appealSpread" is not null and "appealSpread" > 0
         order by "appealSpread" desc, "positiveReach" desc, title asc
         limit 100
       ),
       cult_classic_songs as (
         select *
         from song_appeal
-        where "appealSpread" < 0
+        where "appealSpread" is not null and "appealSpread" < 0
         order by "appealSpread" asc, "roundPointShare" desc, title asc
         limit 100
       ),

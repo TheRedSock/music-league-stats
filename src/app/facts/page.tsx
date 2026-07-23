@@ -9,7 +9,7 @@ import {
   FACT_PREVIEW_LIMIT,
   FactPanel,
 } from "@/components/analytics/fact-panel";
-import { MusicLeagueLink } from "@/components/analytics/music-league-link";
+import { MusicLeagueLink, MusicLeagueScopeLinks } from "@/components/analytics/music-league-link";
 import { RoundOutcomeHover } from "@/components/analytics/round-outcome-hover";
 import { Container } from "@/components/layout/container";
 import {
@@ -75,10 +75,9 @@ function ratio(value: number | null | undefined, digits = 2): string {
   return value.toFixed(digits);
 }
 
-function signedSpread(value: number | null | undefined, digits = 1): string {
+function signedSpread(value: number | null | undefined, digits = 2): string {
   if (value == null || Number.isNaN(value)) return "—";
-  const points = value * 100;
-  return `${points >= 0 ? "+" : ""}${points.toFixed(digits)} pp`;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}σ`;
 }
 
 function correlationLabel(value: number | null): string {
@@ -222,6 +221,7 @@ function SpotifyTitle({
 }
 
 function RoundScopeLinks({
+  className,
   leagueMusicLeagueId,
   leagueName,
   leagueSlug,
@@ -229,6 +229,7 @@ function RoundScopeLinks({
   roundOrdinal,
   sourceRoundId,
 }: {
+  className?: string;
   leagueMusicLeagueId: string | null;
   leagueName: string;
   leagueSlug: string;
@@ -237,24 +238,15 @@ function RoundScopeLinks({
   sourceRoundId: string;
 }) {
   return (
-    <div className="min-w-0 space-y-0.5">
-      <MusicLeagueLink
-        className="text-sm font-medium text-zinc-100"
-        href={musicLeagueUrl(leagueMusicLeagueId)}
-        showIcon={false}
-        title={leagueName}
-      >
-        {leagueTableLabel({ name: leagueName, slug: leagueSlug })}
-      </MusicLeagueLink>
-      <MusicLeagueLink
-        className="text-xs text-zinc-500"
-        href={musicLeagueUrl(leagueMusicLeagueId, sourceRoundId)}
-        showIcon={false}
-        title={roundName}
-      >
-        R{roundOrdinal} · {truncateRoundName(roundName)}
-      </MusicLeagueLink>
-    </div>
+    <MusicLeagueScopeLinks
+      className={className ?? "text-xs text-zinc-500"}
+      leagueHref={musicLeagueUrl(leagueMusicLeagueId)}
+      leagueLabel={leagueTableLabel({ name: leagueName, slug: leagueSlug })}
+      leagueTitle={leagueName}
+      roundHref={musicLeagueUrl(leagueMusicLeagueId, sourceRoundId)}
+      roundLabel={`R${roundOrdinal} · ${truncateRoundName(roundName)}`}
+      roundTitle={roundName}
+    />
   );
 }
 
@@ -523,6 +515,7 @@ export default async function FactsPage({
             render: (row) => (
               <>
                 <RoundScopeLinks
+                  className="text-sm text-zinc-300"
                   leagueMusicLeagueId={row.leagueMusicLeagueId}
                   leagueName={row.leagueName}
                   leagueSlug={row.leagueSlug}
@@ -680,7 +673,7 @@ export default async function FactsPage({
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
-          description="High positive reach relative to round share (spread = reach − share). Broad mild appeal. Requires ~1/3 of scope rounds entered."
+          description="Above-average reach for below-average round share (spread = z_reach − z_share). Broad mild appeal. Requires ~1/3 of scope rounds entered."
           dialog={
             <FactTable
               headers={[
@@ -730,7 +723,7 @@ export default async function FactsPage({
         </FactPanel>
 
         <FactPanel
-          description="High round share relative to positive reach (negative spread). Concentrated devotees. Requires ~1/3 of scope rounds entered."
+          description="Below-average reach for above-average round share (negative z-spread). Concentrated devotees. Requires ~1/3 of scope rounds entered."
           dialog={
             <FactTable
               headers={[
@@ -782,7 +775,7 @@ export default async function FactsPage({
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
-          description="Everyone kinda liked it — high reach relative to round share."
+          description="Everyone kinda liked it — high reach z-score relative to round-share z-score in this scope."
           dialog={
             <FactTable
               headers={[
@@ -837,7 +830,7 @@ export default async function FactsPage({
         </FactPanel>
 
         <FactPanel
-          description="A cult classic — concentrated love from a smaller slice of voters."
+          description="A cult classic — high round-share z-score relative to reach z-score in this scope."
           dialog={
             <FactTable
               headers={[
@@ -936,6 +929,7 @@ export default async function FactsPage({
             render: (row) => (
               <RoundOutcomeHover songs={row.topSongs}>
                 <RoundScopeLinks
+                  className="text-sm text-zinc-300"
                   leagueMusicLeagueId={row.leagueMusicLeagueId}
                   leagueName={row.leagueName}
                   leagueSlug={row.leagueSlug}
@@ -995,6 +989,7 @@ export default async function FactsPage({
             render: (row) => (
               <RoundOutcomeHover songs={row.topSongs}>
                 <RoundScopeLinks
+                  className="text-sm text-zinc-300"
                   leagueMusicLeagueId={row.leagueMusicLeagueId}
                   leagueName={row.leagueName}
                   leagueSlug={row.leagueSlug}
