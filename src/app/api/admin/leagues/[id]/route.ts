@@ -11,7 +11,7 @@ import {
   adminErrorResponse,
   requireAdminMutation,
 } from "@/lib/admin-auth";
-import { invalidateAllLeaguesMaterialization } from "@/lib/analytics-materialize";
+import { invalidateScopesContainingLeague } from "@/lib/analytics-materialize";
 import { formatZodError } from "@/lib/import-data";
 import { leagueInputSchema } from "@/lib/league-validation";
 
@@ -50,7 +50,8 @@ export async function PUT(
     if (!league) {
       throw new AdminRequestError("League not found.", 404);
     }
-    await invalidateAllLeaguesMaterialization(
+    await invalidateScopesContainingLeague(
+      id,
       undefined,
       "Invalidated after league update.",
     );

@@ -1,5 +1,6 @@
 import { DatabaseZap, UploadCloud } from "lucide-react";
 
+import { AnalyticsBuildingSplash } from "@/components/analytics/analytics-building";
 import { ScopedLink } from "@/components/analytics/scoped-link";
 import { buttonStyles } from "@/components/ui/button";
 import {
@@ -13,9 +14,16 @@ import type { AnalyticsLoad } from "@/lib/analytics";
 
 export function AnalyticsUnavailable({
   status,
+  progressLabel,
 }: {
   status: Exclude<AnalyticsLoad<never>["status"], "ready">;
+  progressLabel?: string | null;
 }) {
+  if (status === "building") {
+    return (
+      <AnalyticsBuildingSplash progressLabel={progressLabel ?? null} />
+    );
+  }
   const setup = status === "setup";
   return (
     <Card className="mx-auto max-w-2xl border-dashed">

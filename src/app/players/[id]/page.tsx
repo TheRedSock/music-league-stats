@@ -230,7 +230,10 @@ export default async function PlayerProfilePage({
   if (result.status !== "ready") {
     return (
       <Container className="py-16 sm:py-24">
-        <AnalyticsUnavailable status={result.status} />
+        <AnalyticsUnavailable
+          progressLabel={result.status === "building" ? result.progressLabel : null}
+          status={result.status}
+        />
       </Container>
     );
   }

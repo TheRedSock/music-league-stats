@@ -129,12 +129,32 @@ export default async function RelationshipsPage({
   if (result.status !== "ready") {
     return (
       <Container className="py-16 sm:py-24">
-        <AnalyticsUnavailable status={result.status} />
+        <AnalyticsUnavailable
+          progressLabel={result.status === "building" ? result.progressLabel : null}
+          status={result.status}
+        />
       </Container>
     );
   }
 
   const { data, filter, options } = result.data;
+  if (data.needsScopeMaterialization && data.scopeKey) {
+    const { ScopeMaterializationSplash } = await import(
+      "@/components/analytics/analytics-building"
+    );
+    return (
+      <Container className="py-10 sm:py-14">
+        <div className="mb-8">
+          <AnalyticsFilterBar filter={filter} options={options} />
+        </div>
+        <ScopeMaterializationSplash
+          leagueIds={filter.leagueIds}
+          scopeKey={data.scopeKey}
+        />
+      </Container>
+    );
+  }
+
   const currentParams: Record<string, QueryValue> = {
     ...scopeQueryParams(filter),
     dir: direction,

@@ -58,7 +58,11 @@ export type FilterOptions = {
 export type AnalyticsLoad<T> =
   | { status: "ready"; data: T }
   | { status: "setup" }
-  | { status: "unavailable" };
+  | { status: "unavailable" }
+  | {
+      status: "building";
+      progressLabel: string | null;
+    };
 
 export type DashboardData = {
   summary: {
@@ -290,6 +294,8 @@ export type RelationshipsTableData = {
   direction: SortDirection;
   focusPlayer: { id: string; name: string } | null;
   rows: RelationshipTableRow[];
+  needsScopeMaterialization?: boolean;
+  scopeKey?: string;
 };
 
 export type SubmissionFactsData = {
@@ -391,12 +397,12 @@ export function parseAnalyticsFilters(
   params: SearchParams,
 ): AnalyticsFilterRequest {
   const leagueValues = allParams(params.league);
-  const roundValues = allParams(params.round);
   const explicitAllLeagues = leagueValues.includes("all");
 
+  // Round filters are retired: scope is always all rounds in the selected leagues.
   return {
     leagueIds: explicitAllLeagues ? [] : canonicalIds(leagueValues),
-    roundIds: canonicalIds(roundValues),
+    roundIds: [],
     useDefaultLeague: false,
   };
 }
@@ -406,20 +412,11 @@ export function resolveAnalyticsFilter(
   options: FilterOptions,
 ): AnalyticsFilter {
   const optionLeagueIds = new Set(options.leagues.map(({ id }) => id));
-  const optionRounds = new Map(options.rounds.map((round) => [round.id, round]));
   const leagueIds = request.useDefaultLeague
     ? canonicalIds(options.defaultLeagueId ? [options.defaultLeagueId] : [])
     : canonicalIds(request.leagueIds.filter((id) => optionLeagueIds.has(id)));
-  const roundIds = canonicalIds(
-    request.roundIds.filter((id) => {
-      const round = optionRounds.get(id);
-      return Boolean(
-        round && (!leagueIds.length || leagueIds.includes(round.leagueId)),
-      );
-    }),
-  );
 
-  return { leagueIds, roundIds };
+  return { leagueIds, roundIds: [] };
 }
 
 export function parseSongSort(value: string | string[] | undefined): SongSort {
@@ -555,11 +552,16 @@ export function buildAnalyticsHref(
 
 export function scopeQueryParams(
   filter: AnalyticsFilter,
-): Pick<Record<string, QueryValue>, "league" | "round"> {
+): Pick<Record<string, QueryValue>, "league"> {
   return {
     league: filter.leagueIds.length ? filter.leagueIds : "all",
-    round: filter.roundIds,
   };
+}
+
+/** Canonical mat/combo scope key: "all", a single league uuid, or sorted uuids joined by ",". */
+export function analyticsScopeKey(leagueIds: readonly string[]): string {
+  const ids = canonicalIds(leagueIds);
+  return ids.length ? ids.join(SCOPE_KEY_SEPARATOR) : "all";
 }
 
 export function encodeScopeIds(ids: readonly string[]): string {
@@ -657,6 +659,38 @@ export async function loadAnalytics<T>(
 ): Promise<AnalyticsLoad<T>> {
   if (!process.env.DATABASE_URL) return { status: "setup" };
   try {
+    const [row] = await db.execute<{
+      status: string | null;
+      summary: unknown;
+    }>(sql`
+      select status, summary
+      from analytics_materialization_jobs
+      where analytics_revision = ${ANALYTICS_REVISION}
+      order by created_at desc
+      limit 1
+    `);
+    if (row?.status === "processing" || row?.status === "pending") {
+      const summary = row.summary as {
+        kind?: string;
+        stepLabel?: string;
+        stepIndex?: number;
+        stepCount?: number;
+      } | null;
+      const progressLabel =
+        summary?.kind === "progress" && summary.stepLabel
+          ? `${summary.stepLabel} (${(summary.stepIndex ?? 0) + 1}/${summary.stepCount ?? 1})`
+          : row.status === "pending"
+            ? "Waiting to start analytics refresh…"
+            : "Refreshing analytics cache…";
+      return { status: "building", progressLabel };
+    }
+    if (row?.status !== "completed") {
+      return {
+        status: "building",
+        progressLabel:
+          "Analytics cache is not ready. An admin needs to run Refresh all-leagues stats.",
+      };
+    }
     return { status: "ready", data: await loader() };
   } catch (error) {
     const cause =
@@ -1196,6 +1230,18 @@ export function isAllLeaguesScope(filter: AnalyticsFilter): boolean {
   return filter.leagueIds.length === 0 && filter.roundIds.length === 0;
 }
 
+export function isSingleLeagueScope(filter: AnalyticsFilter): boolean {
+  return filter.leagueIds.length === 1 && filter.roundIds.length === 0;
+}
+
+export function isMultiLeagueScope(filter: AnalyticsFilter): boolean {
+  return filter.leagueIds.length > 1 && filter.roundIds.length === 0;
+}
+
+export function canUseSongDerivedMats(filter: AnalyticsFilter): boolean {
+  return filter.roundIds.length === 0;
+}
+
 export function leagueTableLabel(league: { slug: string; name: string }): string {
   return league.slug || league.name;
 }
@@ -1206,8 +1252,6 @@ export function truncateRoundName(name: string, max = 50): string {
 }
 
 async function hasCompletedAllLeaguesMaterialization(): Promise<boolean> {
-  // Only the latest job for the current revision counts as fresh. An older
-  // completed job must not keep serving mats after a newer pending/failed job.
   const [row] = await db.execute<{ status: string | null }>(sql`
     select status
     from analytics_materialization_jobs
@@ -1218,7 +1262,29 @@ async function hasCompletedAllLeaguesMaterialization(): Promise<boolean> {
   return row?.status === "completed";
 }
 
-function matSongSelect(): SQL {
+async function hasCompletedScopeMaterialization(scopeKey: string): Promise<boolean> {
+  if (scopeKey === "all" || !scopeKey.includes(",")) {
+    return hasCompletedAllLeaguesMaterialization();
+  }
+  const [row] = await db.execute<{ status: string | null }>(sql`
+    select status
+    from analytics_scope_jobs
+    where analytics_revision = ${ANALYTICS_REVISION}
+      and scope_key = ${scopeKey}
+    order by created_at desc
+    limit 1
+  `);
+  return row?.status === "completed";
+}
+
+function matSongSelect(leagueIds: readonly string[] = []): SQL {
+  const leagueFilter =
+    leagueIds.length > 0
+      ? sql`where league_id in (${sql.join(
+          leagueIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})`
+      : sql``;
   return sql`
     select
       id,
@@ -1247,23 +1313,58 @@ function matSongSelect(): SQL {
       support_index as "supportIndex",
       performance_percentile as "performancePercentile"
     from analytics_song_stats
+    ${leagueFilter}
   `;
 }
 
-async function getMaterializedDashboardData(): Promise<DashboardData> {
+async function getMaterializedDashboardData(
+  filter: AnalyticsFilter,
+): Promise<DashboardData> {
+  const scopeKey = analyticsScopeKey(filter.leagueIds);
+  const leagueIds = filter.leagueIds;
+  const songSource = matSongSelect(leagueIds);
+  const leagueCountSql =
+    leagueIds.length > 0
+      ? sql`(select count(*)::int from leagues where id in (${sql.join(
+          leagueIds.map((id) => sql`${id}`),
+          sql`, `,
+        )}))`
+      : sql`(select count(*)::int from leagues)`;
+  const roundCountSql =
+    leagueIds.length > 0
+      ? sql`(select count(*)::int from rounds where league_id in (${sql.join(
+          leagueIds.map((id) => sql`${id}`),
+          sql`, `,
+        )}))`
+      : sql`(select count(*)::int from rounds)`;
+  const playerCountSql =
+    leagueIds.length > 0
+      ? sql`(select count(distinct competitor_id)::int from league_members where league_id in (${sql.join(
+          leagueIds.map((id) => sql`${id}`),
+          sql`, `,
+        )}))`
+      : sql`(select count(distinct competitor_id)::int from league_members)`;
+
+  const useEagerPlayers = scopeKey === "all" || !scopeKey.includes(",");
   const [row] = await db.execute<DashboardCoreQueryRow>(sql`
-    with summary_row as (
+    with ranked_songs as (${songSource}),
+    summary_row as (
       select
-        (select count(*)::int from leagues) as "leagueCount",
-        (select count(*)::int from rounds) as "roundCount",
-        (select count(distinct competitor_id)::int from league_members) as "playerCount",
-        (select count(*)::int from analytics_song_stats) as "songCount",
+        ${leagueCountSql} as "leagueCount",
+        ${roundCountSql} as "roundCount",
+        ${playerCountSql} as "playerCount",
+        (select count(*)::int from ranked_songs) as "songCount",
         coalesce(
-          (select sum(points * count)::int from analytics_point_distribution),
-          0
+          (select sum(points * count)::int from analytics_point_distribution where scope_key = ${scopeKey}),
+          (
+            select coalesce(sum(ss.points), 0)::int from ranked_songs ss
+          )
         ) as "pointCount"
     ),
     leaderboard_rows as (
+      ${
+        useEagerPlayers
+          ? sql`
       select
         id,
         name,
@@ -1271,18 +1372,49 @@ async function getMaterializedDashboardData(): Promise<DashboardData> {
         average_round_index as "normalizedIndex",
         entered_rounds as "enteredRounds"
       from analytics_player_stats
+      where scope_key = ${scopeKey}
       order by total_points desc, name asc
       limit 100
+          `
+          : sql`
+      select
+        submitter_id as id,
+        min(submitter_name) as name,
+        sum(points)::int as "totalPoints",
+        avg(support_index) as "normalizedIndex",
+        count(distinct round_id)::int as "enteredRounds"
+      from ranked_songs
+      group by submitter_id
+      order by "totalPoints" desc, name asc
+      limit 100
+          `
+      }
     ),
     top_song_rows as (
-      ${matSongSelect()}
+      select * from ranked_songs
       order by "supportIndex" desc nulls last, points desc, title asc
       limit 10
     ),
     distribution_rows as (
+      ${
+        useEagerPlayers
+          ? sql`
       select points, count
       from analytics_point_distribution
+      where scope_key = ${scopeKey}
       order by points
+          `
+          : sql`
+      select points, sum(count)::int as count
+      from analytics_point_distribution
+      where scope_key in (${sql.join(
+        leagueIds.map((id) => sql`${id}`),
+        sql`, `,
+      )})
+      group by points
+      order by points
+          `
+      }
     )
     select
       summary_row.*,
@@ -1311,7 +1443,7 @@ async function getMaterializedDashboardData(): Promise<DashboardData> {
   `);
 
   return {
-    alignment: await getMaterializedDashboardAlignmentData(),
+    alignment: await getMaterializedDashboardAlignmentData(scopeKey),
     leaderboard: jsonRows<LeaderboardQueryRow>(row?.leaderboard),
     pointDistribution: createPointDistribution(
       jsonRows<{ points: number; count: number }>(row?.distribution),
@@ -1327,9 +1459,9 @@ async function getMaterializedDashboardData(): Promise<DashboardData> {
   };
 }
 
-async function getMaterializedDashboardAlignmentData(): Promise<
-  DashboardData["alignment"]
-> {
+async function getMaterializedDashboardAlignmentData(
+  scopeKey: string,
+): Promise<DashboardData["alignment"]> {
   const rows = await db.execute<DashboardData["alignment"][number]>(sql`
     select
       left_id as "leftId",
@@ -1341,6 +1473,7 @@ async function getMaterializedDashboardAlignmentData(): Promise<
       shared_rounds as "sharedRounds",
       scope_rounds as "scopeRounds"
     from analytics_relationship_alignment
+    where scope_key = ${scopeKey}
     order by alignment desc, comparable_features desc
     limit 3
   `);
@@ -1351,10 +1484,16 @@ export async function getDashboardData(
   filter: AnalyticsFilter,
 ): Promise<DashboardData> {
   if (
-    isAllLeaguesScope(filter) &&
+    canUseSongDerivedMats(filter) &&
     (await hasCompletedAllLeaguesMaterialization())
   ) {
-    return getMaterializedDashboardData();
+    const scopeKey = analyticsScopeKey(filter.leagueIds);
+    // Multi-league dashboard: songs/players/dist from mats; alignment only if combo cached.
+    if (isMultiLeagueScope(filter) && !(await hasCompletedScopeMaterialization(scopeKey))) {
+      const data = await getMaterializedDashboardData(filter);
+      return { ...data, alignment: [] };
+    }
+    return getMaterializedDashboardData(filter);
   }
 
   const rows = await db.execute<DashboardCoreQueryRow>(sql`
@@ -1438,11 +1577,17 @@ export async function getDashboardData(
 export async function getDashboardAlignmentData(
   filter: AnalyticsFilter,
 ): Promise<DashboardData["alignment"]> {
+  const scopeKey = analyticsScopeKey(filter.leagueIds);
   if (
-    isAllLeaguesScope(filter) &&
-    (await hasCompletedAllLeaguesMaterialization())
+    canUseSongDerivedMats(filter) &&
+    (await hasCompletedScopeMaterialization(scopeKey))
   ) {
-    return getMaterializedDashboardAlignmentData();
+    return getMaterializedDashboardAlignmentData(scopeKey);
+  }
+
+  if (isMultiLeagueScope(filter)) {
+    // Avoid 75s live alignment; caller should trigger combo materialization.
+    return [];
   }
 
   const alignments = await db.execute<{
@@ -1531,9 +1676,10 @@ export async function getSongsData(
   },
 ): Promise<SongsData> {
   const useMat =
-    isAllLeaguesScope(filter) && (await hasCompletedAllLeaguesMaterialization());
+    canUseSongDerivedMats(filter) &&
+    (await hasCompletedAllLeaguesMaterialization());
   const ctes = useMat
-    ? sql`ranked_songs as (${matSongSelect()})`
+    ? sql`ranked_songs as (${matSongSelect(filter.leagueIds)})`
     : sql`${songStatsCtes(filter)}, ranked_songs as (${songSelect()})`;
   const predicate = songSearchPredicate(search);
   const [packedRow] = await db.execute<SongsPackedQueryRow>(sql`
@@ -1650,10 +1796,12 @@ type PlayerProfilePackedQueryRow = {
 async function getMaterializedPlayerProfileData(
   player: { id: string; name: string },
   minimumRounds: number,
+  scopeKey: string,
+  leagueIds: readonly string[],
 ): Promise<PlayerProfileData> {
   const [packedRow] = await db.execute<PlayerProfilePackedQueryRow>(sql`
     with all_song_rows as (
-      ${matSongSelect()}
+      ${matSongSelect(leagueIds)}
     ),
     submission_rows as (
       select *
@@ -1675,13 +1823,13 @@ async function getMaterializedPlayerProfileData(
         top_quartile_rate as "topQuartileRate",
         performance_rank as "performanceRank"
       from analytics_player_stats
-      where id = ${player.id}
+      where scope_key = ${scopeKey} and id = ${player.id}
       limit 1
     ),
     distribution_rows as (
       select direction, points, count
       from analytics_player_point_distribution
-      where player_id = ${player.id}
+      where scope_key = ${scopeKey} and player_id = ${player.id}
     ),
     directional_relationships as (
       select
@@ -1695,7 +1843,7 @@ async function getMaterializedPlayerProfileData(
         points_per_opportunity as "pointsPerEncounter",
         positive_rate as "positiveRate"
       from analytics_relationship_pairs
-      where left_id = ${player.id}
+      where scope_key = ${scopeKey} and left_id = ${player.id}
     ),
     mutual_relationships as (
       select
@@ -1709,7 +1857,8 @@ async function getMaterializedPlayerProfileData(
         positive_rate as "positiveRate",
         ballot_point_share as "ballotPointShare"
       from analytics_relationship_mutual
-      where left_id = ${player.id} or right_id = ${player.id}
+      where scope_key = ${scopeKey}
+        and (left_id = ${player.id} or right_id = ${player.id})
     ),
     alignment_rows as (
       select
@@ -1720,7 +1869,8 @@ async function getMaterializedPlayerProfileData(
         shared_rounds as "sharedRounds",
         scope_rounds as "scopeRounds"
       from analytics_relationship_alignment
-      where left_id = ${player.id} or right_id = ${player.id}
+      where scope_key = ${scopeKey}
+        and (left_id = ${player.id} or right_id = ${player.id})
     ),
     timing_rows as (
       select
@@ -1741,6 +1891,14 @@ async function getMaterializedPlayerProfileData(
       from analytics_player_timing t
       join rounds r on r.id = t.round_id
       where t.player_id = ${player.id}
+        and ${
+          leagueIds.length === 0
+            ? sql`true`
+            : sql`t.league_id in (${sql.join(
+                leagueIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+        }
     )
     select
       (select coalesce(json_agg(to_jsonb(overview_rows)), '[]'::json) from overview_rows) as overview,
@@ -1867,9 +2025,11 @@ export async function getPlayersData(
   },
 ): Promise<PlayersData> {
   if (
-    isAllLeaguesScope(filter) &&
-    (await hasCompletedAllLeaguesMaterialization())
+    canUseSongDerivedMats(filter) &&
+    (await hasCompletedAllLeaguesMaterialization()) &&
+    (isAllLeaguesScope(filter) || isSingleLeagueScope(filter))
   ) {
+    const scopeKey = analyticsScopeKey(filter.leagueIds);
     const rows = await db.execute<PlayerQueryRow>(sql`
       with ranked_players as (
         select
@@ -1897,6 +2057,7 @@ export async function getPlayersData(
             else null
           end as "performanceRank"
         from analytics_player_stats
+        where scope_key = ${scopeKey}
       )
       select *
       from ranked_players
@@ -1904,6 +2065,70 @@ export async function getPlayersData(
       order by ${matPlayerOrder(sort, minimumRounds, direction)}
     `);
 
+    return {
+      direction,
+      minimumRounds,
+      rows: rows.map((row) => ({
+        ...row,
+        provisional: row.enteredRounds < minimumRounds,
+      })),
+      search,
+      sort,
+    };
+  }
+
+  if (
+    isMultiLeagueScope(filter) &&
+    (await hasCompletedAllLeaguesMaterialization())
+  ) {
+    const rows = await db.execute<PlayerQueryRow>(sql`
+      with ranked_songs as (${matSongSelect(filter.leagueIds)}),
+      player_aggregates as (
+        select
+          "submitterId" as submitter_id,
+          min("submitterName") as name,
+          sum(points)::int as total_points,
+          count(*)::int as submissions,
+          count(distinct "roundId")::int as entered_rounds,
+          sum("eligibleRows")::int as eligible_rows,
+          avg("supportIndex") as average_round_index,
+          avg("performancePercentile") as average_round_percentile,
+          0::int as round_wins
+        from ranked_songs
+        group by "submitterId"
+      ),
+      ranked_players as (
+        select
+          pa.submitter_id as id,
+          pa.name,
+          pa.total_points as "totalPoints",
+          pa.submissions,
+          pa.entered_rounds as "enteredRounds",
+          case when pa.submissions > 0 then pa.total_points::double precision / pa.submissions else null end as "pointsPerSubmission",
+          case when pa.eligible_rows > 0 then pa.total_points::double precision / pa.eligible_rows else null end as "pointsPerEligibleVoter",
+          pa.average_round_index as "averageRoundIndex",
+          pa.average_round_percentile as "averageRoundPercentile",
+          pa.round_wins as "roundWins",
+          null::double precision as "topQuartileRate",
+          case
+            when pa.entered_rounds >= ${minimumRounds}
+              then rank() over (
+                order by
+                  case when pa.entered_rounds >= ${minimumRounds} then 0 else 1 end,
+                  pa.average_round_index desc nulls last,
+                  pa.entered_rounds desc,
+                  pa.total_points desc,
+                  pa.submitter_id
+              )::int
+            else null
+          end as "performanceRank"
+        from player_aggregates pa
+      )
+      select *
+      from ranked_players
+      where ${matPlayerSearchPredicate(search)}
+      order by ${matPlayerOrder(sort, minimumRounds, direction)}
+    `);
     return {
       direction,
       minimumRounds,
@@ -1982,10 +2207,16 @@ export async function getPlayerProfileData(
   if (!player) return null;
 
   if (
-    isAllLeaguesScope(filter) &&
-    (await hasCompletedAllLeaguesMaterialization())
+    canUseSongDerivedMats(filter) &&
+    (await hasCompletedScopeMaterialization(analyticsScopeKey(filter.leagueIds))) &&
+    (isAllLeaguesScope(filter) || isSingleLeagueScope(filter))
   ) {
-    return getMaterializedPlayerProfileData(player, minimumRounds);
+    return getMaterializedPlayerProfileData(
+      player,
+      minimumRounds,
+      analyticsScopeKey(filter.leagueIds),
+      filter.leagueIds,
+    );
   }
 
   const [packedRow] = await db.execute<PlayerProfilePackedQueryRow>(sql`
@@ -2351,6 +2582,8 @@ async function focusPlayer(playerId: string | null) {
 async function getMaterializedRelationshipRows(
   tab: RelationshipTab,
   focus: string | null,
+  scopeKey: string,
+  leagueIds: readonly string[],
 ): Promise<RelationshipTableRow[]> {
   if (tab === "alignment") {
     return db.execute<RelationshipTableRow>(sql`
@@ -2372,7 +2605,8 @@ async function getMaterializedRelationshipRows(
         null::int as "votedRounds",
         null::int as "missedBallots"
       from analytics_relationship_alignment
-      where ${focus}::uuid is null or left_id = ${focus} or right_id = ${focus}
+      where scope_key = ${scopeKey}
+        and (${focus}::uuid is null or left_id = ${focus} or right_id = ${focus})
     `);
   }
 
@@ -2396,7 +2630,8 @@ async function getMaterializedRelationshipRows(
         null::int as "votedRounds",
         null::int as "missedBallots"
       from analytics_relationship_mutual
-      where ${focus}::uuid is null or left_id = ${focus} or right_id = ${focus}
+      where scope_key = ${scopeKey}
+        and (${focus}::uuid is null or left_id = ${focus} or right_id = ${focus})
     `);
   }
 
@@ -2410,7 +2645,14 @@ async function getMaterializedRelationshipRows(
         null::int as points,
         null::int as opportunities,
         count(*)::int as "sharedRounds",
-        (select count(*)::int from rounds) as "scopeRounds",
+        (select count(*)::int from rounds ${
+          leagueIds.length
+            ? sql`where league_id in (${sql.join(
+                leagueIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+            : sql``
+        }) as "scopeRounds",
         null::double precision as "pointsPerOpportunity",
         null::double precision as "positiveRate",
         null::double precision as "ballotPointShare",
@@ -2420,7 +2662,15 @@ async function getMaterializedRelationshipRows(
         count(*) filter (where participation = 'voted')::int as "votedRounds",
         count(*) filter (where participation = 'did_not_vote')::int as "missedBallots"
       from analytics_player_timing
-      where ${focus}::uuid is null or player_id = ${focus}
+      where (${focus}::uuid is null or player_id = ${focus})
+        and ${
+          leagueIds.length === 0
+            ? sql`true`
+            : sql`league_id in (${sql.join(
+                leagueIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+        }
       group by player_id, player_name
     `);
   }
@@ -2444,7 +2694,8 @@ async function getMaterializedRelationshipRows(
       null::int as "votedRounds",
       null::int as "missedBallots"
     from analytics_relationship_pairs
-    where direction = ${tab}
+    where scope_key = ${scopeKey}
+      and direction = ${tab}
       and (${focus}::uuid is null or left_id = ${focus})
   `);
 }
@@ -2465,19 +2716,32 @@ export async function getRelationshipsTableData(
 ): Promise<RelationshipsTableData> {
   const focus = isUuid(focusPlayerId) ? focusPlayerId : null;
   const focusRowPromise = focusPlayer(focus);
+  const scopeKey = analyticsScopeKey(filter.leagueIds);
   if (
-    isAllLeaguesScope(filter) &&
-    (await hasCompletedAllLeaguesMaterialization())
+    canUseSongDerivedMats(filter) &&
+    (await hasCompletedScopeMaterialization(scopeKey))
   ) {
     const [focusPlayerRow, rows] = await Promise.all([
       focusRowPromise,
-      getMaterializedRelationshipRows(tab, focus),
+      getMaterializedRelationshipRows(tab, focus, scopeKey, filter.leagueIds),
     ]);
 
     return {
       direction,
       focusPlayer: focusPlayerRow,
       rows: sortRelationshipRows(rows, sort, direction),
+      sort,
+      tab,
+    };
+  }
+
+  if (isMultiLeagueScope(filter) && tab !== "timing") {
+    return {
+      direction,
+      focusPlayer: await focusRowPromise,
+      needsScopeMaterialization: true,
+      rows: [],
+      scopeKey,
       sort,
       tab,
     };
@@ -3049,13 +3313,6 @@ export function selectedFilterLabel(
   options: FilterOptions,
   filter: AnalyticsFilter,
 ): string {
-  const rounds = options.rounds.filter(({ id }) => filter.roundIds.includes(id));
-  if (rounds.length === 1) {
-    const [round] = rounds;
-    return `${round.leagueName} · Round ${round.ordinal}: ${round.name}`;
-  }
-  if (rounds.length > 1) return `${rounds.length} selected rounds`;
-
   const leagues = options.leagues.filter(({ id }) => filter.leagueIds.includes(id));
   if (leagues.length === 1) return leagues[0].name;
   if (leagues.length > 1) return `${leagues.length} selected leagues`;

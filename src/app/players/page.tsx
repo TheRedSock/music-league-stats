@@ -94,7 +94,10 @@ export default async function PlayersPage({
   if (result.status !== "ready") {
     return (
       <Container className="py-16 sm:py-24">
-        <AnalyticsUnavailable status={result.status} />
+        <AnalyticsUnavailable
+          progressLabel={result.status === "building" ? result.progressLabel : null}
+          status={result.status}
+        />
       </Container>
     );
   }
@@ -138,9 +141,6 @@ export default async function PlayersPage({
             ) : (
               <input name="league" type="hidden" value="all" />
             )}
-            {filter.roundIds.map((roundId) => (
-              <input key={roundId} name="round" type="hidden" value={roundId} />
-            ))}
             <label className="relative">
               <span className="sr-only">Search players</span>
               <Search

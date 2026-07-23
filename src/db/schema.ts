@@ -384,6 +384,8 @@ export type AnalyticsMaterializationSummary = {
   relationshipMutual: number;
   relationshipAlignment: number;
   playerTiming: number;
+  effectiveVotes?: number;
+  leagueScopes?: number;
 };
 
 export type AnalyticsMaterializationProgress = {
@@ -392,6 +394,8 @@ export type AnalyticsMaterializationProgress = {
   stepLabel: string;
   stepIndex: number;
   stepCount: number;
+  leagueIndex?: number;
+  leagueCount?: number;
 };
 
 export type AnalyticsMaterializationJobSummary =
@@ -418,6 +422,56 @@ export const analyticsMaterializationJobs = pgTable(
       table.status,
     ),
     index("analytics_jobs_created_at_idx").on(table.createdAt),
+  ],
+);
+
+/** On-demand multi-league relationship/alignment materialization jobs. */
+export const analyticsScopeJobs = pgTable(
+  "analytics_scope_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    analyticsRevision: text("analytics_revision").notNull(),
+    scopeKey: text("scope_key").notNull(),
+    status: analyticsMaterializationStatus("status")
+      .default("pending")
+      .notNull(),
+    summary: jsonb("summary").$type<AnalyticsMaterializationJobSummary>(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("analytics_scope_jobs_revision_scope_idx").on(
+      table.analyticsRevision,
+      table.scopeKey,
+      table.status,
+    ),
+    index("analytics_scope_jobs_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const analyticsEffectiveVotes = pgTable(
+  "analytics_effective_votes",
+  {
+    submissionId: uuid("submission_id").notNull(),
+    leagueId: uuid("league_id").notNull(),
+    roundId: uuid("round_id").notNull(),
+    submitterId: uuid("submitter_id").notNull(),
+    voterId: uuid("voter_id").notNull(),
+    points: integer("points").notNull(),
+    explicit: boolean("explicit").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "analytics_effective_votes_pk",
+      columns: [table.roundId, table.submissionId, table.voterId],
+    }),
+    index("analytics_effective_votes_league_idx").on(table.leagueId),
+    index("analytics_effective_votes_round_idx").on(table.roundId),
+    index("analytics_effective_votes_submitter_idx").on(table.submitterId),
+    index("analytics_effective_votes_voter_idx").on(table.voterId),
   ],
 );
 
@@ -462,7 +516,8 @@ export const analyticsSongStats = pgTable(
 export const analyticsPlayerStats = pgTable(
   "analytics_player_stats",
   {
-    id: uuid("id").primaryKey(),
+    scopeKey: text("scope_key").notNull(),
+    id: uuid("id").notNull(),
     name: text("name").notNull(),
     totalPoints: integer("total_points").notNull(),
     submissions: integer("submissions").notNull(),
@@ -477,23 +532,35 @@ export const analyticsPlayerStats = pgTable(
     ...timestamps,
   },
   (table) => [
-    index("analytics_player_points_idx").on(table.totalPoints),
-    index("analytics_player_name_idx").on(table.name),
+    primaryKey({
+      name: "analytics_player_stats_pk",
+      columns: [table.scopeKey, table.id],
+    }),
+    index("analytics_player_points_idx").on(table.scopeKey, table.totalPoints),
+    index("analytics_player_name_idx").on(table.scopeKey, table.name),
   ],
 );
 
 export const analyticsPointDistribution = pgTable(
   "analytics_point_distribution",
   {
-    points: integer("points").primaryKey(),
+    scopeKey: text("scope_key").notNull(),
+    points: integer("points").notNull(),
     count: integer("count").notNull(),
     ...timestamps,
   },
+  (table) => [
+    primaryKey({
+      name: "analytics_point_distribution_pk",
+      columns: [table.scopeKey, table.points],
+    }),
+  ],
 );
 
 export const analyticsPlayerPointDistribution = pgTable(
   "analytics_player_point_distribution",
   {
+    scopeKey: text("scope_key").notNull(),
     playerId: uuid("player_id").notNull(),
     direction: text("direction").notNull(),
     points: integer("points").notNull(),
@@ -503,15 +570,19 @@ export const analyticsPlayerPointDistribution = pgTable(
   (table) => [
     primaryKey({
       name: "analytics_player_point_distribution_pk",
-      columns: [table.playerId, table.direction, table.points],
+      columns: [table.scopeKey, table.playerId, table.direction, table.points],
     }),
-    index("analytics_player_point_player_idx").on(table.playerId),
+    index("analytics_player_point_player_idx").on(
+      table.scopeKey,
+      table.playerId,
+    ),
   ],
 );
 
 export const analyticsRelationshipPairs = pgTable(
   "analytics_relationship_pairs",
   {
+    scopeKey: text("scope_key").notNull(),
     direction: text("direction").notNull(),
     leftId: uuid("left_id").notNull(),
     leftName: text("left_name").notNull(),
@@ -528,16 +599,23 @@ export const analyticsRelationshipPairs = pgTable(
   (table) => [
     primaryKey({
       name: "analytics_relationship_pairs_pk",
-      columns: [table.direction, table.leftId, table.rightId],
+      columns: [table.scopeKey, table.direction, table.leftId, table.rightId],
     }),
-    index("analytics_relationship_pairs_left_idx").on(table.leftId),
-    index("analytics_relationship_pairs_right_idx").on(table.rightId),
+    index("analytics_relationship_pairs_left_idx").on(
+      table.scopeKey,
+      table.leftId,
+    ),
+    index("analytics_relationship_pairs_right_idx").on(
+      table.scopeKey,
+      table.rightId,
+    ),
   ],
 );
 
 export const analyticsRelationshipMutual = pgTable(
   "analytics_relationship_mutual",
   {
+    scopeKey: text("scope_key").notNull(),
     leftId: uuid("left_id").notNull(),
     leftName: text("left_name").notNull(),
     rightId: uuid("right_id").notNull(),
@@ -554,16 +632,23 @@ export const analyticsRelationshipMutual = pgTable(
   (table) => [
     primaryKey({
       name: "analytics_relationship_mutual_pk",
-      columns: [table.leftId, table.rightId],
+      columns: [table.scopeKey, table.leftId, table.rightId],
     }),
-    index("analytics_relationship_mutual_left_idx").on(table.leftId),
-    index("analytics_relationship_mutual_right_idx").on(table.rightId),
+    index("analytics_relationship_mutual_left_idx").on(
+      table.scopeKey,
+      table.leftId,
+    ),
+    index("analytics_relationship_mutual_right_idx").on(
+      table.scopeKey,
+      table.rightId,
+    ),
   ],
 );
 
 export const analyticsRelationshipAlignment = pgTable(
   "analytics_relationship_alignment",
   {
+    scopeKey: text("scope_key").notNull(),
     leftId: uuid("left_id").notNull(),
     leftName: text("left_name").notNull(),
     rightId: uuid("right_id").notNull(),
@@ -577,11 +662,20 @@ export const analyticsRelationshipAlignment = pgTable(
   (table) => [
     primaryKey({
       name: "analytics_relationship_alignment_pk",
-      columns: [table.leftId, table.rightId],
+      columns: [table.scopeKey, table.leftId, table.rightId],
     }),
-    index("analytics_relationship_alignment_score_idx").on(table.alignment),
-    index("analytics_relationship_alignment_left_idx").on(table.leftId),
-    index("analytics_relationship_alignment_right_idx").on(table.rightId),
+    index("analytics_relationship_alignment_score_idx").on(
+      table.scopeKey,
+      table.alignment,
+    ),
+    index("analytics_relationship_alignment_left_idx").on(
+      table.scopeKey,
+      table.leftId,
+    ),
+    index("analytics_relationship_alignment_right_idx").on(
+      table.scopeKey,
+      table.rightId,
+    ),
   ],
 );
 
@@ -592,6 +686,7 @@ export const analyticsPlayerTiming = pgTable(
     playerName: text("player_name").notNull(),
     roundId: uuid("round_id").notNull(),
     roundName: text("round_name").notNull(),
+    leagueId: uuid("league_id").notNull(),
     leagueName: text("league_name").notNull(),
     leagueSlug: text("league_slug").notNull(),
     leagueMusicLeagueId: text("league_music_league_id"),
@@ -611,6 +706,7 @@ export const analyticsPlayerTiming = pgTable(
       columns: [table.playerId, table.roundId],
     }),
     index("analytics_player_timing_player_idx").on(table.playerId),
+    index("analytics_player_timing_league_idx").on(table.leagueId),
     index("analytics_player_timing_relative_idx").on(table.relativeOrder),
   ],
 );
@@ -625,3 +721,4 @@ export type Vote = typeof votes.$inferSelect;
 export type ImportBatch = typeof importBatches.$inferSelect;
 export type AnalyticsMaterializationJob =
   typeof analyticsMaterializationJobs.$inferSelect;
+export type AnalyticsScopeJob = typeof analyticsScopeJobs.$inferSelect;

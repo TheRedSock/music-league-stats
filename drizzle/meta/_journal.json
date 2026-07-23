@@ -29,6 +29,13 @@
       "when": 1784796832813,
       "tag": "0003_petite_quentin_quire",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784810000000,
+      "tag": "0004_precompute_scope_mats",
+      "breakpoints": true
     }
   ]
 }

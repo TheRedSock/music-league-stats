@@ -156,10 +156,10 @@ describe("analytics metric helpers", () => {
 });
 
 describe("analytics filter helpers", () => {
-  it("accepts UUID filters and rejects arbitrary query values", () => {
+  it("accepts UUID league filters and ignores retired round params", () => {
     expect(parseAnalyticsFilters({ league: leagueId, round: roundId })).toEqual({
       leagueIds: [leagueId],
-      roundIds: [roundId],
+      roundIds: [],
       useDefaultLeague: false,
     });
     expect(parseAnalyticsFilters({ league: "nope", round: "also-nope" })).toEqual({
@@ -171,7 +171,7 @@ describe("analytics filter helpers", () => {
       parseAnalyticsFilters({ league: [otherLeagueId, leagueId], round: [roundId] }),
     ).toEqual({
       leagueIds: [leagueId, otherLeagueId],
-      roundIds: [roundId],
+      roundIds: [],
       useDefaultLeague: false,
     });
   });
@@ -199,7 +199,7 @@ describe("analytics filter helpers", () => {
     expect(truncateRoundName("A".repeat(60)).endsWith("…")).toBe(true);
   });
 
-  it("intersects selected rounds with selected leagues", () => {
+  it("drops round ids from resolved filters", () => {
     expect(
       resolveAnalyticsFilter(
         { leagueIds: [otherLeagueId], roundIds: [roundId], useDefaultLeague: false },
@@ -211,7 +211,7 @@ describe("analytics filter helpers", () => {
         { leagueIds: [], roundIds: [roundId], useDefaultLeague: false },
         options,
       ),
-    ).toEqual({ leagueIds: [], roundIds: [roundId] });
+    ).toEqual({ leagueIds: [], roundIds: [] });
   });
 
   it("preserves current query state while applying overrides", () => {
