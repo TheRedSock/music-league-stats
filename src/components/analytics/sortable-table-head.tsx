@@ -1,12 +1,14 @@
-import Link from "next/link";
+"use client";
+
 import type { ReactNode } from "react";
 
+import { PendingLink } from "@/components/analytics/pending-link";
 import { TableHead } from "@/components/ui/table";
+import type { SortDirection } from "@/lib/analytics";
 import {
   buildAnalyticsHref,
   type QueryValue,
 } from "@/lib/analytics-url";
-import type { SortDirection } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 export function SortableTableHead({
@@ -53,13 +55,14 @@ export function SortableTableHead({
       className={cn(align === "right" && "text-right", className)}
       title={title}
     >
-      <Link
+      <PendingLink
         className={cn(
-          "inline-flex items-center gap-1 rounded-sm outline-none transition-colors hover:text-lime-200 focus-visible:ring-2 focus-visible:ring-lime-300/40",
+          "rounded-sm outline-none transition-colors hover:text-lime-200 focus-visible:ring-2 focus-visible:ring-lime-300/40",
           align === "right" && "justify-end",
           active && "text-lime-200",
         )}
         href={href}
+        pendingLabel={`Sorting by ${typeof children === "string" ? children : sortKey}`}
       >
         <span>{children}</span>
         {active ? (
@@ -67,7 +70,7 @@ export function SortableTableHead({
             {activeDirection === "desc" ? "v" : "^"}
           </span>
         ) : null}
-      </Link>
+      </PendingLink>
     </TableHead>
   );
 }

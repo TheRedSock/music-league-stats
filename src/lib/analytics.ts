@@ -563,6 +563,12 @@ export function safeRatio(
     : null;
 }
 
+/** Minimum entered rounds to qualify for round-adjusted rankings (half of scope, at least 1). */
+export function qualificationRoundFloor(scopeRounds: number): number {
+  if (!Number.isFinite(scopeRounds) || scopeRounds <= 0) return 1;
+  return Math.max(1, Math.ceil(scopeRounds / 2));
+}
+
 export function supportIndex(
   songPoints: number,
   expectedPoints: number,
@@ -1255,6 +1261,24 @@ async function hasCompletedScopeMaterialization(scopeKey: string): Promise<boole
     limit 1
   `);
   return row?.status === "completed";
+}
+
+async function countScopeRounds(filter: AnalyticsFilter): Promise<number> {
+  if (filter.leagueIds.length === 0) {
+    const [row] = await db.execute<{ count: number }>(sql`
+      select count(*)::int as count from rounds
+    `);
+    return row?.count ?? 0;
+  }
+  const [row] = await db.execute<{ count: number }>(sql`
+    select count(*)::int as count
+    from rounds
+    where league_id in (${sql.join(
+      filter.leagueIds.map((id) => sql`${id}`),
+      sql`, `,
+    )})
+  `);
+  return row?.count ?? 0;
 }
 
 function matSongSelect(leagueIds: readonly string[] = []): SQL {
@@ -1995,15 +2019,16 @@ export async function getPlayersData(
   {
     search,
     sort,
-    minimumRounds,
     direction,
   }: {
     search: string;
     sort: PlayerSort;
-    minimumRounds: number;
     direction: SortDirection;
   },
 ): Promise<PlayersData> {
+  const scopeRounds = await countScopeRounds(filter);
+  const minimumRounds = qualificationRoundFloor(scopeRounds);
+
   if (
     canUseSongDerivedMats(filter) &&
     (await hasCompletedAllLeaguesMaterialization()) &&
@@ -2063,19 +2088,51 @@ export async function getPlayersData(
   ) {
     const rows = await db.execute<PlayerQueryRow>(sql`
       with ranked_songs as (${matSongSelect(filter.leagueIds)}),
-      player_aggregates as (
+      player_round as (
         select
           "submitterId" as submitter_id,
           min("submitterName") as name,
-          sum(points)::int as total_points,
+          "roundId" as round_id,
+          sum(points)::int as points,
           count(*)::int as submissions,
-          count(distinct "roundId")::int as entered_rounds,
           sum("eligibleRows")::int as eligible_rows,
-          avg("supportIndex") as average_round_index,
-          avg("performancePercentile") as average_round_percentile,
-          0::int as round_wins
+          sum("expectedPoints")::double precision as expected_points
         from ranked_songs
-        group by "submitterId"
+        group by "submitterId", "roundId"
+      ),
+      player_round_indexed as (
+        select
+          pr.*,
+          case when pr.expected_points > 0
+            then pr.points::double precision / pr.expected_points else null end as round_index,
+          case
+            when count(*) over (partition by pr.round_id) = 1 then 100::double precision
+            else percent_rank() over (
+              partition by pr.round_id
+              order by case
+                when pr.expected_points > 0
+                  then pr.points::double precision / pr.expected_points
+                else null
+              end asc nulls first
+            ) * 100
+          end as round_percentile,
+          rank() over (partition by pr.round_id order by pr.points desc) as round_rank
+        from player_round pr
+      ),
+      player_aggregates as (
+        select
+          pri.submitter_id,
+          min(pri.name) as name,
+          sum(pri.points)::int as total_points,
+          sum(pri.submissions)::int as submissions,
+          count(*)::int as entered_rounds,
+          sum(pri.eligible_rows)::int as eligible_rows,
+          avg(pri.round_index) as average_round_index,
+          avg(pri.round_percentile) as average_round_percentile,
+          count(*) filter (where pri.round_rank = 1)::int as round_wins,
+          count(*) filter (where pri.round_percentile >= 75)::int as top_quartile_rounds
+        from player_round_indexed pri
+        group by pri.submitter_id
       ),
       ranked_players as (
         select
@@ -2089,7 +2146,7 @@ export async function getPlayersData(
           pa.average_round_index as "averageRoundIndex",
           pa.average_round_percentile as "averageRoundPercentile",
           pa.round_wins as "roundWins",
-          null::double precision as "topQuartileRate",
+          case when pa.entered_rounds > 0 then pa.top_quartile_rounds::double precision / pa.entered_rounds else null end as "topQuartileRate",
           case
             when pa.entered_rounds >= ${minimumRounds}
               then rank() over (
@@ -2172,7 +2229,6 @@ export async function getPlayersData(
 export async function getPlayerProfileData(
   playerId: string,
   filter: AnalyticsFilter,
-  minimumRounds = 3,
 ): Promise<PlayerProfileData | null> {
   if (!isUuid(playerId)) return null;
   const playerRows = await db
@@ -2185,6 +2241,8 @@ export async function getPlayerProfileData(
     .limit(1);
   const player = playerRows[0];
   if (!player) return null;
+
+  const minimumRounds = qualificationRoundFloor(await countScopeRounds(filter));
 
   if (
     canUseSongDerivedMats(filter) &&
@@ -3221,7 +3279,6 @@ export async function getCachedPlayersData(
   roundKey: string,
   search: string,
   sort: PlayerSort,
-  minimumRounds: number,
   direction: SortDirection,
 ): Promise<PlayersData> {
   "use cache";
@@ -3229,7 +3286,6 @@ export async function getCachedPlayersData(
   cacheTag(ANALYTICS_CACHE_TAG);
   return getPlayersData(analyticsFilter(leagueKey, roundKey), {
     direction,
-    minimumRounds,
     search,
     sort,
   });
@@ -3239,16 +3295,11 @@ export async function getCachedPlayerProfileData(
   playerId: string,
   leagueKey: string,
   roundKey: string,
-  minimumRounds = 3,
 ): Promise<PlayerProfileData | null> {
   "use cache";
   cacheLife("hours");
   cacheTag(ANALYTICS_CACHE_TAG);
-  return getPlayerProfileData(
-    playerId,
-    analyticsFilter(leagueKey, roundKey),
-    minimumRounds,
-  );
+  return getPlayerProfileData(playerId, analyticsFilter(leagueKey, roundKey));
 }
 
 export async function getCachedRelationshipsTableData(

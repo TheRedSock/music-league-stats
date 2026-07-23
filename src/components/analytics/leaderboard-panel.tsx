@@ -22,13 +22,18 @@ const PAGE_SIZE = 10;
 export function LeaderboardPanel({
   filterParams = {},
   rows,
+  scopeRounds,
 }: {
   filterParams?: Record<string, QueryValue>;
   rows: LeaderboardRow[];
+  scopeRounds: number;
 }) {
   const [mode, setMode] = useState<Mode>("points");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const normalizedMinimum = rows.some((row) => row.enteredRounds >= 3) ? 3 : 1;
+  const normalizedMinimum = Math.max(
+    1,
+    Math.ceil((Number.isFinite(scopeRounds) ? scopeRounds : 0) / 2),
+  );
   const ordered = useMemo(
     () =>
       rows
@@ -70,8 +75,9 @@ export function LeaderboardPanel({
           <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
             Raw points reward volume. The round index compares each
             player&apos;s points with the expected points for their submitted songs
-            from that round&apos;s eligible ballot budgets. Ratio rankings require
-            three entered rounds when the selected scope contains enough history.
+            from that round&apos;s eligible ballot budgets. Round-adjusted rankings
+            require entering at least half of the selected rounds (
+            {normalizedMinimum}+ of {scopeRounds || "—"}).
           </p>
         </div>
         <div

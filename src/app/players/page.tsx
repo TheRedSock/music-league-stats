@@ -37,7 +37,6 @@ import {
   parseAnalyticsFilters,
   parsePlayerSort,
   parsePlayerSortDirection,
-  parsePositiveInteger,
   parseSearch,
   resolveAnalyticsFilter,
   selectedFilterLabel,
@@ -76,7 +75,6 @@ export default async function PlayersPage({
   const search = parseSearch(params.q);
   const sort = parsePlayerSort(params.sort);
   const direction = parsePlayerSortDirection(params.dir, sort);
-  const minimumRounds = parsePositiveInteger(params.min, 3, 20);
   const result = await loadAnalytics(async () => {
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
@@ -85,7 +83,6 @@ export default async function PlayersPage({
       encodeScopeIds(filter.roundIds),
       search,
       sort,
-      minimumRounds,
       direction,
     );
     return { data, filter, options };
@@ -108,7 +105,6 @@ export default async function PlayersPage({
     q: search || null,
     sort,
     dir: direction,
-    min: minimumRounds,
   };
 
   return (
@@ -131,7 +127,7 @@ export default async function PlayersPage({
         <CardContent className="p-4 sm:p-5">
           <form
             action="/players"
-            className="grid gap-3 sm:grid-cols-[1fr_15rem_9rem_auto]"
+            className="grid gap-3 sm:grid-cols-[1fr_15rem_auto]"
             method="get"
           >
             {filter.leagueIds.length ? (
@@ -170,21 +166,6 @@ export default async function PlayersPage({
                 ))}
               </select>
             </label>
-            <label className="text-xs text-zinc-500">
-              <span className="sr-only">Minimum rounds for ranked status</span>
-              <select
-                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40"
-                defaultValue={minimumRounds}
-                name="min"
-                title="Minimum entered rounds for non-provisional status"
-              >
-                {[1, 2, 3, 4, 5, 6, 8, 10].map((rounds) => (
-                  <option key={rounds} value={rounds}>
-                    {rounds}+ rounds
-                  </option>
-                ))}
-              </select>
-            </label>
             <button className={buttonStyles()} type="submit">
               Apply
             </button>
@@ -198,7 +179,8 @@ export default async function PlayersPage({
           {data.rows.length === 1 ? "player" : "players"}
         </p>
         <p className="text-xs text-zinc-500">
-          Fewer than {minimumRounds} entered rounds is marked provisional
+          Fewer than {data.minimumRounds} entered rounds (half of this scope) is
+          marked provisional; avg round index shows as — until then
         </p>
       </div>
 
@@ -263,7 +245,7 @@ export default async function PlayersPage({
                           href={buildAnalyticsHref(
                             `/players/${player.id}`,
                             currentParams,
-                            { dir: null, q: null, sort: null, min: null },
+                            { dir: null, q: null, sort: null },
                           )}
                           pendingLabel={`Loading ${player.name}`}
                         >
@@ -294,7 +276,9 @@ export default async function PlayersPage({
                       {value(player.pointsPerEligibleVoter)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-lime-200">
-                      {value(player.averageRoundIndex)}×
+                      {player.provisional
+                        ? "—"
+                        : `${value(player.averageRoundIndex)}×`}
                     </TableCell>
                     <TableCell className="hidden text-right font-mono 2xl:table-cell">
                       {player.averageRoundPercentile === null

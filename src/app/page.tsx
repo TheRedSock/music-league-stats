@@ -318,6 +318,7 @@ export default async function HomePage({
                 <LeaderboardPanel
                   filterParams={filterParams}
                   rows={data.leaderboard}
+                  scopeRounds={data.summary.rounds}
                 />
               </CardContent>
             </Card>

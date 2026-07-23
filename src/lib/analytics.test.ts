@@ -20,6 +20,7 @@ import {
   parseSongSort,
   parseSongSortDirection,
   percentileRank,
+  qualificationRoundFloor,
   resolveAnalyticsFilter,
   safeRatio,
   supportIndex,
@@ -61,6 +62,13 @@ describe("analytics metric helpers", () => {
     expect(safeRatio(5, 2)).toBe(2.5);
     expect(safeRatio(5, 0)).toBeNull();
     expect(safeRatio(Number.NaN, 2)).toBeNull();
+  });
+
+  it("requires half of scope rounds for round-adjusted qualification", () => {
+    expect(qualificationRoundFloor(37)).toBe(19);
+    expect(qualificationRoundFloor(4)).toBe(2);
+    expect(qualificationRoundFloor(1)).toBe(1);
+    expect(qualificationRoundFloor(0)).toBe(1);
   });
 
   it("expresses support relative to expected eligible ballot points", () => {
