@@ -33,7 +33,7 @@ const sections = [
   },
   {
     title: "What is support index?",
-    body: "Support index compares the points a song received with the points it was expected to receive from the actual ballot budgets that could reach it. 1.0 means expected support, 2.0 means twice expected support, and 0.5 means half expected support.",
+    body: "Raw support index compares the points a song received with the points it was expected to receive from the actual ballot budgets that could reach it. 1.0 means expected support, 2.0 means twice expected support, and 0.5 means half expected support. Support index (EB) is an empirical-Bayes shrinkage of that ratio toward 1.0 using sample-size variance estimated from the corpus, so cross-round rankings are less dominated by small-room noise. Support z is the standardized point surplus under the same variance model.",
   },
   {
     title: "What is average round index?",

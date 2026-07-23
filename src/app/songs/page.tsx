@@ -1,15 +1,14 @@
-import { ArrowLeft, ArrowRight, ExternalLink, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
-import { SortableTableHead } from "@/components/analytics/sortable-table-head";
+import { SongsTable } from "@/components/analytics/songs-table";
 import { Container } from "@/components/layout/container";
 import { buttonStyles } from "@/components/ui/button";
 import {
@@ -20,21 +19,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHeader,
-  TableRow,
-  TruncatedCell,
-} from "@/components/ui/table";
-import {
   buildAnalyticsHref,
-  defaultSongSortDirection,
   encodeScopeIds,
   getCachedFilterOptions,
   getCachedSongsData,
   loadAnalytics,
-  leagueTableLabel,
   parseAnalyticsFilters,
   parsePositiveInteger,
   parseSearch,
@@ -43,10 +32,8 @@ import {
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
-  truncateRoundName,
   type SearchParams,
 } from "@/lib/analytics";
-import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 export const metadata: Metadata = {
   title: "Songs",
@@ -61,14 +48,12 @@ const sortLabels = {
   "points-per-voter": "Points per eligible voter",
   "positive-reach": "Positive vote reach",
   "round-share": "Round share",
-  "normalized-index": "Round-normalized index",
+  "support-eb": "Support index (EB)",
+  "support-z": "Support z",
+  "normalized-index": "Support index (raw)",
   percentile: "Round percentile",
   newest: "Newest",
 } as const;
-
-function percent(value: number | null): string {
-  return value === null ? "—" : `${(value * 100).toFixed(1)}%`;
-}
 
 export default async function SongsPage({
   searchParams,
@@ -198,171 +183,14 @@ export default async function SongsPage({
 
       {data.rows.length ? (
         <Card className="mt-3 overflow-hidden">
-          <Table className="table-fixed">
-            <TableHeader>
-              <TableRow>
-                <SortableTableHead
-                  activeDirection={direction}
-                  activeSort={sort}
-                  className="w-[24%]"
-                  defaultDirection={defaultSongSortDirection("title")}
-                  params={currentParams}
-                  path="/songs"
-                  sortKey="title"
-                >
-                  Song
-                </SortableTableHead>
-                <SortableTableHead
-                  activeDirection={direction}
-                  activeSort={sort}
-                  className="w-[12%]"
-                  defaultDirection={defaultSongSortDirection("submitter")}
-                  params={currentParams}
-                  path="/songs"
-                  sortKey="submitter"
-                >
-                  Submitter
-                </SortableTableHead>
-                <SortableTableHead
-                  activeDirection={direction}
-                  activeSort={sort}
-                  className="w-[14%]"
-                  defaultDirection={defaultSongSortDirection("scope")}
-                  params={currentParams}
-                  path="/songs"
-                  sortKey="scope"
-                >
-                  League / round
-                </SortableTableHead>
-                <SortableTableHead
-                  activeDirection={direction}
-                  activeSort={sort}
-                  align="right"
-                  className="w-[7%]"
-                  defaultDirection={defaultSongSortDirection("points")}
-                  params={currentParams}
-                  path="/songs"
-                  sortKey="points"
-                >
-                  Points
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("positive-reach")} params={currentParams} path="/songs" sortKey="positive-reach" title="Positive eligible opportunities divided by all eligible opportunities.">
-                  Positive reach
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[9%]" defaultDirection={defaultSongSortDirection("points-per-voter")} params={currentParams} path="/songs" sortKey="points-per-voter" title="Eligible points divided by eligible voter opportunities.">
-                  Pts / voter
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultSongSortDirection("round-share")} params={currentParams} path="/songs" sortKey="round-share" title="Song points divided by all eligible points in its round.">
-                  Round share
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("normalized-index")} params={currentParams} path="/songs" sortKey="normalized-index" title="Points received divided by expected points from the eligible ballot budgets that could reach the song.">
-                  Support index
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] 2xl:table-cell" defaultDirection={defaultSongSortDirection("percentile")} params={currentParams} path="/songs" sortKey="percentile">
-                  Round percentile
-                </SortableTableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.rows.map((song) => (
-                <TableRow key={song.id}>
-                  <TableCell>
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-zinc-100">
-                        {song.spotifyUrl ? (
-                          <a
-                            className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
-                            href={song.spotifyUrl}
-                            rel="noreferrer"
-                            target="_blank"
-                          >
-                            <span className="truncate" title={song.title}>
-                              {song.title}
-                            </span>
-                            <ExternalLink
-                              aria-label="Open on Spotify"
-                              className="size-3 shrink-0"
-                            />
-                          </a>
-                        ) : (
-                          <TruncatedCell title={song.title}>{song.title}</TruncatedCell>
-                        )}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-zinc-500">
-                        {song.artist}
-                        {song.album ? ` · ${song.album}` : ""}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      className="block truncate text-zinc-200 hover:text-lime-200"
-                      href={buildAnalyticsHref(
-                        `/players/${song.submitterId}`,
-                        currentParams,
-                        { dir: null, q: null, sort: null },
-                      )}
-                    >
-                      <span title={song.submitterName}>{song.submitterName}</span>
-                    </Link>
-                  </TableCell>
-                  <TableCell className="max-w-0 min-w-0">
-                    <div className="min-w-0 space-y-0.5">
-                      <div className="min-w-0">
-                        <MusicLeagueLink
-                          className="text-zinc-300"
-                          href={musicLeagueUrl(song.leagueMusicLeagueId)}
-                          showIcon={false}
-                          title={song.leagueName}
-                        >
-                          {leagueTableLabel({
-                            name: song.leagueName,
-                            slug: song.leagueSlug,
-                          })}
-                        </MusicLeagueLink>
-                      </div>
-                      <div className="min-w-0">
-                        <MusicLeagueLink
-                          className="text-xs text-zinc-500"
-                          href={musicLeagueUrl(
-                            song.leagueMusicLeagueId,
-                            song.sourceRoundId,
-                          )}
-                          title={song.roundName}
-                        >
-                          R{song.roundOrdinal} ·{" "}
-                          {truncateRoundName(song.roundName)}
-                        </MusicLeagueLink>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-white">
-                    {song.points}
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {percent(song.positiveReach)}
-                    <p className="mt-0.5 text-[10px] text-zinc-600">
-                      {song.positiveRows}/{song.eligibleRows} rows
-                    </p>
-                  </TableCell>
-                  <TableCell className="text-right font-mono">
-                    {song.pointsPerEligibleVoter?.toFixed(2) ?? "—"}
-                  </TableCell>
-                  <TableCell className="hidden text-right font-mono xl:table-cell">
-                    {percent(song.roundPointShare)}
-                  </TableCell>
-                  <TableCell className="text-right font-mono text-lime-200">
-                    {song.supportIndex?.toFixed(2) ?? "—"}×
-                  </TableCell>
-                  <TableCell className="hidden text-right font-mono 2xl:table-cell">
-                    {song.performancePercentile === null
-                      ? "—"
-                      : `${song.performancePercentile.toFixed(0)}th`}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <CardContent className="p-0">
+            <SongsTable
+              currentParams={currentParams}
+              direction={direction}
+              rows={data.rows}
+              sort={sort}
+            />
+          </CardContent>
         </Card>
       ) : (
         <div className="mt-3">
@@ -416,9 +244,12 @@ export default async function SongsPage({
             Active voters create eligible opportunities for visible songs they
             did not submit. Omitted eligible opportunities count as zero; rounds
             where a submitter did not vote do not create zeroes for that player.
-            Support index compares actual song points with expected points from
-            eligible ballot budgets. Index and percentile are computed against
-            the full round before search and pagination are applied.
+            Raw support index compares actual points with expected points from
+            eligible ballot budgets. Support index (EB) shrinks that ratio toward
+            1.0 using sample-size variance estimated from the corpus, so
+            small-room extremes are not overweighted in cross-round rankings.
+            Support z is the standardized surplus under the same variance model.
+            Use Columns to show raw support index or round percentile.
           </CardDescription>
         </CardHeader>
       </Card>

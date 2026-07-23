@@ -1,1 +1,1 @@
-export const ANALYTICS_REVISION = "2026-07-23-precompute-scopes-v1";
+export const ANALYTICS_REVISION = "2026-07-23-support-eb-z-v2";

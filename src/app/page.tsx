@@ -334,15 +334,15 @@ export default async function HomePage({
                       Top round-adjusted songs
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      Support index compares the song&apos;s points with the
-                      points expected from the eligible ballot budgets that
-                      could reach it. 1.0 is expected support.
+                      Ranked by empirical-Bayes support index (SI_eb), which
+                      shrinks noisy small-sample extremes toward expected
+                      support (1.0×) using corpus-estimated variance.
                     </CardDescription>
                   </div>
                   <Link
                     className="shrink-0 text-xs font-medium text-lime-300 hover:text-lime-200"
                     href={buildAnalyticsHref("/songs", filterParams, {
-                      sort: "normalized-index",
+                      sort: "support-eb",
                     })}
                   >
                     View all
@@ -400,10 +400,13 @@ export default async function HomePage({
                         </div>
                         <div className="text-right">
                           <p className="font-mono text-sm text-white">
-                            {song.supportIndex?.toFixed(2) ?? "—"}×
+                            {song.supportIndexEb?.toFixed(2) ?? "—"}×
                           </p>
                           <p className="text-[11px] text-zinc-600">
                             {song.points} pts
+                            {song.supportZ !== null
+                              ? ` · z ${song.supportZ.toFixed(1)}`
+                              : ""}
                           </p>
                         </div>
                       </li>

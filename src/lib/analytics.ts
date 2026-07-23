@@ -119,6 +119,8 @@ export type SongAnalyticsRow = {
   positiveReach: number | null;
   roundPointShare: number | null;
   supportIndex: number | null;
+  supportIndexEb: number | null;
+  supportZ: number | null;
   performancePercentile: number | null;
 };
 
@@ -130,6 +132,8 @@ export const songSorts = [
   "points-per-voter",
   "positive-reach",
   "round-share",
+  "support-eb",
+  "support-z",
   "normalized-index",
   "percentile",
   "newest",
@@ -576,6 +580,108 @@ export function supportIndex(
   return safeRatio(songPoints, expectedPoints);
 }
 
+/** Minimum songs per expected-point bin when estimating SI variance components. */
+const SI_VARIANCE_BIN_MIN_N = 20;
+
+export type SupportIndexVarianceComponents = {
+  phi: number;
+  tau2: number;
+};
+
+/**
+ * Estimate Var(SI) ≈ τ² + φ/E from binned method-of-moments regression.
+ * Used for empirical-Bayes shrinkage and support z-scores.
+ */
+export function estimateSupportIndexVarianceComponents(
+  songs: readonly { supportIndex: number; expectedPoints: number }[],
+): SupportIndexVarianceComponents | null {
+  const edges = [0, 10, 12, 14, 16, 18, 20, 22, 25, Number.POSITIVE_INFINITY];
+  const bins: { invE: number; varSI: number }[] = [];
+
+  for (let i = 0; i < edges.length - 1; i += 1) {
+    const lo = edges[i]!;
+    const hi = edges[i + 1]!;
+    const values = songs.filter(
+      (song) =>
+        Number.isFinite(song.supportIndex) &&
+        Number.isFinite(song.expectedPoints) &&
+        song.expectedPoints > 0 &&
+        song.expectedPoints >= lo &&
+        song.expectedPoints < hi,
+    );
+    if (values.length < SI_VARIANCE_BIN_MIN_N) continue;
+    const meanE =
+      values.reduce((sum, song) => sum + song.expectedPoints, 0) / values.length;
+    const meanSi =
+      values.reduce((sum, song) => sum + song.supportIndex, 0) / values.length;
+    const varSI =
+      values.reduce(
+        (sum, song) => sum + (song.supportIndex - meanSi) ** 2,
+        0,
+      ) /
+      (values.length - 1);
+    if (!(meanE > 0) || !Number.isFinite(varSI)) continue;
+    bins.push({ invE: 1 / meanE, varSI });
+  }
+
+  if (bins.length < 2) return null;
+
+  const n = bins.length;
+  const meanX = bins.reduce((sum, bin) => sum + bin.invE, 0) / n;
+  const meanY = bins.reduce((sum, bin) => sum + bin.varSI, 0) / n;
+  let cov = 0;
+  let varX = 0;
+  for (const bin of bins) {
+    cov += (bin.invE - meanX) * (bin.varSI - meanY);
+    varX += (bin.invE - meanX) ** 2;
+  }
+  if (!(varX > 0)) return null;
+  const phi = Math.max(0.01, cov / varX);
+  const tau2 = Math.max(0, meanY - phi * meanX);
+  return { phi, tau2 };
+}
+
+/** Empirical-Bayes shrunk support index toward 1.0 using Var(SI)=τ²+φ/E. */
+export function supportIndexEb(
+  songSupportIndex: number | null,
+  expectedPoints: number,
+  components: SupportIndexVarianceComponents,
+): number | null {
+  if (
+    songSupportIndex === null ||
+    !Number.isFinite(songSupportIndex) ||
+    !Number.isFinite(expectedPoints) ||
+    expectedPoints <= 0
+  ) {
+    return null;
+  }
+  const { phi, tau2 } = components;
+  // Without a positive prior variance, shrinking would collapse every song to 1.0×.
+  // Prefer the raw index over that degenerate result.
+  if (!(phi > 0) || !(tau2 > 0)) return songSupportIndex;
+  const samplingVar = phi / expectedPoints;
+  const weight = tau2 / (tau2 + samplingVar);
+  return 1 + (songSupportIndex - 1) * weight;
+}
+
+/** Standardized surplus vs expected points under quasi-Poisson Var=φ·E. */
+export function supportZ(
+  songPoints: number,
+  expectedPoints: number,
+  phi: number,
+): number | null {
+  if (
+    !Number.isFinite(songPoints) ||
+    !Number.isFinite(expectedPoints) ||
+    !Number.isFinite(phi) ||
+    expectedPoints <= 0 ||
+    phi <= 0
+  ) {
+    return null;
+  }
+  return (songPoints - expectedPoints) / Math.sqrt(phi * expectedPoints);
+}
+
 export function percentileRank(values: number[], value: number): number | null {
   const finiteValues = values.filter(Number.isFinite).sort((a, b) => a - b);
   if (!finiteValues.length || !Number.isFinite(value)) return null;
@@ -951,6 +1057,101 @@ export function songStatsCtes(filter: AnalyticsFilter): SQL {
       join submission_vote_stats svs on svs.submission_id = s.id
       join round_submission_totals rst on rst.round_id = sr.id
       join round_vote_totals rvt on rvt.round_id = sr.id
+    ),
+    si_bins as (
+      select
+        avg(expected_points)::double precision as mean_e,
+        (1.0 / nullif(avg(expected_points), 0))::double precision as inv_e,
+        var_samp(support_index)::double precision as var_si,
+        count(*)::int as n
+      from song_stats
+      where support_index is not null
+        and expected_points > 0
+      group by case
+        when expected_points < 10 then 0
+        when expected_points < 12 then 1
+        when expected_points < 14 then 2
+        when expected_points < 16 then 3
+        when expected_points < 18 then 4
+        when expected_points < 20 then 5
+        when expected_points < 22 then 6
+        when expected_points < 25 then 7
+        else 8
+      end
+      having count(*) >= 20
+        and avg(expected_points) > 0
+        and var_samp(support_index) is not null
+    ),
+    si_regression as (
+      select
+        count(*)::int as bin_count,
+        (
+          count(*)::double precision * sum(inv_e * var_si)
+          - sum(inv_e) * sum(var_si)
+        ) / nullif(
+          count(*)::double precision * sum(inv_e * inv_e)
+          - sum(inv_e) * sum(inv_e),
+          0
+        ) as phi,
+        avg(var_si) - (
+          (
+            count(*)::double precision * sum(inv_e * var_si)
+            - sum(inv_e) * sum(var_si)
+          ) / nullif(
+            count(*)::double precision * sum(inv_e * inv_e)
+            - sum(inv_e) * sum(inv_e),
+            0
+          )
+        ) * avg(inv_e) as tau2
+      from si_bins
+    ),
+    si_params as (
+      select
+        phi_resolved.phi,
+        -- Prefer binned regression τ² when at least two bins exist. Otherwise use
+        -- method-of-moments τ². Never coerce a missing fit to 0: that would make
+        -- every supportIndexEb collapse to 1.0×.
+        greatest(
+          0::double precision,
+          coalesce(
+            case
+              when coalesce(reg.bin_count, 0) >= 2 then reg.tau2
+            end,
+            mom.tau2
+          )
+        )::double precision as tau2
+      from (
+        select greatest(
+          0.01::double precision,
+          coalesce(reg.phi, fallback.phi, 1.0::double precision)
+        )::double precision as phi
+        from (select 1) as seed
+        left join si_regression reg on true
+        left join (
+          select avg(
+            (ss.points - ss.expected_points)
+            * (ss.points - ss.expected_points)
+            / nullif(ss.expected_points, 0)
+          )::double precision as phi
+          from song_stats ss
+          where ss.support_index is not null
+            and ss.expected_points > 0
+        ) fallback on true
+      ) phi_resolved
+      left join si_regression reg on true
+      left join lateral (
+        select greatest(
+          0::double precision,
+          avg(
+            (ss.support_index - 1::double precision)
+            * (ss.support_index - 1::double precision)
+            - phi_resolved.phi / nullif(ss.expected_points, 0)
+          )
+        )::double precision as tau2
+        from song_stats ss
+        where ss.support_index is not null
+          and ss.expected_points > 0
+      ) mom on true
     )
   `;
 }
@@ -1002,6 +1203,8 @@ type SongQueryRow = {
   positiveReach: number | null;
   roundPointShare: number | null;
   supportIndex: number | null;
+  supportIndexEb: number | null;
+  supportZ: number | null;
   performancePercentile: number | null;
 };
 
@@ -1052,6 +1255,19 @@ export function songSelect(): SQL {
       ss.round_point_share as "roundPointShare",
       ss.support_index as "supportIndex",
       case
+        when ss.support_index is null or ss.expected_points <= 0 then null::double precision
+        -- No usable prior variance: keep raw SI instead of collapsing every song to 1.0×.
+        when sp.tau2 <= 0 then ss.support_index
+        else 1::double precision + (ss.support_index - 1::double precision) * (
+          sp.tau2 / (sp.tau2 + sp.phi / ss.expected_points)
+        )
+      end as "supportIndexEb",
+      case
+        when ss.expected_points <= 0 then null::double precision
+        else (ss.points - ss.expected_points)
+          / nullif(sqrt(sp.phi * ss.expected_points), 0)
+      end as "supportZ",
+      case
         when ss.support_index is null then null::double precision
         when count(ss.support_index) over (partition by ss.round_id) = 1
           then 100::double precision
@@ -1062,6 +1278,7 @@ export function songSelect(): SQL {
         ) * 100
       end as "performancePercentile"
     from song_stats ss
+    cross join si_params sp
     join competitors c on c.id = ss.submitter_id
     join leagues l on l.id = ss.league_id
   `;
@@ -1315,6 +1532,8 @@ function matSongSelect(leagueIds: readonly string[] = []): SQL {
       positive_reach as "positiveReach",
       round_point_share as "roundPointShare",
       support_index as "supportIndex",
+      support_index_eb as "supportIndexEb",
+      support_z as "supportZ",
       performance_percentile as "performancePercentile"
     from analytics_song_stats
     ${leagueFilter}
@@ -1396,7 +1615,7 @@ async function getMaterializedDashboardData(
     ),
     top_song_rows as (
       select * from ranked_songs
-      order by "supportIndex" desc nulls last, points desc, title asc
+      order by "supportIndexEb" desc nulls last, "supportIndex" desc nulls last, points desc, title asc
       limit 10
     ),
     distribution_rows as (
@@ -1433,7 +1652,7 @@ async function getMaterializedDashboardData(
         select coalesce(
           json_agg(
             to_jsonb(top_song_rows)
-            order by "supportIndex" desc nulls last, points desc, title asc
+            order by "supportIndexEb" desc nulls last, "supportIndex" desc nulls last, points desc, title asc
           ),
           '[]'::json
         )
@@ -1528,7 +1747,7 @@ export async function getDashboardData(
     ranked_songs as (${songSelect()}),
     top_song_rows as (
       select * from ranked_songs
-      order by "supportIndex" desc nulls last, points desc, title asc
+      order by "supportIndexEb" desc nulls last, "supportIndex" desc nulls last, points desc, title asc
       limit 10
     ),
     distribution_rows as (
@@ -1544,7 +1763,7 @@ export async function getDashboardData(
       (select count(s.id)::int from submissions s join selected_rounds sr on sr.id = s.round_id) as "songCount",
       (select coalesce(sum(ev.points), 0)::int from effective_votes ev) as "pointCount",
       (select coalesce(json_agg(to_jsonb(leaderboard_rows) order by "totalPoints" desc, name asc), '[]'::json) from leaderboard_rows) as leaderboard,
-      (select coalesce(json_agg(to_jsonb(top_song_rows) order by "supportIndex" desc nulls last, points desc, title asc), '[]'::json) from top_song_rows) as "topSongs",
+      (select coalesce(json_agg(to_jsonb(top_song_rows) order by "supportIndexEb" desc nulls last, "supportIndex" desc nulls last, points desc, title asc), '[]'::json) from top_song_rows) as "topSongs",
       (select coalesce(json_agg(to_jsonb(distribution_rows) order by points), '[]'::json) from distribution_rows) as distribution
   `);
   const row = rows[0] ?? {
@@ -1655,12 +1874,16 @@ function songOrder(sort: SongSort, direction: SortDirection): SQL {
     return sql`"positiveReach" ${dir} ${nulls}, points desc`;
   if (sort === "round-share")
     return sql`"roundPointShare" ${dir} ${nulls}, points desc`;
+  if (sort === "support-eb")
+    return sql`"supportIndexEb" ${dir} ${nulls}, "supportIndex" desc nulls last, points desc`;
+  if (sort === "support-z")
+    return sql`"supportZ" ${dir} ${nulls}, "supportIndexEb" desc nulls last, points desc`;
   if (sort === "normalized-index")
     return sql`"supportIndex" ${dir} ${nulls}, points desc`;
   if (sort === "percentile")
     return sql`"performancePercentile" ${dir} ${nulls}, points desc`;
   if (sort === "newest") return sql`"submittedAt" ${dir}, title asc`;
-  return sql`points ${dir}, "supportIndex" desc nulls last`;
+  return sql`points ${dir}, "supportIndexEb" desc nulls last, "supportIndex" desc nulls last`;
 }
 
 export async function getSongsData(

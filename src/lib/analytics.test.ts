@@ -23,7 +23,10 @@ import {
   qualificationRoundFloor,
   resolveAnalyticsFilter,
   safeRatio,
+  estimateSupportIndexVarianceComponents,
   supportIndex,
+  supportIndexEb,
+  supportZ,
   timingMidpointPercentile,
   truncateRoundName,
   type FilterOptions,
@@ -86,6 +89,47 @@ describe("analytics metric helpers", () => {
     expect(supportIndex(twoSubmissionExpected * 1.5, twoSubmissionExpected)).toBe(
       1.5,
     );
+  });
+
+  it("shrinks support index toward 1.0 more when expected points are small", () => {
+    const components = { phi: 1.35, tau2: 0.08 };
+    const lowE = supportIndexEb(2.5, 10, components);
+    const highE = supportIndexEb(2.5, 20, components);
+    expect(lowE).not.toBeNull();
+    expect(highE).not.toBeNull();
+    expect(lowE!).toBeLessThan(highE!);
+    expect(lowE!).toBeGreaterThan(1);
+    expect(highE!).toBeLessThan(2.5);
+  });
+
+  it("keeps raw support index when prior variance is unavailable", () => {
+    expect(supportIndexEb(2.5, 10, { phi: 1.35, tau2: 0 })).toBe(2.5);
+  });
+
+  it("preserves support-index order when expected points match", () => {
+    const components = { phi: 1.35, tau2: 0.08 };
+    const lower = supportIndexEb(1.5, 16, components)!;
+    const higher = supportIndexEb(2.0, 16, components)!;
+    expect(higher).toBeGreaterThan(lower);
+  });
+
+  it("scores the same support index as a higher z with larger expected points", () => {
+    const phi = 1.35;
+    const lowE = supportZ(25, 10, phi)!; // SI = 2.5
+    const highE = supportZ(50, 20, phi)!; // SI = 2.5
+    expect(highE).toBeGreaterThan(lowE);
+  });
+
+  it("estimates variance components from binned SI dispersion", () => {
+    const songs = [];
+    for (let i = 0; i < 40; i += 1) {
+      songs.push({ supportIndex: 1 + (i % 5) * 0.1, expectedPoints: 11 });
+      songs.push({ supportIndex: 1 + (i % 3) * 0.05, expectedPoints: 20 });
+    }
+    const components = estimateSupportIndexVarianceComponents(songs);
+    expect(components).not.toBeNull();
+    expect(components!.phi).toBeGreaterThan(0);
+    expect(components!.tau2).toBeGreaterThanOrEqual(0);
   });
 
   it("keeps explicit zero and overflow point buckets", () => {

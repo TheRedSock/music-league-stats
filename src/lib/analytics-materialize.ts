@@ -605,7 +605,7 @@ async function runMaterializationStep(
         round_id, source_round_id, round_name, round_ordinal, submitted_at,
         points, expected_points, eligible_rows, positive_rows,
         points_per_eligible_voter, positive_reach, round_point_share,
-        support_index, performance_percentile
+        support_index, support_index_eb, support_z, performance_percentile
       )
       with ${songStatsCtes(ALL_LEAGUES_FILTER)}, ranked_songs as (${songSelect()})
       select
@@ -614,7 +614,7 @@ async function runMaterializationStep(
         "roundId", "sourceRoundId", "roundName", "roundOrdinal", "submittedAt",
         points, "expectedPoints", "eligibleRows", "positiveRows",
         "pointsPerEligibleVoter", "positiveReach", "roundPointShare",
-        "supportIndex", "performancePercentile"
+        "supportIndex", "supportIndexEb", "supportZ", "performancePercentile"
       from ranked_songs
     `);
     return;

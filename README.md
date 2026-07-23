@@ -83,10 +83,13 @@ database cannot be queried. URL parameters keep analytics views shareable:
 - Eligible point totals and positive reach are calculated from those query-time
   eligible opportunities, with self-votes excluded from both numerators and
   denominators. Imported vote rows are not rewritten or expanded.
-- A song's support index is its received points divided by the expected points
-  from the actual eligible ballot budgets that could reach it. `1.0` means the
-  song met expected support for that round context. Song percentiles are
-  calculated within the complete round before search and pagination.
+- A song's raw support index is its received points divided by the expected
+  points from the actual eligible ballot budgets that could reach it. `1.0`
+  means the song met expected support for that round context. Support index
+  (EB) shrinks that ratio toward `1.0` with corpus-estimated sample-size
+  variance (`Var(SI) ≈ τ² + φ/E`) for cross-round rankings; support z is the
+  standardized surplus under the same model. Song percentiles are calculated
+  within the complete round before search and pagination.
 - Player round index uses the same expected-points model, summing expected
   points for all of the player's submitted songs in each round, then averaging
   those round-local values. The default non-provisional threshold is three

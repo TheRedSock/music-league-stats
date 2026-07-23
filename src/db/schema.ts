@@ -502,6 +502,8 @@ export const analyticsSongStats = pgTable(
     positiveReach: doublePrecision("positive_reach"),
     roundPointShare: doublePrecision("round_point_share"),
     supportIndex: doublePrecision("support_index"),
+    supportIndexEb: doublePrecision("support_index_eb"),
+    supportZ: doublePrecision("support_z"),
     performancePercentile: doublePrecision("performance_percentile"),
     ...timestamps,
   },
@@ -509,6 +511,8 @@ export const analyticsSongStats = pgTable(
     index("analytics_song_submitter_idx").on(table.submitterId),
     index("analytics_song_points_idx").on(table.points),
     index("analytics_song_support_idx").on(table.supportIndex),
+    index("analytics_song_support_eb_idx").on(table.supportIndexEb),
+    index("analytics_song_support_z_idx").on(table.supportZ),
     index("analytics_song_scope_idx").on(table.leagueId, table.roundId),
   ],
 );
