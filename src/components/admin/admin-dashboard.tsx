@@ -9,12 +9,14 @@ import { AnalyticsRefreshPanel } from "@/components/admin/analytics-refresh-pane
 import { ImportPanel } from "@/components/admin/import-panel";
 import { LeagueForm } from "@/components/admin/league-form";
 import { PlayerNameEditor } from "@/components/admin/player-name-editor";
+import { SpotifyEnrichPanel } from "@/components/admin/spotify-enrich-panel";
 import type {
   AdminImportBatch,
   AdminLeague,
   AdminPlayer,
 } from "@/components/admin/types";
 import type { AnalyticsRefreshStatusResponse } from "@/lib/analytics-refresh-client";
+import type { SpotifyEnrichStatusResponse } from "@/lib/spotify-enrich-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,11 +42,13 @@ export function AdminDashboard({
   history,
   players,
   materializationStatus,
+  spotifyEnrichStatus,
 }: {
   leagues: AdminLeague[];
   history: AdminImportBatch[];
   players: AdminPlayer[];
   materializationStatus: AnalyticsRefreshStatusResponse | null;
+  spotifyEnrichStatus: SpotifyEnrichStatusResponse | null;
 }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -138,6 +142,8 @@ export function AdminDashboard({
       </section>
 
       <AnalyticsRefreshPanel initialStatus={materializationStatus} />
+
+      <SpotifyEnrichPanel initialStatus={spotifyEnrichStatus} />
 
       <Card>
         <CardHeader>

@@ -25,6 +25,8 @@ import {
 } from "@/lib/admin-auth";
 import { getAllLeaguesMaterializationStatus } from "@/lib/analytics-materialize";
 import type { AnalyticsRefreshStatusResponse } from "@/lib/analytics-refresh-client";
+import { getSpotifyEnrichmentStatus } from "@/lib/spotify-enrich";
+import type { SpotifyEnrichStatusResponse } from "@/lib/spotify-enrich-client";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -64,7 +66,7 @@ export default async function AdminPage() {
     );
   }
 
-  const [leagueRows, historyRows, playerRows, materialization] =
+  const [leagueRows, historyRows, playerRows, materialization, spotifyEnrich] =
     await Promise.all([
       db.select().from(leagues).orderBy(asc(leagues.name)),
       db
@@ -106,6 +108,7 @@ export default async function AdminPage() {
           sql`coalesce(${competitors.nameOverride}, ${competitors.name}) asc`,
         ),
       getAllLeaguesMaterializationStatus().catch(() => null),
+      getSpotifyEnrichmentStatus().catch(() => null),
     ]);
   const materializationStatus: AnalyticsRefreshStatusResponse | null =
     materialization
@@ -126,6 +129,25 @@ export default async function AdminPage() {
             : null,
         }
       : null;
+  const spotifyEnrichStatus: SpotifyEnrichStatusResponse | null = spotifyEnrich
+    ? {
+        status: spotifyEnrich.status,
+        counts: spotifyEnrich.counts,
+        progress: spotifyEnrich.progress,
+        job: spotifyEnrich.job
+          ? {
+              id: spotifyEnrich.job.id,
+              status: spotifyEnrich.job.status,
+              ambiguousOnly: spotifyEnrich.job.ambiguousOnly,
+              errorMessage: spotifyEnrich.job.errorMessage,
+              summary: spotifyEnrich.job.summary as
+                | Record<string, unknown>
+                | null
+                | undefined,
+            }
+          : null,
+      }
+    : null;
   const adminLeagues: AdminLeague[] = leagueRows.map((league) => ({
     id: league.id,
     name: league.name,
@@ -152,6 +174,7 @@ export default async function AdminPage() {
         leagues={adminLeagues}
         materializationStatus={materializationStatus}
         players={players}
+        spotifyEnrichStatus={spotifyEnrichStatus}
       />
     </Container>
   );

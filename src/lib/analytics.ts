@@ -8,6 +8,7 @@ import {
   type PointBucket,
 } from "@/lib/point-buckets";
 import { ANALYTICS_REVISION } from "@/lib/analytics-revision";
+import { parseSpotifyTrackId } from "@/lib/spotify";
 
 const ANALYTICS_CACHE_TAG = "analytics";
 
@@ -829,8 +830,8 @@ export function cosineSimilarity(
 }
 
 export function spotifyTrackUrl(uri: string): string | null {
-  const match = /^spotify:track:([A-Za-z0-9]+)$/.exec(uri);
-  return match ? `https://open.spotify.com/track/${match[1]}` : null;
+  const id = parseSpotifyTrackId(uri);
+  return id ? `https://open.spotify.com/track/${id}` : null;
 }
 
 export function isoTimestamp(value: Date | string): string {
@@ -3338,29 +3339,46 @@ export async function getSubmissionFactsData(
   const scopeCte = selectedRoundsCte(filter);
   const [row] = await db.execute<SubmissionFactsPackedQueryRow>(sql`
       with ${scopeCte},
+      submission_artists as (
+        select
+          s.id as submission_id,
+          s.submitter_id,
+          s.round_id,
+          s.league_id,
+          s.spotify_uri,
+          s.song_title,
+          coalesce(ta.artist_name, s.artist_name) as artist_name
+        from submissions s
+        join selected_rounds sr on sr.id = s.round_id
+        left join spotify_track_enrichments ste
+          on ste.spotify_track_id = substring(
+            s.spotify_uri from '^spotify:track:([A-Za-z0-9]+)$'
+          )
+          and ste.status = 'ok'
+        left join spotify_track_artists ta
+          on ta.spotify_track_id = ste.spotify_track_id
+      ),
       most_submitted_artists as (
       select
-        min(s.artist_name) as artist,
+        min(sa.artist_name) as artist,
         count(*)::int as submissions,
-        count(distinct s.submitter_id)::int as submitters
-      from submissions s
-      join selected_rounds sr on sr.id = s.round_id
-      group by lower(trim(s.artist_name))
+        count(distinct sa.submitter_id)::int as submitters
+      from submission_artists sa
+      group by lower(trim(sa.artist_name))
       order by submissions desc, submitters desc, artist asc
       limit 100
       ),
       player_artist_counts as (
         select
-          s.submitter_id,
-          min(s.artist_name) as artist,
+          sa.submitter_id,
+          min(sa.artist_name) as artist,
           count(*)::int as submissions,
           row_number() over (
-            partition by s.submitter_id
-            order by count(*) desc, min(s.artist_name) asc
+            partition by sa.submitter_id
+            order by count(*) desc, min(sa.artist_name) asc
           ) as artist_rank
-        from submissions s
-        join selected_rounds sr on sr.id = s.round_id
-        group by s.submitter_id, lower(trim(s.artist_name))
+        from submission_artists sa
+        group by sa.submitter_id, lower(trim(sa.artist_name))
       ),
       artist_loyalists as (
       select
@@ -3392,12 +3410,11 @@ export async function getSubmissionFactsData(
       ),
       diverse_artists as (
       select
-        min(s.artist_name) as artist,
-        count(distinct s.submitter_id)::int as submitters,
+        min(sa.artist_name) as artist,
+        count(distinct sa.submitter_id)::int as submitters,
         count(*)::int as submissions
-      from submissions s
-      join selected_rounds sr on sr.id = s.round_id
-      group by lower(trim(s.artist_name))
+      from submission_artists sa
+      group by lower(trim(sa.artist_name))
       order by submitters desc, submissions desc, artist asc
       limit 100
       ),
@@ -3405,10 +3422,9 @@ export async function getSubmissionFactsData(
       select
         s.submitter_id as "playerId",
         ${competitorDisplayName("c")} as "playerName",
-        count(*)::int as submissions,
+        count(distinct s.submission_id)::int as submissions,
         count(distinct lower(trim(s.artist_name)))::int as artists
-      from submissions s
-      join selected_rounds sr on sr.id = s.round_id
+      from submission_artists s
       join competitors c on c.id = s.submitter_id
       group by s.submitter_id, c.name_override, c.name
       order by submissions desc, artists desc, "playerName" asc

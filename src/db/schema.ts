@@ -29,6 +29,12 @@ export const analyticsMaterializationStatus = pgEnum(
   "analytics_materialization_status",
   ["pending", "processing", "completed", "failed"],
 );
+export const spotifyEnrichmentStatus = pgEnum("spotify_enrichment_status", [
+  "pending",
+  "ok",
+  "not_found",
+  "error",
+]);
 export const importKind = pgEnum("import_kind", [
   "competitors",
   "rounds",
@@ -717,6 +723,86 @@ export const analyticsPlayerTiming = pgTable(
   ],
 );
 
+export type SpotifyEnrichmentProgress = {
+  kind: "progress";
+  message: string;
+  processed: number;
+  total: number;
+  ok: number;
+  notFound: number;
+  error: number;
+  waitingMs?: number;
+};
+
+export type SpotifyEnrichmentCompletedSummary = {
+  kind: "completed";
+  processed: number;
+  ok: number;
+  notFound: number;
+  error: number;
+  ambiguousOnly: boolean;
+};
+
+export type SpotifyEnrichmentJobSummary =
+  | SpotifyEnrichmentProgress
+  | SpotifyEnrichmentCompletedSummary;
+
+export const spotifyTrackEnrichments = pgTable(
+  "spotify_track_enrichments",
+  {
+    spotifyTrackId: text("spotify_track_id").primaryKey(),
+    status: spotifyEnrichmentStatus("status").default("pending").notNull(),
+    errorMessage: text("error_message"),
+    enrichedAt: timestamp("enriched_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [index("spotify_track_enrichments_status_idx").on(table.status)],
+);
+
+export const spotifyTrackArtists = pgTable(
+  "spotify_track_artists",
+  {
+    spotifyTrackId: text("spotify_track_id")
+      .notNull()
+      .references(() => spotifyTrackEnrichments.spotifyTrackId, {
+        onDelete: "cascade",
+      }),
+    position: integer("position").notNull(),
+    artistSpotifyId: text("artist_spotify_id").notNull(),
+    artistName: text("artist_name").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "spotify_track_artists_pk",
+      columns: [table.spotifyTrackId, table.position],
+    }),
+    index("spotify_track_artists_artist_id_idx").on(table.artistSpotifyId),
+    index("spotify_track_artists_artist_name_idx").on(table.artistName),
+    check("spotify_track_artists_position_nonneg", sql`${table.position} >= 0`),
+  ],
+);
+
+export const spotifyEnrichmentJobs = pgTable(
+  "spotify_enrichment_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    ambiguousOnly: boolean("ambiguous_only").notNull(),
+    status: analyticsMaterializationStatus("status")
+      .default("pending")
+      .notNull(),
+    summary: jsonb("summary").$type<SpotifyEnrichmentJobSummary>(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("spotify_enrichment_jobs_status_idx").on(table.status),
+    index("spotify_enrichment_jobs_created_at_idx").on(table.createdAt),
+  ],
+);
+
 export type League = typeof leagues.$inferSelect;
 export type NewLeague = typeof leagues.$inferInsert;
 export type Competitor = typeof competitors.$inferSelect;
@@ -728,3 +814,7 @@ export type ImportBatch = typeof importBatches.$inferSelect;
 export type AnalyticsMaterializationJob =
   typeof analyticsMaterializationJobs.$inferSelect;
 export type AnalyticsScopeJob = typeof analyticsScopeJobs.$inferSelect;
+export type SpotifyTrackEnrichment =
+  typeof spotifyTrackEnrichments.$inferSelect;
+export type SpotifyTrackArtist = typeof spotifyTrackArtists.$inferSelect;
+export type SpotifyEnrichmentJob = typeof spotifyEnrichmentJobs.$inferSelect;

@@ -50,6 +50,13 @@
       "when": 1784830000000,
       "tag": "0006_submission_playlist_index",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784840000000,
+      "tag": "0007_spotify_artist_enrichment",
+      "breakpoints": true
     }
   ]
 }
