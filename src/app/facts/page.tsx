@@ -893,8 +893,8 @@ export default async function FactsPage({
               headers={[
                 { label: "League", width: "w-[28%]" },
                 { label: "Round", width: "w-[36%]" },
-                { align: "right", label: "Top share" },
                 { align: "right", label: "Gap" },
+                { align: "right", label: "Top share" },
               ]}
               rows={data.closestRaces.map((row) => [
                 <TruncatedCell
@@ -915,8 +915,8 @@ export default async function FactsPage({
                 >
                   R{row.roundOrdinal} · {truncateRoundName(row.roundName)}
                 </TruncatedCell>,
-                percent(row.maxRoundPointShare),
                 percent(row.topTwoShareGap),
+                percent(row.maxRoundPointShare),
               ])}
             />
           }
@@ -938,8 +938,8 @@ export default async function FactsPage({
                   sourceRoundId={row.sourceRoundId}
                 />
                 <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  top {percent(row.maxRoundPointShare)} · gap{" "}
-                  {percent(row.topTwoShareGap)}
+                  gap {percent(row.topTwoShareGap)} · top{" "}
+                  {percent(row.maxRoundPointShare)}
                 </p>
               </RoundOutcomeHover>
             ),
@@ -947,14 +947,14 @@ export default async function FactsPage({
         </FactPanel>
 
         <FactPanel
-          description="Rounds dominated by one song’s share of total points. Hover a row for the top 3."
+          description="Rounds where 1st place’s point share most outpaces 2nd. Hover a row for the top 3."
           dialog={
             <FactTable
               headers={[
                 { label: "League", width: "w-[28%]" },
                 { label: "Round", width: "w-[36%]" },
-                { align: "right", label: "Top share" },
                 { align: "right", label: "Gap" },
+                { align: "right", label: "Top share" },
               ]}
               rows={data.biggestLandslides.map((row) => [
                 <TruncatedCell
@@ -975,8 +975,8 @@ export default async function FactsPage({
                 >
                   R{row.roundOrdinal} · {truncateRoundName(row.roundName)}
                 </TruncatedCell>,
-                percent(row.maxRoundPointShare),
                 percent(row.topTwoShareGap),
+                percent(row.maxRoundPointShare),
               ])}
             />
           }
@@ -998,8 +998,8 @@ export default async function FactsPage({
                   sourceRoundId={row.sourceRoundId}
                 />
                 <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  top {percent(row.maxRoundPointShare)} · gap{" "}
-                  {percent(row.topTwoShareGap)}
+                  gap {percent(row.topTwoShareGap)} · top{" "}
+                  {percent(row.maxRoundPointShare)}
                 </p>
               </RoundOutcomeHover>
             ),

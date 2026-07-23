@@ -6,6 +6,7 @@ import {
   useId,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { cn } from "@/lib/utils";
 
@@ -46,11 +47,12 @@ export function Dialog({
 
   if (!open) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-3 sm:items-center sm:p-6">
+  // Portal out of cards with backdrop-filter/transform so `fixed` covers the viewport.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center p-3 sm:items-center sm:p-6">
       <button
         aria-label="Close dialog"
-        className="absolute inset-0 cursor-default bg-black/60 backdrop-blur-[2px]"
+        className="absolute inset-0 cursor-default bg-black/70 backdrop-blur-[2px]"
         onClick={onClose}
         type="button"
       />
@@ -59,7 +61,7 @@ export function Dialog({
         aria-labelledby={titleId}
         aria-modal="true"
         className={cn(
-          "relative z-10 flex max-h-[min(90vh,52rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.45)]",
+          "relative z-10 flex max-h-[min(90vh,52rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-950 shadow-[0_24px_80px_rgba(0,0,0,0.55)]",
           className,
         )}
         role="dialog"
@@ -91,6 +93,7 @@ export function Dialog({
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -3671,7 +3671,7 @@ export async function getSubmissionFactsData(
       biggest_landslides as (
         select *
         from round_outliers
-        order by "maxRoundPointShare" desc, "topTwoShareGap" desc, "leagueName" asc, "roundOrdinal" asc
+        order by "topTwoShareGap" desc, "maxRoundPointShare" desc, "leagueName" asc, "roundOrdinal" asc
         limit 100
       ),
       ordered_songs as (
@@ -3807,7 +3807,7 @@ export async function getSubmissionFactsData(
           from closest_races
         ) as "closestRaces",
         (
-          select coalesce(json_agg(to_jsonb(biggest_landslides) order by "maxRoundPointShare" desc, "topTwoShareGap" desc, "leagueName" asc, "roundOrdinal" asc), '[]'::json)
+          select coalesce(json_agg(to_jsonb(biggest_landslides) order by "topTwoShareGap" desc, "maxRoundPointShare" desc, "leagueName" asc, "roundOrdinal" asc), '[]'::json)
           from biggest_landslides
         ) as "biggestLandslides",
         (
