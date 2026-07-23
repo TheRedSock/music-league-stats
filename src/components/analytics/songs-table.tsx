@@ -17,16 +17,18 @@ import {
   TableRow,
   TruncatedCell,
 } from "@/components/ui/table";
+import type { SongAnalyticsRow } from "@/lib/analytics";
 import {
   buildAnalyticsHref,
+  type QueryValue,
+} from "@/lib/analytics-url";
+import {
   defaultSongSortDirection,
   leagueTableLabel,
   truncateRoundName,
-  type QueryValue,
-  type SongAnalyticsRow,
   type SongSort,
   type SortDirection,
-} from "@/lib/analytics";
+} from "@/lib/analytics-view";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 function percent(value: number | null): string {

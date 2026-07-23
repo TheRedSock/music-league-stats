@@ -4,11 +4,11 @@ import type { ReactNode } from "react";
 
 import { PendingLink } from "@/components/analytics/pending-link";
 import { TableHead } from "@/components/ui/table";
-import type { SortDirection } from "@/lib/analytics";
 import {
   buildAnalyticsHref,
   type QueryValue,
 } from "@/lib/analytics-url";
+import type { SortDirection } from "@/lib/analytics-view";
 import { cn } from "@/lib/utils";
 
 export function SortableTableHead({

@@ -124,23 +124,22 @@ export type SongAnalyticsRow = {
   performancePercentile: number | null;
 };
 
-export const songSorts = [
-  "title",
-  "submitter",
-  "scope",
-  "points",
-  "points-per-voter",
-  "positive-reach",
-  "round-share",
-  "support-eb",
-  "support-z",
-  "normalized-index",
-  "percentile",
-  "newest",
-] as const;
-export type SongSort = (typeof songSorts)[number];
-export const sortDirections = ["asc", "desc"] as const;
-export type SortDirection = (typeof sortDirections)[number];
+export {
+  defaultSongSortDirection,
+  leagueTableLabel,
+  songSorts,
+  sortDirections,
+  truncateRoundName,
+  type SongSort,
+  type SortDirection,
+} from "@/lib/analytics-view";
+import {
+  defaultSongSortDirection,
+  songSorts,
+  sortDirections,
+  type SongSort,
+  type SortDirection,
+} from "@/lib/analytics-view";
 
 export type SongsData = {
   rows: SongAnalyticsRow[];
@@ -458,12 +457,6 @@ export function parseRelationshipSort(
   if (tab === "timing") return "timing";
   if (tab === "mutual") return "share";
   return "rate";
-}
-
-export function defaultSongSortDirection(sort: SongSort): SortDirection {
-  return sort === "title" || sort === "submitter" || sort === "scope"
-    ? "asc"
-    : "desc";
 }
 
 export function defaultPlayerSortDirection(sort: PlayerSort): SortDirection {
@@ -1443,15 +1436,6 @@ export function isMultiLeagueScope(filter: AnalyticsFilter): boolean {
 
 export function canUseSongDerivedMats(filter: AnalyticsFilter): boolean {
   return filter.roundIds.length === 0;
-}
-
-export function leagueTableLabel(league: { slug: string; name: string }): string {
-  return league.slug || league.name;
-}
-
-export function truncateRoundName(name: string, max = 50): string {
-  if (name.length <= max) return name;
-  return `${name.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
 async function hasCompletedAllLeaguesMaterialization(): Promise<boolean> {
