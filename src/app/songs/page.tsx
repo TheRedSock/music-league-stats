@@ -312,6 +312,7 @@ export default async function SongsPage({
                         <MusicLeagueLink
                           className="text-zinc-300"
                           href={musicLeagueUrl(song.leagueMusicLeagueId)}
+                          showIcon={false}
                           title={song.leagueName}
                         >
                           {leagueTableLabel({

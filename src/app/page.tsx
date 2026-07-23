@@ -11,7 +11,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { MusicLeagueLink } from "@/components/analytics/music-league-link";
+import { MusicLeagueScopeLinks } from "@/components/analytics/music-league-link";
 import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
@@ -29,6 +29,7 @@ import {
 import {
   buildAnalyticsHref,
   encodeScopeIds,
+  analyticsScopeKey,
   getCachedDashboardAlignmentData,
   getCachedDashboardData,
   getCachedFilterOptions,
@@ -54,9 +55,11 @@ const summaryMetadata = [
 function AlignmentPanel({
   alignments,
   filterParams,
+  pendingScopeMaterialization = false,
 }: {
   alignments: Awaited<ReturnType<typeof getCachedDashboardAlignmentData>>;
   filterParams: ReturnType<typeof scopeQueryParams>;
+  pendingScopeMaterialization?: boolean;
 }) {
   return (
     <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
@@ -120,6 +123,25 @@ function AlignmentPanel({
                 patterns, not personal relationships or causality.
               </p>
             </>
+          ) : pendingScopeMaterialization ? (
+            <>
+              <h2 className="mt-2 text-xl font-semibold text-white">
+                Multi-league alignment not computed yet
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+                Leaderboard and songs for this combination come from existing
+                caches. Vote-pattern alignment is built when you open Compare
+                with the same leagues selected.
+              </p>
+              <Link
+                className="mt-4 inline-flex text-sm font-medium text-lime-300 hover:text-lime-200"
+                href={buildAnalyticsHref("/relationships", filterParams, {
+                  tab: "alignment",
+                })}
+              >
+                Open Compare to compute alignment
+              </Link>
+            </>
           ) : (
             <>
               <h2 className="mt-2 text-xl font-semibold text-white">
@@ -172,16 +194,31 @@ async function DashboardAlignmentCard({
   filter: { leagueIds: string[]; roundIds: string[] };
   filterParams: ReturnType<typeof scopeQueryParams>;
 }) {
-  const result = await loadAnalytics(() =>
-    getCachedDashboardAlignmentData(
+  const result = await loadAnalytics(async () => {
+    const alignments = await getCachedDashboardAlignmentData(
       encodeScopeIds(filter.leagueIds),
       encodeScopeIds(filter.roundIds),
-    ),
-  );
+    );
+    let pendingScopeMaterialization = false;
+    if (filter.leagueIds.length >= 2 && alignments.length === 0) {
+      const { hasFreshScopeMaterialization } = await import(
+        "@/lib/analytics-materialize"
+      );
+      pendingScopeMaterialization = !(await hasFreshScopeMaterialization(
+        analyticsScopeKey(filter.leagueIds),
+      ));
+    }
+    return { alignments, pendingScopeMaterialization };
+  });
   return (
     <AlignmentPanel
-      alignments={result.status === "ready" ? result.data : []}
+      alignments={result.status === "ready" ? result.data.alignments : []}
       filterParams={filterParams}
+      pendingScopeMaterialization={
+        result.status === "ready"
+          ? result.data.pendingScopeMaterialization
+          : false
+      }
     />
   );
 }
@@ -215,9 +252,11 @@ export default async function HomePage({
 
   const { data, filter, options } = result.data;
   const filterParams = scopeQueryParams(filter);
-  const summaryCards = filter.leagueIds.length
-    ? summaryMetadata.filter(({ key }) => key !== "leagues")
-    : summaryMetadata;
+  // Hide the leagues count only for a single-league scope (redundant with the title).
+  const summaryCards =
+    filter.leagueIds.length === 1
+      ? summaryMetadata.filter(({ key }) => key !== "leagues")
+      : summaryMetadata;
 
   return (
     <Container className="py-10 sm:py-14">
@@ -276,7 +315,10 @@ export default async function HomePage({
           <>
             <Card>
               <CardContent className="p-5 sm:p-7">
-                <LeaderboardPanel rows={data.leaderboard} />
+                <LeaderboardPanel
+                  filterParams={filterParams}
+                  rows={data.leaderboard}
+                />
               </CardContent>
             </Card>
 
@@ -334,19 +376,25 @@ export default async function HomePage({
                             </span>
                           </p>
                           <p className="mt-0.5 truncate text-xs text-zinc-500">
-                            <MusicLeagueLink
-                              href={musicLeagueUrl(
+                            <MusicLeagueScopeLinks
+                              leagueHref={musicLeagueUrl(song.leagueMusicLeagueId)}
+                              leagueLabel={leagueTableLabel({
+                                name: song.leagueName,
+                                slug: song.leagueSlug,
+                              })}
+                              leagueTitle={song.leagueName}
+                              roundHref={musicLeagueUrl(
                                 song.leagueMusicLeagueId,
                                 song.sourceRoundId,
                               )}
-                            >
-                              {leagueTableLabel({
-                                name: song.leagueName,
-                                slug: song.leagueSlug,
-                              })}{" "}
-                              · R{song.roundOrdinal} ·{" "}
-                              {truncateRoundName(song.roundName)}
-                            </MusicLeagueLink>
+                              roundLabel={
+                                <>
+                                  R{song.roundOrdinal} ·{" "}
+                                  {truncateRoundName(song.roundName)}
+                                </>
+                              }
+                              roundTitle={song.roundName}
+                            />
                           </p>
                         </div>
                         <div className="text-right">

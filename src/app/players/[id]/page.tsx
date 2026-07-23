@@ -11,7 +11,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
-import { MusicLeagueLink } from "@/components/analytics/music-league-link";
+import { MusicLeagueScopeLinks } from "@/components/analytics/music-league-link";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
 import { VoteDistributions } from "@/components/analytics/vote-distributions";
 import { Container } from "@/components/layout/container";
@@ -130,17 +130,24 @@ function SubmissionList({
               </p>
               <p className="mt-0.5 truncate text-xs text-zinc-500">
                 {song.artist} ·{" "}
-                <MusicLeagueLink
-                  href={musicLeagueUrl(
+                <MusicLeagueScopeLinks
+                  leagueHref={musicLeagueUrl(song.leagueMusicLeagueId)}
+                  leagueLabel={leagueTableLabel({
+                    name: song.leagueName,
+                    slug: song.leagueSlug,
+                  })}
+                  leagueTitle={song.leagueName}
+                  roundHref={musicLeagueUrl(
                     song.leagueMusicLeagueId,
                     song.sourceRoundId,
                   )}
-                >
-                  {leagueTableLabel({
-                    name: song.leagueName,
-                    slug: song.leagueSlug,
-                  })}, R{song.roundOrdinal} · {truncateRoundName(song.roundName)}
-                </MusicLeagueLink>
+                  roundLabel={
+                    <>
+                      R{song.roundOrdinal} · {truncateRoundName(song.roundName)}
+                    </>
+                  }
+                  roundTitle={song.roundName}
+                />
               </p>
             </div>
             <div className="shrink-0 text-right">
@@ -170,18 +177,24 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
           >
             <div className="min-w-0">
               <p className="truncate text-sm text-zinc-200">
-                <MusicLeagueLink
-                  href={musicLeagueUrl(
+                <MusicLeagueScopeLinks
+                  leagueHref={musicLeagueUrl(row.leagueMusicLeagueId)}
+                  leagueLabel={leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                  leagueTitle={row.leagueName}
+                  roundHref={musicLeagueUrl(
                     row.leagueMusicLeagueId,
                     row.sourceRoundId,
                   )}
-                >
-                  {leagueTableLabel({
-                    name: row.leagueName,
-                    slug: row.leagueSlug,
-                  })}{" "}
-                  · R{row.ordinal} {truncateRoundName(row.roundName)}
-                </MusicLeagueLink>
+                  roundLabel={
+                    <>
+                      R{row.ordinal} {truncateRoundName(row.roundName)}
+                    </>
+                  }
+                  roundTitle={row.roundName}
+                />
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
                 <div
