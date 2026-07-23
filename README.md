@@ -59,8 +59,8 @@ database cannot be queried. URL parameters keep analytics views shareable:
   alignment, and relative ballot order
 - `/relationships` — full tables for player-to-player relationship metrics,
   optionally focused from a player profile section
-- `/facts` — submission-level facts such as repeated artists, repeated tracks,
-  prolific submitters, and dense rounds
+- `/facts` — submission patterns and voting quirks (appeal shape, round
+  races/landslides, submission-order bias), with top-5 previews and full tables
 - `/faq` — plain-language metric explanations
 - Repeated `league=<uuid>` and `round=<uuid>` parameters scope every route. With
   no scope parameters, pages default to the latest league. Use `league=all` for

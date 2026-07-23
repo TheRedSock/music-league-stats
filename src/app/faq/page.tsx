@@ -73,7 +73,7 @@ const sections = [
   },
   {
     title: "What is the Facts page?",
-    body: "Facts groups submissions to surface dataset-level patterns, such as repeated artists, repeat songs, prolific submitters, and dense rounds. It uses the same league and round scope filter as the analytics pages.",
+    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion), round races and landslides, and a submission-order bias summary. It uses the same league scope filter as the analytics pages.",
   },
 ];
 

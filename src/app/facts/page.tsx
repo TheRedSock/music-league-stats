@@ -1,18 +1,15 @@
-import { ExternalLink, Sparkles } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
-import { Container } from "@/components/layout/container";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  FACT_PREVIEW_LIMIT,
+  FactPanel,
+} from "@/components/analytics/fact-panel";
+import { Container } from "@/components/layout/container";
 import {
   Table,
   TableBody,
@@ -34,35 +31,17 @@ import {
   scopeQueryParams,
   spotifyTrackUrl,
   truncateRoundName,
+  type QueryValue,
   type SearchParams,
+  type SubmissionFactsData,
 } from "@/lib/analytics";
 
 export const metadata: Metadata = {
   title: "Facts",
-  description: "Scope-aware submission facts and repeat patterns.",
+  description: "Submission patterns and voting quirks for the selected scope.",
 };
 
-function FactList({
-  children,
-  description,
-  title,
-}: {
-  children: ReactNode;
-  description: string;
-  title: string;
-}) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
-  );
-}
-
-function rankedList<T>({
+function rankedFactList<T>({
   rows,
   render,
 }: {
@@ -81,6 +60,155 @@ function rankedList<T>({
       ))}
     </ol>
   );
+}
+
+function percent(value: number | null | undefined, digits = 1): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
+function ratio(value: number | null | undefined, digits = 2): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toFixed(digits);
+}
+
+function signedPercent(value: number | null | undefined, digits = 0): string {
+  if (value == null || Number.isNaN(value)) return "—";
+  const pct = value * 100;
+  const formatted = `${pct >= 0 ? "+" : ""}${pct.toFixed(digits)}%`;
+  return formatted;
+}
+
+function correlationLabel(value: number | null): string {
+  if (value == null || Number.isNaN(value)) return "Not enough data";
+  const abs = Math.abs(value);
+  if (abs < 0.05) return "essentially no linear relationship";
+  if (abs < 0.15) return "a very weak relationship";
+  if (abs < 0.3) return "a weak relationship";
+  if (abs < 0.5) return "a moderate relationship";
+  return "a strong relationship";
+}
+
+function previewRows<T>(rows: T[]): T[] {
+  return rows.slice(0, FACT_PREVIEW_LIMIT);
+}
+
+function FactTable({
+  headers,
+  rows,
+}: {
+  headers: Array<{ align?: "left" | "right"; label: string; width?: string }>;
+  rows: ReactNode[][];
+}) {
+  return (
+    <Table className="table-fixed">
+      <TableHeader>
+        <TableRow>
+          {headers.map((header) => (
+            <TableHead
+              className={
+                header.align === "right"
+                  ? `text-right ${header.width ?? ""}`
+                  : header.width
+              }
+              key={header.label}
+            >
+              {header.label}
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((cells, index) => (
+          <TableRow key={index}>
+            {cells.map((cell, cellIndex) => (
+              <TableCell
+                className={
+                  headers[cellIndex]?.align === "right"
+                    ? "text-right font-mono"
+                    : "max-w-0"
+                }
+                key={cellIndex}
+              >
+                {cell}
+              </TableCell>
+            ))}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+}
+
+function PlayerLink({
+  filterParams,
+  id,
+  name,
+}: {
+  filterParams: Record<string, QueryValue>;
+  id: string;
+  name: string;
+}) {
+  return (
+    <Link
+      className="hover:text-lime-200"
+      href={buildAnalyticsHref(`/players/${id}`, filterParams, {})}
+    >
+      {name}
+    </Link>
+  );
+}
+
+function SpotifyTitle({
+  spotifyUri,
+  title,
+}: {
+  spotifyUri: string;
+  title: string;
+}) {
+  const href = spotifyTrackUrl(spotifyUri);
+  if (!href) {
+    return <TruncatedCell title={title}>{title}</TruncatedCell>;
+  }
+  return (
+    <a
+      className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
+      href={href}
+      rel="noreferrer"
+      target="_blank"
+    >
+      <span className="truncate">{title}</span>
+      <ExternalLink aria-hidden="true" className="size-3 shrink-0" />
+    </a>
+  );
+}
+
+function hasReliableSubmissionOrderBias(
+  bias: SubmissionFactsData["submissionOrderBias"],
+): boolean {
+  return bias.sampleSize >= 10 && bias.correlationPoints != null;
+}
+
+function submissionOrderCopy(bias: SubmissionFactsData["submissionOrderBias"]) {
+  if (!hasReliableSubmissionOrderBias(bias)) {
+    return "Not enough songs in this scope to estimate a submission-order effect.";
+  }
+
+  const correlationPoints = bias.correlationPoints as number;
+
+  const direction =
+    correlationPoints < -0.05
+      ? "earlier submissions tending to score slightly higher"
+      : correlationPoints > 0.05
+        ? "later submissions tending to score slightly higher"
+        : "little difference between early and late submissions";
+
+  const delta =
+    bias.earlyVsLatePointsDeltaPct == null
+      ? null
+      : ` Early-half songs averaged ${signedPercent(bias.earlyVsLatePointsDeltaPct)} points versus the late half.`;
+
+  return `Across ${bias.sampleSize} songs, submission timestamp order shows ${correlationLabel(correlationPoints)} with points (${ratio(correlationPoints, 3)}), with ${direction}.${delta ?? ""} This uses submission time within each round — not Spotify playlist position.`;
 }
 
 export default async function FactsPage({
@@ -112,6 +240,14 @@ export default async function FactsPage({
 
   const { data, filter, options } = result.data;
   const filterParams = scopeQueryParams(filter);
+  const orderBias = data.submissionOrderBias;
+  const reliableOrderBias = hasReliableSubmissionOrderBias(orderBias);
+  const earlyExtremes = data.submissionOrderExtremes.filter(
+    (row) => row.side === "early-over",
+  );
+  const lateExtremes = data.submissionOrderExtremes.filter(
+    (row) => row.side === "late-over",
+  );
 
   return (
     <Container className="py-10 sm:py-14">
@@ -121,7 +257,7 @@ export default async function FactsPage({
             Facts
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Submission patterns in the selected scope
+            Submission patterns and voting quirks in the selected scope
           </p>
         </div>
         <div className="w-full lg:max-w-3xl">
@@ -129,13 +265,34 @@ export default async function FactsPage({
         </div>
       </div>
 
-      <section className="mt-9 grid gap-4 lg:grid-cols-3">
-        <FactList
+      <h2 className="mt-10 text-sm font-medium uppercase tracking-wide text-zinc-500">
+        Submission patterns
+      </h2>
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-3">
+        <FactPanel
           description="Artists grouped by exact exported artist text, normalized for case."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Artist", width: "w-[50%]" },
+                { align: "right", label: "Submissions" },
+                { align: "right", label: "Submitters" },
+              ]}
+              rows={data.mostSubmittedArtists.map((row) => [
+                <span className="font-medium text-zinc-100" key="a">
+                  {row.artist}
+                </span>,
+                row.submissions,
+                row.submitters,
+              ])}
+            />
+          }
+          itemCount={data.mostSubmittedArtists.length}
           title="Most-submitted artists"
         >
-          {rankedList({
-            rows: data.mostSubmittedArtists,
+          {rankedFactList({
+            rows: previewRows(data.mostSubmittedArtists),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
@@ -147,27 +304,44 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
 
-        <FactList
+        <FactPanel
           description="The strongest one-player, one-artist repeats."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Player", width: "w-[35%]" },
+                { label: "Artist", width: "w-[40%]" },
+                { align: "right", label: "Subs" },
+              ]}
+              rows={data.artistLoyalists.map((row) => [
+                <PlayerLink
+                  filterParams={filterParams}
+                  id={row.playerId}
+                  key="p"
+                  name={row.playerName}
+                />,
+                <TruncatedCell key="a" title={row.artist}>
+                  {row.artist}
+                </TruncatedCell>,
+                row.submissions,
+              ])}
+            />
+          }
+          itemCount={data.artistLoyalists.length}
           title="Player artist streaks"
         >
-          {rankedList({
-            rows: data.artistLoyalists,
+          {rankedFactList({
+            rows: previewRows(data.artistLoyalists),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
-                  <Link
-                    className="hover:text-lime-200"
-                    href={buildAnalyticsHref(
-                      `/players/${row.playerId}`,
-                      filterParams,
-                      {},
-                    )}
-                  >
-                    {row.playerName}
-                  </Link>{" "}
+                  <PlayerLink
+                    filterParams={filterParams}
+                    id={row.playerId}
+                    name={row.playerName}
+                  />{" "}
                   <span className="text-zinc-500">→ {row.artist}</span>
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
@@ -176,14 +350,31 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
 
-        <FactList
+        <FactPanel
           description="Artists that reached the most different submitters."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Artist", width: "w-[50%]" },
+                { align: "right", label: "Submitters" },
+                { align: "right", label: "Submissions" },
+              ]}
+              rows={data.diverseArtists.map((row) => [
+                <span className="font-medium text-zinc-100" key="a">
+                  {row.artist}
+                </span>,
+                row.submitters,
+                row.submissions,
+              ])}
+            />
+          }
+          itemCount={data.diverseArtists.length}
           title="Broadest artist reach"
         >
-          {rankedList({
-            rows: data.diverseArtists,
+          {rankedFactList({
+            rows: previewRows(data.diverseArtists),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
@@ -195,29 +386,44 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
       </section>
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
-        <FactList
+        <FactPanel
           description="Players with the most submissions and distinct artists in this scope."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Player", width: "w-[50%]" },
+                { align: "right", label: "Submissions" },
+                { align: "right", label: "Artists" },
+              ]}
+              rows={data.prolificSubmitters.map((row) => [
+                <PlayerLink
+                  filterParams={filterParams}
+                  id={row.playerId}
+                  key="p"
+                  name={row.playerName}
+                />,
+                row.submissions,
+                row.artists,
+              ])}
+            />
+          }
+          itemCount={data.prolificSubmitters.length}
           title="Most prolific submitters"
         >
-          {rankedList({
-            rows: data.prolificSubmitters,
+          {rankedFactList({
+            rows: previewRows(data.prolificSubmitters),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
-                  <Link
-                    className="hover:text-lime-200"
-                    href={buildAnalyticsHref(
-                      `/players/${row.playerId}`,
-                      filterParams,
-                      {},
-                    )}
-                  >
-                    {row.playerName}
-                  </Link>
+                  <PlayerLink
+                    filterParams={filterParams}
+                    id={row.playerId}
+                    name={row.playerName}
+                  />
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
                   {row.submissions} submissions · {row.artists} artists
@@ -225,14 +431,47 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
 
-        <FactList
+        <FactPanel
           description="Rounds with the largest submitted song slates."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "League", width: "w-[30%]" },
+                { label: "Round", width: "w-[40%]" },
+                { align: "right", label: "Songs" },
+                { align: "right", label: "Players" },
+              ]}
+              rows={data.densestRounds.map((row) => [
+                <TruncatedCell
+                  key="l"
+                  title={leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                >
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                </TruncatedCell>,
+                <TruncatedCell
+                  key="r"
+                  title={`R${row.roundOrdinal} · ${row.roundName}`}
+                >
+                  R{row.roundOrdinal} · {truncateRoundName(row.roundName)}
+                </TruncatedCell>,
+                row.submissions,
+                row.submitters,
+              ])}
+            />
+          }
+          itemCount={data.densestRounds.length}
           title="Densest rounds"
         >
-          {rankedList({
-            rows: data.densestRounds,
+          {rankedFactList({
+            rows: previewRows(data.densestRounds),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
@@ -248,114 +487,88 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
       </section>
-
-      <Card className="mt-4">
-        <CardHeader>
-          <Sparkles aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-          <CardTitle>Repeated songs</CardTitle>
-          <CardDescription>
-            Tracks that were submitted more than once in the selected scope.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {data.repeatedSongs.length ? (
-            <Table className="table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[45%]">Song</TableHead>
-                  <TableHead className="text-right">Submissions</TableHead>
-                  <TableHead className="text-right">Submitters</TableHead>
-                  <TableHead className="text-right">Leagues</TableHead>
-                  <TableHead className="text-right">Rounds</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.repeatedSongs.map((row) => {
-                  const href = spotifyTrackUrl(row.spotifyUri);
-                  return (
-                    <TableRow key={row.spotifyUri}>
-                      <TableCell className="max-w-0">
-                        <p className="truncate font-medium text-zinc-100">
-                          {href ? (
-                            <a
-                              className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
-                              href={href}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              <span className="truncate">{row.title}</span>
-                              <ExternalLink
-                                aria-hidden="true"
-                                className="size-3 shrink-0"
-                              />
-                            </a>
-                          ) : (
-                            <TruncatedCell title={row.title}>{row.title}</TruncatedCell>
-                          )}
-                        </p>
-                        <p className="mt-0.5 truncate text-xs text-zinc-500">
-                          {row.artist}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.submissions}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.submitters}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.leagues}
-                      </TableCell>
-                      <TableCell className="text-right font-mono">
-                        {row.rounds}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="text-sm text-zinc-500">
-              No repeated tracks in this scope.
-            </p>
-          )}
-        </CardContent>
-      </Card>
 
       <section className="mt-4 grid gap-4 lg:grid-cols-3">
-        <FactList
-          description="Same submitter, same Spotify track, more than once."
-          title="Personal repeats"
+        <FactPanel
+          description="Tracks that were submitted more than once in the selected scope."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Song", width: "w-[40%]" },
+                { align: "right", label: "Subs" },
+                { align: "right", label: "Players" },
+                { align: "right", label: "Leagues" },
+                { align: "right", label: "Rounds" },
+              ]}
+              rows={data.repeatedSongs.map((row) => [
+                <div key="s">
+                  <p className="truncate font-medium text-zinc-100">
+                    <SpotifyTitle
+                      spotifyUri={row.spotifyUri}
+                      title={row.title}
+                    />
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {row.artist}
+                  </p>
+                </div>,
+                row.submissions,
+                row.submitters,
+                row.leagues,
+                row.rounds,
+              ])}
+            />
+          }
+          emptyMessage="No repeated tracks in this scope."
+          itemCount={data.repeatedSongs.length}
+          title="Repeated songs"
         >
-          {rankedList({
-            rows: data.repeatSubmitterSongs,
+          {rankedFactList({
+            rows: previewRows(data.repeatedSongs),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
-                  <Link
-                    className="hover:text-lime-200"
-                    href={buildAnalyticsHref(
-                      `/players/${row.playerId}`,
-                      filterParams,
-                      {},
-                    )}
-                  >
-                    {row.playerName}
-                  </Link>
+                  <SpotifyTitle spotifyUri={row.spotifyUri} title={row.title} />
                 </p>
                 <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  {row.title} · {row.artist} · {row.submissions}x
+                  {row.artist} · {row.submissions}x · {row.submitters} submitters
                 </p>
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
 
-        <FactList description="Longest exported song titles." title="Longest titles">
-          {rankedList({
-            rows: data.longestTitles,
+        <FactPanel
+          description="Longest exported song titles."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Title", width: "w-[45%]" },
+                { label: "Artist", width: "w-[30%]" },
+                { align: "right", label: "Chars" },
+                { label: "By" },
+              ]}
+              rows={data.longestTitles.map((row) => [
+                <TruncatedCell key="t" title={row.title}>
+                  {row.title}
+                </TruncatedCell>,
+                <TruncatedCell key="a" title={row.artist}>
+                  {row.artist}
+                </TruncatedCell>,
+                row.length,
+                <TruncatedCell key="s" title={row.submitterName}>
+                  {row.submitterName}
+                </TruncatedCell>,
+              ])}
+            />
+          }
+          itemCount={data.longestTitles.length}
+          title="Longest titles"
+        >
+          {rankedFactList({
+            rows: previewRows(data.longestTitles),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
@@ -367,11 +580,37 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
 
-        <FactList description="Shortest exported song titles." title="Shortest titles">
-          {rankedList({
-            rows: data.shortestTitles,
+        <FactPanel
+          description="Shortest exported song titles."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Title", width: "w-[45%]" },
+                { label: "Artist", width: "w-[30%]" },
+                { align: "right", label: "Chars" },
+                { label: "By" },
+              ]}
+              rows={data.shortestTitles.map((row) => [
+                <TruncatedCell key="t" title={row.title}>
+                  {row.title}
+                </TruncatedCell>,
+                <TruncatedCell key="a" title={row.artist}>
+                  {row.artist}
+                </TruncatedCell>,
+                row.length,
+                <TruncatedCell key="s" title={row.submitterName}>
+                  {row.submitterName}
+                </TruncatedCell>,
+              ])}
+            />
+          }
+          itemCount={data.shortestTitles.length}
+          title="Shortest titles"
+        >
+          {rankedFactList({
+            rows: previewRows(data.shortestTitles),
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
@@ -383,8 +622,456 @@ export default async function FactsPage({
               </>
             ),
           })}
-        </FactList>
+        </FactPanel>
       </section>
+
+      <h2 className="mt-12 text-sm font-medium uppercase tracking-wide text-zinc-500">
+        Voting quirks
+      </h2>
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-2">
+        <FactPanel
+          description="High reach, low round share — many people give a little. Ratio = avg round share ÷ avg positive reach."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Player", width: "w-[35%]" },
+                { align: "right", label: "Songs" },
+                { align: "right", label: "Reach" },
+                { align: "right", label: "Share" },
+                { align: "right", label: "Ratio" },
+              ]}
+              rows={data.crowdPleaserPlayers.map((row) => [
+                <PlayerLink
+                  filterParams={filterParams}
+                  id={row.playerId}
+                  key="p"
+                  name={row.playerName}
+                />,
+                row.songs,
+                percent(row.avgPositiveReach),
+                percent(row.avgRoundPointShare),
+                ratio(row.appealRatio),
+              ])}
+            />
+          }
+          emptyMessage="Not enough player song samples in this scope."
+          itemCount={data.crowdPleaserPlayers.length}
+          title="Crowd pleasers"
+        >
+          {rankedFactList({
+            rows: previewRows(data.crowdPleaserPlayers),
+            render: (row) => (
+              <>
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  <PlayerLink
+                    filterParams={filterParams}
+                    id={row.playerId}
+                    name={row.playerName}
+                  />
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  reach {percent(row.avgPositiveReach)} · share{" "}
+                  {percent(row.avgRoundPointShare)} · ratio{" "}
+                  {ratio(row.appealRatio)}
+                </p>
+              </>
+            ),
+          })}
+        </FactPanel>
+
+        <FactPanel
+          description="Low reach, high round share — fewer voters, bigger allotments. Cult-favorite submitters."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Player", width: "w-[35%]" },
+                { align: "right", label: "Songs" },
+                { align: "right", label: "Reach" },
+                { align: "right", label: "Share" },
+                { align: "right", label: "Ratio" },
+              ]}
+              rows={data.nicheDevotionPlayers.map((row) => [
+                <PlayerLink
+                  filterParams={filterParams}
+                  id={row.playerId}
+                  key="p"
+                  name={row.playerName}
+                />,
+                row.songs,
+                percent(row.avgPositiveReach),
+                percent(row.avgRoundPointShare),
+                ratio(row.appealRatio),
+              ])}
+            />
+          }
+          emptyMessage="Not enough player song samples in this scope."
+          itemCount={data.nicheDevotionPlayers.length}
+          title="Niche devotion"
+        >
+          {rankedFactList({
+            rows: previewRows(data.nicheDevotionPlayers),
+            render: (row) => (
+              <>
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  <PlayerLink
+                    filterParams={filterParams}
+                    id={row.playerId}
+                    name={row.playerName}
+                  />
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  reach {percent(row.avgPositiveReach)} · share{" "}
+                  {percent(row.avgRoundPointShare)} · ratio{" "}
+                  {ratio(row.appealRatio)}
+                </p>
+              </>
+            ),
+          })}
+        </FactPanel>
+      </section>
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-2">
+        <FactPanel
+          description="Everyone kinda liked it — high positive reach relative to round point share."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Song", width: "w-[40%]" },
+                { align: "right", label: "Reach" },
+                { align: "right", label: "Share" },
+                { align: "right", label: "Ratio" },
+                { align: "right", label: "Pts" },
+              ]}
+              rows={data.thinSpreadSongs.map((row) => [
+                <div key="s">
+                  <p className="truncate font-medium text-zinc-100">
+                    {row.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {row.artist} · {row.submitterName} · R{row.roundOrdinal}
+                  </p>
+                </div>,
+                percent(row.positiveReach),
+                percent(row.roundPointShare),
+                ratio(row.appealRatio),
+                row.points,
+              ])}
+            />
+          }
+          emptyMessage="Not enough song samples in this scope."
+          itemCount={data.thinSpreadSongs.length}
+          title="Thin-spread songs"
+        >
+          {rankedFactList({
+            rows: previewRows(data.thinSpreadSongs),
+            render: (row) => (
+              <>
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  {row.title}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  {row.artist} · reach {percent(row.positiveReach)} · share{" "}
+                  {percent(row.roundPointShare)}
+                </p>
+              </>
+            ),
+          })}
+        </FactPanel>
+
+        <FactPanel
+          description="A cult classic — concentrated love from a smaller slice of voters."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "Song", width: "w-[40%]" },
+                { align: "right", label: "Reach" },
+                { align: "right", label: "Share" },
+                { align: "right", label: "Ratio" },
+                { align: "right", label: "Pts" },
+              ]}
+              rows={data.cultClassicSongs.map((row) => [
+                <div key="s">
+                  <p className="truncate font-medium text-zinc-100">
+                    {row.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {row.artist} · {row.submitterName} · R{row.roundOrdinal}
+                  </p>
+                </div>,
+                percent(row.positiveReach),
+                percent(row.roundPointShare),
+                ratio(row.appealRatio),
+                row.points,
+              ])}
+            />
+          }
+          emptyMessage="Not enough song samples in this scope."
+          itemCount={data.cultClassicSongs.length}
+          title="Cult classics"
+        >
+          {rankedFactList({
+            rows: previewRows(data.cultClassicSongs),
+            render: (row) => (
+              <>
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  {row.title}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  {row.artist} · reach {percent(row.positiveReach)} · share{" "}
+                  {percent(row.roundPointShare)}
+                </p>
+              </>
+            ),
+          })}
+        </FactPanel>
+      </section>
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-2">
+        <FactPanel
+          description="Rounds where the top song barely edged the runner-up on round point share."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "League", width: "w-[28%]" },
+                { label: "Round", width: "w-[36%]" },
+                { align: "right", label: "Top share" },
+                { align: "right", label: "Gap" },
+              ]}
+              rows={data.closestRaces.map((row) => [
+                <TruncatedCell
+                  key="l"
+                  title={leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                >
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                </TruncatedCell>,
+                <TruncatedCell
+                  key="r"
+                  title={`R${row.roundOrdinal} · ${row.roundName}`}
+                >
+                  R{row.roundOrdinal} · {truncateRoundName(row.roundName)}
+                </TruncatedCell>,
+                percent(row.maxRoundPointShare),
+                percent(row.topTwoShareGap),
+              ])}
+            />
+          }
+          emptyMessage="Not enough rounds in this scope."
+          itemCount={data.closestRaces.length}
+          title="Closest races"
+        >
+          {rankedFactList({
+            rows: previewRows(data.closestRaces),
+            render: (row) => (
+              <>
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  R{row.roundOrdinal} · {truncateRoundName(row.roundName)} · top{" "}
+                  {percent(row.maxRoundPointShare)} · gap{" "}
+                  {percent(row.topTwoShareGap)}
+                </p>
+              </>
+            ),
+          })}
+        </FactPanel>
+
+        <FactPanel
+          description="Rounds dominated by one song’s share of total points."
+          dialog={
+            <FactTable
+              headers={[
+                { label: "League", width: "w-[28%]" },
+                { label: "Round", width: "w-[36%]" },
+                { align: "right", label: "Top share" },
+                { align: "right", label: "Gap" },
+              ]}
+              rows={data.biggestLandslides.map((row) => [
+                <TruncatedCell
+                  key="l"
+                  title={leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                >
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                </TruncatedCell>,
+                <TruncatedCell
+                  key="r"
+                  title={`R${row.roundOrdinal} · ${row.roundName}`}
+                >
+                  R{row.roundOrdinal} · {truncateRoundName(row.roundName)}
+                </TruncatedCell>,
+                percent(row.maxRoundPointShare),
+                percent(row.topTwoShareGap),
+              ])}
+            />
+          }
+          emptyMessage="Not enough rounds in this scope."
+          itemCount={data.biggestLandslides.length}
+          title="Biggest landslides"
+        >
+          {rankedFactList({
+            rows: previewRows(data.biggestLandslides),
+            render: (row) => (
+              <>
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  R{row.roundOrdinal} · {truncateRoundName(row.roundName)} · top{" "}
+                  {percent(row.maxRoundPointShare)} · gap{" "}
+                  {percent(row.topTwoShareGap)}
+                </p>
+              </>
+            ),
+          })}
+        </FactPanel>
+      </section>
+
+      <FactPanel
+        className="mt-4"
+        description="Correlation between when a song was submitted in its round and how it scored. Proxy only — not Spotify playlist listening order."
+        dialog={
+          reliableOrderBias && data.submissionOrderExtremes.length ? (
+            <FactTable
+              headers={[
+                { label: "Side", width: "w-[14%]" },
+                { label: "Song", width: "w-[36%]" },
+                { align: "right", label: "Order" },
+                { align: "right", label: "Pts" },
+                { align: "right", label: "Vs avg" },
+              ]}
+              rows={data.submissionOrderExtremes.map((row) => [
+                <span key="side">
+                  {row.side === "early-over" ? "Early" : "Late"}
+                </span>,
+                <div key="s">
+                  <p className="truncate font-medium text-zinc-100">
+                    {row.title}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    {row.artist} · R{row.roundOrdinal} · {row.submitterName}
+                  </p>
+                </div>,
+                percent(row.orderPercentile, 0),
+                row.points,
+                `${row.residual >= 0 ? "+" : ""}${row.residual.toFixed(1)}`,
+              ])}
+            />
+          ) : undefined
+        }
+        dialogClassName="max-w-4xl"
+        emptyMessage="Not enough songs in this scope to estimate a submission-order effect."
+        itemCount={
+          reliableOrderBias
+            ? Math.max(data.submissionOrderExtremes.length, 1)
+            : 0
+        }
+        title="Submission-order bias"
+      >
+        <div className="space-y-5">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                corr vs points
+              </p>
+              <p className="mt-1 font-mono text-lg text-zinc-100">
+                {reliableOrderBias
+                  ? ratio(orderBias.correlationPoints, 3)
+                  : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                corr vs round share
+              </p>
+              <p className="mt-1 font-mono text-lg text-zinc-100">
+                {reliableOrderBias
+                  ? ratio(orderBias.correlationShare, 3)
+                  : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-zinc-500">
+                early vs late pts
+              </p>
+              <p className="mt-1 font-mono text-lg text-zinc-100">
+                {reliableOrderBias
+                  ? signedPercent(orderBias.earlyVsLatePointsDeltaPct)
+                  : "—"}
+              </p>
+            </div>
+          </div>
+          <p className="text-sm leading-6 text-zinc-400">
+            {submissionOrderCopy(orderBias)}
+          </p>
+
+          {reliableOrderBias &&
+          (earlyExtremes.length || lateExtremes.length) ? (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Early overperformers
+                </p>
+                {rankedFactList({
+                  rows: previewRows(earlyExtremes),
+                  render: (row) => (
+                    <>
+                      <p className="truncate text-sm font-medium text-zinc-100">
+                        {row.title}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-zinc-500">
+                        {row.artist} · {row.points} pts · order{" "}
+                        {percent(row.orderPercentile, 0)} · vs round avg{" "}
+                        {row.residual >= 0 ? "+" : ""}
+                        {row.residual.toFixed(1)}
+                      </p>
+                    </>
+                  ),
+                })}
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  Late overperformers
+                </p>
+                {rankedFactList({
+                  rows: previewRows(lateExtremes),
+                  render: (row) => (
+                    <>
+                      <p className="truncate text-sm font-medium text-zinc-100">
+                        {row.title}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-zinc-500">
+                        {row.artist} · {row.points} pts · order{" "}
+                        {percent(row.orderPercentile, 0)} · vs round avg{" "}
+                        {row.residual >= 0 ? "+" : ""}
+                        {row.residual.toFixed(1)}
+                      </p>
+                    </>
+                  ),
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </FactPanel>
     </Container>
   );
 }
