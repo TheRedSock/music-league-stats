@@ -32,8 +32,20 @@ const sections = [
     body: "This is the average points received per eligible opportunity. It is useful when one song had more people able to vote on it than another.",
   },
   {
-    title: "What is support index?",
-    body: "Raw support index compares the points a song received with the points it was expected to receive from the actual ballot budgets that could reach it. 1.0 means expected support, 2.0 means twice expected support, and 0.5 means half expected support. Support index (EB) is an empirical-Bayes shrinkage of that ratio toward 1.0 using sample-size variance estimated from the corpus, so cross-round rankings are less dominated by small-room noise. Support z is the standardized point surplus under the same variance model.",
+    title: "What is support index (raw)?",
+    body: "Raw support index is points received divided by expected points from the eligible ballot budgets that could reach the song. 1.0× means expected support, 2.0× means twice expected, and 0.5× means half expected. It is fair within a round, but extreme values are easier in small rooms because a few strong votes move a smaller denominator more.",
+  },
+  {
+    title: "What is support index (EB)?",
+    body: "Support index (EB) is an empirical-Bayes version of raw support index. It shrinks the ratio toward 1.0× using sample-size variance estimated from the full corpus (Var(SI) ≈ τ² + φ/E). Songs from small or noisy samples are pulled toward expected support; songs with more eligible ballot mass keep more of their raw signal. The dashboard top-songs list and the default Songs sort use this for cross-round comparison. If variance cannot be estimated, the app falls back to the raw index instead of forcing every song to 1.0×.",
+  },
+  {
+    title: "What is support z?",
+    body: "Support z is the standardized surplus under the same variance model: (points − expected) / sqrt(φ × expected). It answers how surprising the result is if the song were only at expected support, not what the best estimate of the true multiplier is. A 2.0× result in a large round scores a higher z than the same 2.0× in a tiny round. On the Songs page it is shown by default next to Support (EB); use Columns to hide it.",
+  },
+  {
+    title: "When should I use raw SI vs EB vs z?",
+    body: "Use raw support index to compare songs inside the same round or to see the unadjusted multiplier. Use support index (EB) for cross-round or all-league leaderboards where small-sample blowouts should not dominate. Use support z when you care about statistical surprise under a null of expected support. Round percentile stays a within-round rank and is optional on the Songs table via Columns.",
   },
   {
     title: "What is average round index?",
@@ -41,7 +53,7 @@ const sections = [
   },
   {
     title: "What is a percentile?",
-    body: "A percentile says where a song or player landed inside the round. Higher is better for performance percentiles. For relative voting order, lower means the ballot was completed earlier than more observed voters; ties use the middle of the tied positions.",
+    body: "A percentile says where a song or player landed inside the round. Higher is better for performance percentiles. For relative voting order, lower means the ballot was completed earlier than more observed voters; ties use the middle of the tied positions. On Songs, round percentile is hidden by default and can be added from the Columns control.",
   },
   {
     title: "What is top quartile?",
@@ -69,6 +81,9 @@ const glossary = [
   ["Active ballot", "A voter with at least one exported vote row in a round."],
   ["Inferred zero", "A missing vote row for a song the active voter could have voted for."],
   ["Did not vote", "A submitter with no exported vote row in that round."],
+  ["Support index (raw)", "Points ÷ expected points from eligible ballot budgets."],
+  ["Support index (EB)", "Raw support index shrunk toward 1.0× for sample-size noise."],
+  ["Support z", "Standardized points surplus vs expected under the EB variance model."],
   ["Scope", "The selected league and/or round filter."],
   ["Comparable features", "The ballot items used when comparing two voters."],
   ["Provisional", "A player with fewer entered rounds than the selected ranking threshold."],

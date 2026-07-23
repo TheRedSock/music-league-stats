@@ -40,6 +40,10 @@ const STORAGE_KEY = "songs-table-columns-v1";
 
 const listeners = new Set<() => void>();
 
+/** Cached snapshot so useSyncExternalStore gets a stable reference until storage changes. */
+let cachedRaw: string | null | undefined;
+let cachedColumns: SongTableColumnId[] = DEFAULT_SONG_TABLE_COLUMNS;
+
 function emitColumnChange() {
   for (const listener of listeners) listener();
 }
@@ -65,16 +69,24 @@ function parseStoredColumns(raw: string | null): SongTableColumnId[] | null {
 
 function readColumns(): SongTableColumnId[] {
   if (typeof window === "undefined") return DEFAULT_SONG_TABLE_COLUMNS;
-  return (
-    parseStoredColumns(window.localStorage.getItem(STORAGE_KEY)) ??
-    DEFAULT_SONG_TABLE_COLUMNS
-  );
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (raw === cachedRaw) return cachedColumns;
+  cachedRaw = raw;
+  cachedColumns = parseStoredColumns(raw) ?? DEFAULT_SONG_TABLE_COLUMNS;
+  return cachedColumns;
+}
+
+function getServerSnapshot(): SongTableColumnId[] {
+  return DEFAULT_SONG_TABLE_COLUMNS;
 }
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
   const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) listener();
+    if (event.key === STORAGE_KEY) {
+      cachedRaw = undefined;
+      listener();
+    }
   };
   window.addEventListener("storage", onStorage);
   return () => {
@@ -84,14 +96,15 @@ function subscribe(listener: () => void) {
 }
 
 function writeColumns(columns: SongTableColumnId[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(columns));
+  const raw = JSON.stringify(columns);
+  window.localStorage.setItem(STORAGE_KEY, raw);
+  cachedRaw = raw;
+  cachedColumns = columns;
   emitColumnChange();
 }
 
 export function useSongTableColumns() {
-  const columns = useSyncExternalStore(subscribe, readColumns, () => {
-    return DEFAULT_SONG_TABLE_COLUMNS;
-  });
+  const columns = useSyncExternalStore(subscribe, readColumns, getServerSnapshot);
 
   function toggle(column: SongTableColumnId) {
     const current = readColumns();
