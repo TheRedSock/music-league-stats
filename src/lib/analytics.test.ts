@@ -9,6 +9,7 @@ import {
   defaultSongSortDirection,
   filterPointBuckets,
   isoTimestamp,
+  leagueTableLabel,
   parseAnalyticsFilters,
   parseFocusPlayerId,
   parsePlayerSort,
@@ -23,6 +24,7 @@ import {
   safeRatio,
   supportIndex,
   timingMidpointPercentile,
+  truncateRoundName,
   type FilterOptions,
 } from "@/lib/analytics";
 
@@ -174,9 +176,9 @@ describe("analytics filter helpers", () => {
     });
   });
 
-  it("defaults an omitted scope to the latest league but preserves explicit all", () => {
+  it("defaults an omitted scope to all leagues and preserves explicit all", () => {
     expect(resolveAnalyticsFilter(parseAnalyticsFilters({}), options)).toEqual({
-      leagueIds: [leagueId],
+      leagueIds: [],
       roundIds: [],
     });
     expect(
@@ -185,6 +187,16 @@ describe("analytics filter helpers", () => {
       leagueIds: [],
       roundIds: [],
     });
+  });
+
+  it("formats compact table labels", () => {
+    expect(leagueTableLabel({ name: "League A", slug: "league-a" })).toBe(
+      "league-a",
+    );
+    expect(leagueTableLabel({ name: "League A", slug: "" })).toBe("League A");
+    expect(truncateRoundName("Short round")).toBe("Short round");
+    expect(truncateRoundName("A".repeat(60))).toHaveLength(50);
+    expect(truncateRoundName("A".repeat(60)).endsWith("…")).toBe(true);
   });
 
   it("intersects selected rounds with selected leagues", () => {

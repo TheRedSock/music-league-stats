@@ -28,10 +28,12 @@ import {
   getCachedFilterOptions,
   getCachedPlayerProfileData,
   loadAnalytics,
+  leagueTableLabel,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
+  truncateRoundName,
   type DirectionalRelationship,
   type MutualRelationship,
   type SearchParams,
@@ -134,7 +136,10 @@ function SubmissionList({
                     song.sourceRoundId,
                   )}
                 >
-                  {song.leagueName}, R{song.roundOrdinal}
+                  {leagueTableLabel({
+                    name: song.leagueName,
+                    slug: song.leagueSlug,
+                  })}, R{song.roundOrdinal} · {truncateRoundName(song.roundName)}
                 </MusicLeagueLink>
               </p>
             </div>
@@ -171,7 +176,11 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
                     row.sourceRoundId,
                   )}
                 >
-                  {row.leagueName} · R{row.ordinal} {row.roundName}
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}{" "}
+                  · R{row.ordinal} {truncateRoundName(row.roundName)}
                 </MusicLeagueLink>
               </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">

@@ -7,7 +7,7 @@ let queryClient: ReturnType<typeof postgres> | undefined;
 
 function createDatabase(databaseUrl: string) {
   queryClient = postgres(databaseUrl, {
-    max: 1,
+    max: 3,
     prepare: false,
     idle_timeout: 20,
     connect_timeout: 10,

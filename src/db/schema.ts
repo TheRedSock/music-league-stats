@@ -3,6 +3,7 @@ import {
   boolean,
   check,
   date,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -24,6 +25,10 @@ export const importStatus = pgEnum("import_status", [
   "completed",
   "failed",
 ]);
+export const analyticsMaterializationStatus = pgEnum(
+  "analytics_materialization_status",
+  ["pending", "processing", "completed", "failed"],
+);
 export const importKind = pgEnum("import_kind", [
   "competitors",
   "rounds",
@@ -370,6 +375,234 @@ export const importStagingRows = pgTable(
   ],
 );
 
+export type AnalyticsMaterializationSummary = {
+  songStats: number;
+  playerStats: number;
+  pointDistribution: number;
+  playerPointDistribution: number;
+  relationshipPairs: number;
+  relationshipMutual: number;
+  relationshipAlignment: number;
+  playerTiming: number;
+};
+
+export const analyticsMaterializationJobs = pgTable(
+  "analytics_materialization_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    analyticsRevision: text("analytics_revision").notNull(),
+    status: analyticsMaterializationStatus("status")
+      .default("pending")
+      .notNull(),
+    summary: jsonb("summary").$type<AnalyticsMaterializationSummary>(),
+    errorMessage: text("error_message"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index("analytics_jobs_revision_status_idx").on(
+      table.analyticsRevision,
+      table.status,
+    ),
+    index("analytics_jobs_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const analyticsSongStats = pgTable(
+  "analytics_song_stats",
+  {
+    id: uuid("id").primaryKey(),
+    title: text("title").notNull(),
+    artist: text("artist").notNull(),
+    album: text("album"),
+    spotifyUri: text("spotify_uri").notNull(),
+    submitterId: uuid("submitter_id").notNull(),
+    submitterName: text("submitter_name").notNull(),
+    leagueId: uuid("league_id").notNull(),
+    leagueName: text("league_name").notNull(),
+    leagueSlug: text("league_slug").notNull(),
+    leagueMusicLeagueId: text("league_music_league_id"),
+    roundId: uuid("round_id").notNull(),
+    sourceRoundId: text("source_round_id").notNull(),
+    roundName: text("round_name").notNull(),
+    roundOrdinal: integer("round_ordinal").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+    points: integer("points").notNull(),
+    expectedPoints: doublePrecision("expected_points").notNull(),
+    eligibleRows: integer("eligible_rows").notNull(),
+    positiveRows: integer("positive_rows").notNull(),
+    pointsPerEligibleVoter: doublePrecision("points_per_eligible_voter"),
+    positiveReach: doublePrecision("positive_reach"),
+    roundPointShare: doublePrecision("round_point_share"),
+    supportIndex: doublePrecision("support_index"),
+    performancePercentile: doublePrecision("performance_percentile"),
+    ...timestamps,
+  },
+  (table) => [
+    index("analytics_song_submitter_idx").on(table.submitterId),
+    index("analytics_song_points_idx").on(table.points),
+    index("analytics_song_support_idx").on(table.supportIndex),
+    index("analytics_song_scope_idx").on(table.leagueId, table.roundId),
+  ],
+);
+
+export const analyticsPlayerStats = pgTable(
+  "analytics_player_stats",
+  {
+    id: uuid("id").primaryKey(),
+    name: text("name").notNull(),
+    totalPoints: integer("total_points").notNull(),
+    submissions: integer("submissions").notNull(),
+    enteredRounds: integer("entered_rounds").notNull(),
+    pointsPerSubmission: doublePrecision("points_per_submission"),
+    pointsPerEligibleVoter: doublePrecision("points_per_eligible_voter"),
+    averageRoundIndex: doublePrecision("average_round_index"),
+    averageRoundPercentile: doublePrecision("average_round_percentile"),
+    roundWins: integer("round_wins").notNull(),
+    topQuartileRate: doublePrecision("top_quartile_rate"),
+    performanceRank: integer("performance_rank"),
+    ...timestamps,
+  },
+  (table) => [
+    index("analytics_player_points_idx").on(table.totalPoints),
+    index("analytics_player_name_idx").on(table.name),
+  ],
+);
+
+export const analyticsPointDistribution = pgTable(
+  "analytics_point_distribution",
+  {
+    points: integer("points").primaryKey(),
+    count: integer("count").notNull(),
+    ...timestamps,
+  },
+);
+
+export const analyticsPlayerPointDistribution = pgTable(
+  "analytics_player_point_distribution",
+  {
+    playerId: uuid("player_id").notNull(),
+    direction: text("direction").notNull(),
+    points: integer("points").notNull(),
+    count: integer("count").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "analytics_player_point_distribution_pk",
+      columns: [table.playerId, table.direction, table.points],
+    }),
+    index("analytics_player_point_player_idx").on(table.playerId),
+  ],
+);
+
+export const analyticsRelationshipPairs = pgTable(
+  "analytics_relationship_pairs",
+  {
+    direction: text("direction").notNull(),
+    leftId: uuid("left_id").notNull(),
+    leftName: text("left_name").notNull(),
+    rightId: uuid("right_id").notNull(),
+    rightName: text("right_name").notNull(),
+    points: integer("points").notNull(),
+    opportunities: integer("opportunities").notNull(),
+    sharedRounds: integer("shared_rounds").notNull(),
+    scopeRounds: integer("scope_rounds").notNull(),
+    pointsPerOpportunity: doublePrecision("points_per_opportunity").notNull(),
+    positiveRate: doublePrecision("positive_rate").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "analytics_relationship_pairs_pk",
+      columns: [table.direction, table.leftId, table.rightId],
+    }),
+    index("analytics_relationship_pairs_left_idx").on(table.leftId),
+    index("analytics_relationship_pairs_right_idx").on(table.rightId),
+  ],
+);
+
+export const analyticsRelationshipMutual = pgTable(
+  "analytics_relationship_mutual",
+  {
+    leftId: uuid("left_id").notNull(),
+    leftName: text("left_name").notNull(),
+    rightId: uuid("right_id").notNull(),
+    rightName: text("right_name").notNull(),
+    points: integer("points").notNull(),
+    opportunities: integer("opportunities").notNull(),
+    sharedRounds: integer("shared_rounds").notNull(),
+    scopeRounds: integer("scope_rounds").notNull(),
+    pointsPerOpportunity: doublePrecision("points_per_opportunity").notNull(),
+    positiveRate: doublePrecision("positive_rate").notNull(),
+    ballotPointShare: doublePrecision("ballot_point_share").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "analytics_relationship_mutual_pk",
+      columns: [table.leftId, table.rightId],
+    }),
+    index("analytics_relationship_mutual_left_idx").on(table.leftId),
+    index("analytics_relationship_mutual_right_idx").on(table.rightId),
+  ],
+);
+
+export const analyticsRelationshipAlignment = pgTable(
+  "analytics_relationship_alignment",
+  {
+    leftId: uuid("left_id").notNull(),
+    leftName: text("left_name").notNull(),
+    rightId: uuid("right_id").notNull(),
+    rightName: text("right_name").notNull(),
+    alignment: doublePrecision("alignment").notNull(),
+    comparableFeatures: integer("comparable_features").notNull(),
+    sharedRounds: integer("shared_rounds").notNull(),
+    scopeRounds: integer("scope_rounds").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "analytics_relationship_alignment_pk",
+      columns: [table.leftId, table.rightId],
+    }),
+    index("analytics_relationship_alignment_score_idx").on(table.alignment),
+    index("analytics_relationship_alignment_left_idx").on(table.leftId),
+    index("analytics_relationship_alignment_right_idx").on(table.rightId),
+  ],
+);
+
+export const analyticsPlayerTiming = pgTable(
+  "analytics_player_timing",
+  {
+    playerId: uuid("player_id").notNull(),
+    playerName: text("player_name").notNull(),
+    roundId: uuid("round_id").notNull(),
+    roundName: text("round_name").notNull(),
+    leagueName: text("league_name").notNull(),
+    leagueSlug: text("league_slug").notNull(),
+    leagueMusicLeagueId: text("league_music_league_id"),
+    sourceRoundId: text("source_round_id").notNull(),
+    ordinal: integer("ordinal").notNull(),
+    castAt: timestamp("cast_at", { withTimezone: true }),
+    relativeOrder: doublePrecision("relative_order"),
+    ballotRank: integer("ballot_rank"),
+    tieCount: integer("tie_count"),
+    observedVoters: integer("observed_voters").notNull(),
+    participation: text("participation").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({
+      name: "analytics_player_timing_pk",
+      columns: [table.playerId, table.roundId],
+    }),
+    index("analytics_player_timing_player_idx").on(table.playerId),
+    index("analytics_player_timing_relative_idx").on(table.relativeOrder),
+  ],
+);
+
 export type League = typeof leagues.$inferSelect;
 export type NewLeague = typeof leagues.$inferInsert;
 export type Competitor = typeof competitors.$inferSelect;
@@ -378,3 +611,5 @@ export type Round = typeof rounds.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type Vote = typeof votes.$inferSelect;
 export type ImportBatch = typeof importBatches.$inferSelect;
+export type AnalyticsMaterializationJob =
+  typeof analyticsMaterializationJobs.$inferSelect;

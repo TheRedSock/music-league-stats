@@ -22,6 +22,13 @@
       "when": 1784750309567,
       "tag": "0002_serious_puppet_master",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784796832813,
+      "tag": "0003_petite_quentin_quire",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,7 @@ import {
   getCachedFilterOptions,
   getCachedSongsData,
   loadAnalytics,
+  leagueTableLabel,
   parseAnalyticsFilters,
   parsePositiveInteger,
   parseSearch,
@@ -42,6 +43,7 @@ import {
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
+  truncateRoundName,
   type SearchParams,
 } from "@/lib/analytics";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
@@ -312,7 +314,10 @@ export default async function SongsPage({
                           href={musicLeagueUrl(song.leagueMusicLeagueId)}
                           title={song.leagueName}
                         >
-                          {song.leagueName}
+                          {leagueTableLabel({
+                            name: song.leagueName,
+                            slug: song.leagueSlug,
+                          })}
                         </MusicLeagueLink>
                       </div>
                       <div className="min-w-0">
@@ -324,7 +329,8 @@ export default async function SongsPage({
                           )}
                           title={song.roundName}
                         >
-                          R{song.roundOrdinal} · {song.roundName}
+                          R{song.roundOrdinal} ·{" "}
+                          {truncateRoundName(song.roundName)}
                         </MusicLeagueLink>
                       </div>
                     </div>

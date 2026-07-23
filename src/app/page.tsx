@@ -33,10 +33,12 @@ import {
   getCachedDashboardData,
   getCachedFilterOptions,
   loadAnalytics,
+  leagueTableLabel,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
+  truncateRoundName,
   type SearchParams,
 } from "@/lib/analytics";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
@@ -225,7 +227,7 @@ export default async function HomePage({
             {selectedFilterLabel(options, filter)}
           </p>
         </div>
-        <div className="w-full lg:max-w-3xl">
+        <div className="w-full lg:max-w-5xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>
@@ -335,8 +337,12 @@ export default async function HomePage({
                                 song.sourceRoundId,
                               )}
                             >
-                              {song.leagueName} · R{song.roundOrdinal} ·{" "}
-                              {song.roundName}
+                              {leagueTableLabel({
+                                name: song.leagueName,
+                                slug: song.leagueSlug,
+                              })}{" "}
+                              · R{song.roundOrdinal} ·{" "}
+                              {truncateRoundName(song.roundName)}
                             </MusicLeagueLink>
                           </p>
                         </div>

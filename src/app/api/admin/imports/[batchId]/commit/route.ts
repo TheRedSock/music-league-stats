@@ -14,6 +14,7 @@ import {
   markImportFailed,
 } from "@/lib/import-commit";
 import { revalidateAnalyticsCache } from "@/lib/analytics";
+import { invalidateAllLeaguesMaterialization } from "@/lib/analytics-materialize";
 
 export async function POST(
   request: NextRequest,
@@ -27,6 +28,12 @@ export async function POST(
       throw new AdminRequestError("Invalid import batch ID.", 400);
     }
     const summary = await commitImportBatch(batchId);
+    // Mark mats stale so empty-scope reads fall back to live SQL until the
+    // import panel finishes /api/admin/analytics/refresh.
+    await invalidateAllLeaguesMaterialization(
+      undefined,
+      "Invalidated after import commit.",
+    );
     revalidateAnalyticsCache();
     revalidatePath("/");
     revalidatePath("/songs");

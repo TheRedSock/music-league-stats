@@ -80,14 +80,12 @@ export async function POST(
     });
 
     const progress = await db.transaction(async (tx) => {
-      await tx.execute(
-        sql`select id from ${importBatches} where ${importBatches.id} = ${batchId} for update`,
-      );
       const [batch] = await tx
         .select()
         .from(importBatches)
         .where(eq(importBatches.id, batchId))
-        .limit(1);
+        .limit(1)
+        .for("update");
       if (!batch) throw new AdminRequestError("Import batch not found.", 404);
       const expected = batch.manifest[kind];
       if (

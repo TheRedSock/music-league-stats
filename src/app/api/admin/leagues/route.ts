@@ -6,12 +6,12 @@ import { NextResponse } from "next/server";
 
 import { leagues } from "@/db/schema";
 import { db } from "@/db";
-import { revalidateAnalyticsCache } from "@/lib/analytics";
 import {
   AdminRequestError,
   adminErrorResponse,
   requireAdminMutation,
 } from "@/lib/admin-auth";
+import { refreshAllLeaguesMaterialization } from "@/lib/analytics-materialize";
 import { formatZodError } from "@/lib/import-data";
 import { leagueInputSchema } from "@/lib/league-validation";
 
@@ -42,10 +42,15 @@ export async function POST(request: NextRequest) {
         sourceLeagueId: `manual:${randomUUID()}`,
       })
       .returning();
-    revalidateAnalyticsCache();
-    revalidatePath("/");
-    revalidatePath("/songs");
-    revalidatePath("/players");
+    const job = await refreshAllLeaguesMaterialization(undefined, {
+      force: true,
+    });
+    if (job.status === "failed") {
+      throw new AdminRequestError(
+        job.errorMessage ?? "All-leagues analytics refresh failed.",
+        500,
+      );
+    }
     revalidatePath("/admin");
     return NextResponse.json({ league }, { status: 201 });
   } catch (error) {

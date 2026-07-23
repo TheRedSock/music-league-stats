@@ -7,6 +7,7 @@ import {
   createPointDistribution,
   type PointBucket,
 } from "@/lib/point-buckets";
+import { ANALYTICS_REVISION } from "@/lib/analytics-revision";
 
 const ANALYTICS_CACHE_TAG = "analytics";
 
@@ -99,6 +100,7 @@ export type SongAnalyticsRow = {
   submitterName: string;
   leagueId: string;
   leagueName: string;
+  leagueSlug: string;
   leagueMusicLeagueId: string | null;
   roundId: string;
   sourceRoundId: string;
@@ -208,6 +210,7 @@ export type TimingRow = {
   roundId: string;
   roundName: string;
   leagueName: string;
+  leagueSlug: string;
   leagueMusicLeagueId: string | null;
   sourceRoundId: string;
   ordinal: number;
@@ -343,11 +346,24 @@ export type SubmissionFactsData = {
   }>;
   densestRounds: Array<{
     leagueName: string;
+    leagueSlug: string;
     roundName: string;
     roundOrdinal: number;
     submissions: number;
     submitters: number;
   }>;
+};
+
+type SubmissionFactsPackedQueryRow = {
+  mostSubmittedArtists: unknown;
+  artistLoyalists: unknown;
+  repeatedSongs: unknown;
+  diverseArtists: unknown;
+  prolificSubmitters: unknown;
+  repeatSubmitterSongs: unknown;
+  longestTitles: unknown;
+  shortestTitles: unknown;
+  densestRounds: unknown;
 };
 
 const UUID_PATTERN =
@@ -381,7 +397,7 @@ export function parseAnalyticsFilters(
   return {
     leagueIds: explicitAllLeagues ? [] : canonicalIds(leagueValues),
     roundIds: canonicalIds(roundValues),
-    useDefaultLeague: leagueValues.length === 0 && roundValues.length === 0,
+    useDefaultLeague: false,
   };
 }
 
@@ -759,11 +775,11 @@ function selectedLeaguesCte(filter: AnalyticsFilter): SQL {
   `;
 }
 
-function competitorDisplayName(alias = "c"): SQL {
+export function competitorDisplayName(alias = "c"): SQL {
   return sql.raw(`coalesce(${alias}.name_override, ${alias}.name)`);
 }
 
-function voteOpportunityCtes(filter: AnalyticsFilter): SQL {
+export function voteOpportunityCtes(filter: AnalyticsFilter): SQL {
   return sql`
     ${selectedRoundsCte(filter)},
     scope_thresholds as (
@@ -839,7 +855,7 @@ function voteOpportunityCtes(filter: AnalyticsFilter): SQL {
   `;
 }
 
-function songStatsCtes(filter: AnalyticsFilter): SQL {
+export function songStatsCtes(filter: AnalyticsFilter): SQL {
   return sql`
     ${voteOpportunityCtes(filter)},
     round_submission_totals as (
@@ -951,6 +967,7 @@ type SongQueryRow = {
   submitterName: string;
   leagueId: string;
   leagueName: string;
+  leagueSlug: string;
   leagueMusicLeagueId: string | null;
   roundId: string;
   sourceRoundId: string;
@@ -968,8 +985,9 @@ type SongQueryRow = {
   performancePercentile: number | null;
 };
 
-type SongQueryRowWithTotal = SongQueryRow & {
+type SongsPackedQueryRow = {
   totalCount: number;
+  rows: unknown;
 };
 
 function jsonRows<T>(value: unknown): T[] {
@@ -986,7 +1004,7 @@ function mapSong(row: SongQueryRow): SongAnalyticsRow {
   };
 }
 
-function songSelect(): SQL {
+export function songSelect(): SQL {
   return sql`
     select
       ss.id,
@@ -998,6 +1016,7 @@ function songSelect(): SQL {
       ${competitorDisplayName("c")} as "submitterName",
       ss.league_id as "leagueId",
       l.name as "leagueName",
+      l.slug as "leagueSlug",
       l.music_league_id as "leagueMusicLeagueId",
       ss.round_id as "roundId",
       ss.source_round_id as "sourceRoundId",
@@ -1028,15 +1047,11 @@ function songSelect(): SQL {
   `;
 }
 
-function alignmentComparisonCtes(
-  filter: AnalyticsFilter,
-  playerId?: string,
-): SQL {
+export function alignmentComparisonTailCtes(playerId?: string): SQL {
   const pairScopeFilter = playerId
     ? sql`where lm1.competitor_id = ${playerId} or lm2.competitor_id = ${playerId}`
     : sql``;
   return sql`
-    ${voteOpportunityCtes(filter)},
     pair_scope as (
       select
         lm1.competitor_id as left_id,
@@ -1170,9 +1185,178 @@ function alignmentComparisonCtes(
   `;
 }
 
+export function alignmentComparisonCtes(
+  filter: AnalyticsFilter,
+  playerId?: string,
+): SQL {
+  return sql`${voteOpportunityCtes(filter)}, ${alignmentComparisonTailCtes(playerId)}`;
+}
+
+export function isAllLeaguesScope(filter: AnalyticsFilter): boolean {
+  return filter.leagueIds.length === 0 && filter.roundIds.length === 0;
+}
+
+export function leagueTableLabel(league: { slug: string; name: string }): string {
+  return league.slug || league.name;
+}
+
+export function truncateRoundName(name: string, max = 50): string {
+  if (name.length <= max) return name;
+  return `${name.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+async function hasCompletedAllLeaguesMaterialization(): Promise<boolean> {
+  // Only the latest job for the current revision counts as fresh. An older
+  // completed job must not keep serving mats after a newer pending/failed job.
+  const [row] = await db.execute<{ status: string | null }>(sql`
+    select status
+    from analytics_materialization_jobs
+    where analytics_revision = ${ANALYTICS_REVISION}
+    order by created_at desc
+    limit 1
+  `);
+  return row?.status === "completed";
+}
+
+function matSongSelect(): SQL {
+  return sql`
+    select
+      id,
+      title,
+      artist,
+      album,
+      spotify_uri as "spotifyUri",
+      submitter_id as "submitterId",
+      submitter_name as "submitterName",
+      league_id as "leagueId",
+      league_name as "leagueName",
+      league_slug as "leagueSlug",
+      league_music_league_id as "leagueMusicLeagueId",
+      round_id as "roundId",
+      source_round_id as "sourceRoundId",
+      round_name as "roundName",
+      round_ordinal as "roundOrdinal",
+      submitted_at as "submittedAt",
+      points,
+      expected_points as "expectedPoints",
+      eligible_rows as "eligibleRows",
+      positive_rows as "positiveRows",
+      points_per_eligible_voter as "pointsPerEligibleVoter",
+      positive_reach as "positiveReach",
+      round_point_share as "roundPointShare",
+      support_index as "supportIndex",
+      performance_percentile as "performancePercentile"
+    from analytics_song_stats
+  `;
+}
+
+async function getMaterializedDashboardData(): Promise<DashboardData> {
+  const [row] = await db.execute<DashboardCoreQueryRow>(sql`
+    with summary_row as (
+      select
+        (select count(*)::int from leagues) as "leagueCount",
+        (select count(*)::int from rounds) as "roundCount",
+        (select count(distinct competitor_id)::int from league_members) as "playerCount",
+        (select count(*)::int from analytics_song_stats) as "songCount",
+        coalesce(
+          (select sum(points * count)::int from analytics_point_distribution),
+          0
+        ) as "pointCount"
+    ),
+    leaderboard_rows as (
+      select
+        id,
+        name,
+        total_points as "totalPoints",
+        average_round_index as "normalizedIndex",
+        entered_rounds as "enteredRounds"
+      from analytics_player_stats
+      order by total_points desc, name asc
+      limit 100
+    ),
+    top_song_rows as (
+      ${matSongSelect()}
+      order by "supportIndex" desc nulls last, points desc, title asc
+      limit 10
+    ),
+    distribution_rows as (
+      select points, count
+      from analytics_point_distribution
+      order by points
+    )
+    select
+      summary_row.*,
+      (
+        select coalesce(
+          json_agg(to_jsonb(leaderboard_rows) order by "totalPoints" desc, name asc),
+          '[]'::json
+        )
+        from leaderboard_rows
+      ) as leaderboard,
+      (
+        select coalesce(
+          json_agg(
+            to_jsonb(top_song_rows)
+            order by "supportIndex" desc nulls last, points desc, title asc
+          ),
+          '[]'::json
+        )
+        from top_song_rows
+      ) as "topSongs",
+      (
+        select coalesce(json_agg(to_jsonb(distribution_rows) order by points), '[]'::json)
+        from distribution_rows
+      ) as distribution
+    from summary_row
+  `);
+
+  return {
+    alignment: await getMaterializedDashboardAlignmentData(),
+    leaderboard: jsonRows<LeaderboardQueryRow>(row?.leaderboard),
+    pointDistribution: createPointDistribution(
+      jsonRows<{ points: number; count: number }>(row?.distribution),
+    ),
+    summary: {
+      leagues: row?.leagueCount ?? 0,
+      points: row?.pointCount ?? 0,
+      players: row?.playerCount ?? 0,
+      rounds: row?.roundCount ?? 0,
+      songs: row?.songCount ?? 0,
+    },
+    topSongs: jsonRows<SongQueryRow>(row?.topSongs).map(mapSong),
+  };
+}
+
+async function getMaterializedDashboardAlignmentData(): Promise<
+  DashboardData["alignment"]
+> {
+  const rows = await db.execute<DashboardData["alignment"][number]>(sql`
+    select
+      left_id as "leftId",
+      left_name as "leftName",
+      right_id as "rightId",
+      right_name as "rightName",
+      alignment,
+      comparable_features as "comparableFeatures",
+      shared_rounds as "sharedRounds",
+      scope_rounds as "scopeRounds"
+    from analytics_relationship_alignment
+    order by alignment desc, comparable_features desc
+    limit 3
+  `);
+  return rows;
+}
+
 export async function getDashboardData(
   filter: AnalyticsFilter,
 ): Promise<DashboardData> {
+  if (
+    isAllLeaguesScope(filter) &&
+    (await hasCompletedAllLeaguesMaterialization())
+  ) {
+    return getMaterializedDashboardData();
+  }
+
   const rows = await db.execute<DashboardCoreQueryRow>(sql`
     with ${songStatsCtes(filter)}, ${selectedLeaguesCte(filter)},
     player_round as (
@@ -1254,6 +1438,13 @@ export async function getDashboardData(
 export async function getDashboardAlignmentData(
   filter: AnalyticsFilter,
 ): Promise<DashboardData["alignment"]> {
+  if (
+    isAllLeaguesScope(filter) &&
+    (await hasCompletedAllLeaguesMaterialization())
+  ) {
+    return getMaterializedDashboardAlignmentData();
+  }
+
   const alignments = await db.execute<{
     leftId: string;
     leftName: string;
@@ -1339,33 +1530,36 @@ export async function getSongsData(
     direction: SortDirection;
   },
 ): Promise<SongsData> {
-  const ctes = sql`${songStatsCtes(filter)}, ranked_songs as (${songSelect()})`;
+  const useMat =
+    isAllLeaguesScope(filter) && (await hasCompletedAllLeaguesMaterialization());
+  const ctes = useMat
+    ? sql`ranked_songs as (${matSongSelect()})`
+    : sql`${songStatsCtes(filter)}, ranked_songs as (${songSelect()})`;
   const predicate = songSearchPredicate(search);
-  const rows = await db.execute<SongQueryRowWithTotal>(sql`
+  const [packedRow] = await db.execute<SongsPackedQueryRow>(sql`
     with ${ctes},
     filtered_songs as (
       select * from ranked_songs
       where ${predicate}
+    ),
+    paged_songs as (
+      select *
+      from filtered_songs
+      order by ${songOrder(sort, direction)}
+      limit ${pageSize} offset ${(page - 1) * pageSize}
     )
-    select *, count(*) over()::int as "totalCount"
-    from filtered_songs
-    order by ${songOrder(sort, direction)}
-    limit ${pageSize} offset ${(page - 1) * pageSize}
+    select
+      (select count(*)::int from filtered_songs) as "totalCount",
+      (
+        select coalesce(json_agg(to_jsonb(paged_songs) order by ${songOrder(sort, direction)}), '[]'::json)
+        from paged_songs
+      ) as rows
   `);
-  const fallbackCount =
-    rows.length || page <= 1
-      ? 0
-      : (
-          await db.execute<{ count: number }>(sql`
-            with ${ctes}
-            select count(*)::int as count from ranked_songs
-            where ${predicate}
-          `)
-        )[0]?.count ?? 0;
+  const rows = jsonRows<SongQueryRow>(packedRow?.rows);
 
   return {
     rows: rows.map(mapSong),
-    total: rows[0]?.totalCount ?? fallbackCount,
+    total: packedRow?.totalCount ?? 0,
     page,
     pageSize,
     search,
@@ -1374,9 +1568,8 @@ export async function getSongsData(
   };
 }
 
-function playerStatsCtes(filter: AnalyticsFilter): SQL {
+export function playerAggregateCtes(): SQL {
   return sql`
-    ${songStatsCtes(filter)},
     player_round as (
       select
         submitter_id,
@@ -1425,6 +1618,10 @@ function playerStatsCtes(filter: AnalyticsFilter): SQL {
   `;
 }
 
+export function playerStatsCtes(filter: AnalyticsFilter): SQL {
+  return sql`${songStatsCtes(filter)}, ${playerAggregateCtes()}`;
+}
+
 type PlayerQueryRow = {
   id: string;
   name: string;
@@ -1439,6 +1636,158 @@ type PlayerQueryRow = {
   topQuartileRate: number | null;
   performanceRank: number | null;
 };
+
+type PlayerProfilePackedQueryRow = {
+  overview: unknown;
+  submissions: unknown;
+  distributions: unknown;
+  relationships: unknown;
+  mutualRelationships: unknown;
+  alignments: unknown;
+  timing: unknown;
+};
+
+async function getMaterializedPlayerProfileData(
+  player: { id: string; name: string },
+  minimumRounds: number,
+): Promise<PlayerProfileData> {
+  const [packedRow] = await db.execute<PlayerProfilePackedQueryRow>(sql`
+    with all_song_rows as (
+      ${matSongSelect()}
+    ),
+    submission_rows as (
+      select *
+      from all_song_rows
+      where "submitterId" = ${player.id}
+    ),
+    overview_rows as (
+      select
+        id,
+        name,
+        total_points as "totalPoints",
+        submissions,
+        entered_rounds as "enteredRounds",
+        points_per_submission as "pointsPerSubmission",
+        points_per_eligible_voter as "pointsPerEligibleVoter",
+        average_round_index as "averageRoundIndex",
+        average_round_percentile as "averageRoundPercentile",
+        round_wins as "roundWins",
+        top_quartile_rate as "topQuartileRate",
+        performance_rank as "performanceRank"
+      from analytics_player_stats
+      where id = ${player.id}
+      limit 1
+    ),
+    distribution_rows as (
+      select direction, points, count
+      from analytics_player_point_distribution
+      where player_id = ${player.id}
+    ),
+    directional_relationships as (
+      select
+        direction,
+        right_id as "competitorId",
+        right_name as "competitorName",
+        points,
+        opportunities as encounters,
+        shared_rounds as "sharedRounds",
+        scope_rounds as "scopeRounds",
+        points_per_opportunity as "pointsPerEncounter",
+        positive_rate as "positiveRate"
+      from analytics_relationship_pairs
+      where left_id = ${player.id}
+    ),
+    mutual_relationships as (
+      select
+        case when left_id = ${player.id} then right_id else left_id end as "competitorId",
+        case when left_id = ${player.id} then right_name else left_name end as "competitorName",
+        points,
+        opportunities,
+        shared_rounds as "sharedRounds",
+        scope_rounds as "scopeRounds",
+        points_per_opportunity as "pointsPerOpportunity",
+        positive_rate as "positiveRate",
+        ballot_point_share as "ballotPointShare"
+      from analytics_relationship_mutual
+      where left_id = ${player.id} or right_id = ${player.id}
+    ),
+    alignment_rows as (
+      select
+        case when left_id = ${player.id} then right_id else left_id end as "competitorId",
+        case when left_id = ${player.id} then right_name else left_name end as "competitorName",
+        alignment,
+        comparable_features as "comparableFeatures",
+        shared_rounds as "sharedRounds",
+        scope_rounds as "scopeRounds"
+      from analytics_relationship_alignment
+      where left_id = ${player.id} or right_id = ${player.id}
+    ),
+    timing_rows as (
+      select
+        t.round_id as "roundId",
+        t.round_name as "roundName",
+        t.league_name as "leagueName",
+        t.league_slug as "leagueSlug",
+        t.league_music_league_id as "leagueMusicLeagueId",
+        t.source_round_id as "sourceRoundId",
+        t.ordinal,
+        t.cast_at as "castAt",
+        t.relative_order as "relativeOrder",
+        t.ballot_rank as "ballotRank",
+        t.tie_count as "tieCount",
+        t.observed_voters as "observedVoters",
+        t.participation,
+        r.source_created_at as "sourceCreatedAt"
+      from analytics_player_timing t
+      join rounds r on r.id = t.round_id
+      where t.player_id = ${player.id}
+    )
+    select
+      (select coalesce(json_agg(to_jsonb(overview_rows)), '[]'::json) from overview_rows) as overview,
+      (select coalesce(json_agg(to_jsonb(submission_rows) order by "supportIndex" desc nulls last, points desc), '[]'::json) from submission_rows) as submissions,
+      (select coalesce(json_agg(to_jsonb(distribution_rows) order by direction, points), '[]'::json) from distribution_rows) as distributions,
+      (select coalesce(json_agg(to_jsonb(directional_relationships) order by direction, "pointsPerEncounter" desc, encounters desc), '[]'::json) from directional_relationships) as relationships,
+      (select coalesce(json_agg(to_jsonb(mutual_relationships) order by "pointsPerOpportunity" desc, opportunities desc), '[]'::json) from mutual_relationships) as "mutualRelationships",
+      (select coalesce(json_agg(to_jsonb(alignment_rows) order by alignment desc, "comparableFeatures" desc), '[]'::json) from alignment_rows) as alignments,
+      (select coalesce(json_agg(to_jsonb(timing_rows) order by "sourceCreatedAt" desc, "castAt" desc nulls last), '[]'::json) from timing_rows) as timing
+  `);
+
+  const overviewRows = jsonRows<PlayerQueryRow>(packedRow?.overview);
+  const distributionRows = jsonRows<{
+    direction: "received" | "given";
+    points: number;
+    count: number;
+  }>(packedRow?.distributions);
+  const timingRows = jsonRows<TimingRow>(packedRow?.timing);
+
+  return {
+    alignments: jsonRows<PlayerProfileData["alignments"][number]>(
+      packedRow?.alignments,
+    ),
+    givenDistribution: createPointDistribution(
+      distributionRows.filter(({ direction }) => direction === "given"),
+    ),
+    mutualRelationships: jsonRows<MutualRelationship>(
+      packedRow?.mutualRelationships,
+    ),
+    overview: overviewRows[0]
+      ? {
+          ...overviewRows[0],
+          provisional: overviewRows[0].enteredRounds < minimumRounds,
+        }
+      : null,
+    player,
+    receivedDistribution: createPointDistribution(
+      distributionRows.filter(({ direction }) => direction === "received"),
+    ),
+    relationships: jsonRows<DirectionalRelationship>(packedRow?.relationships),
+    submissions: jsonRows<SongQueryRow>(packedRow?.submissions).map(mapSong),
+    timing: timingRows.map((row) => ({
+      ...row,
+      castAt: row.castAt ? isoTimestamp(row.castAt) : null,
+    })),
+  };
+}
 
 function playerSearchPredicate(search: string): SQL {
   return search ? sql`${competitorDisplayName("c")} ilike ${`%${search}%`}` : sql`true`;
@@ -1472,6 +1821,37 @@ function playerOrder(
   return sql`${provisional}, pa.average_round_index ${dir} ${nulls}, pa.entered_rounds desc`;
 }
 
+function matPlayerSearchPredicate(search: string): SQL {
+  return search ? sql`name ilike ${`%${search}%`}` : sql`true`;
+}
+
+function matPlayerOrder(
+  sort: PlayerSort,
+  minimumRounds: number,
+  direction: SortDirection,
+): SQL {
+  const provisional = sql`case when "enteredRounds" >= ${minimumRounds} then 0 else 1 end`;
+  const dir = sortKeyword(direction);
+  const nulls = nullsKeyword();
+  if (sort === "points") return sql`${provisional}, "totalPoints" ${dir}, name asc`;
+  if (sort === "songs")
+    return sql`${provisional}, submissions ${dir}, "totalPoints" desc`;
+  if (sort === "rounds")
+    return sql`${provisional}, "enteredRounds" ${dir}, "totalPoints" desc`;
+  if (sort === "name") return sql`name ${dir}`;
+  if (sort === "points-per-song")
+    return sql`${provisional}, "pointsPerSubmission" ${dir} ${nulls}, "totalPoints" desc`;
+  if (sort === "points-per-voter")
+    return sql`${provisional}, "pointsPerEligibleVoter" ${dir} ${nulls}, "totalPoints" desc`;
+  if (sort === "percentile")
+    return sql`${provisional}, "averageRoundPercentile" ${dir} ${nulls}, "totalPoints" desc`;
+  if (sort === "wins")
+    return sql`${provisional}, "roundWins" ${dir}, "totalPoints" desc`;
+  if (sort === "top-quartile")
+    return sql`${provisional}, "topQuartileRate" ${dir} ${nulls}, "totalPoints" desc`;
+  return sql`${provisional}, "averageRoundIndex" ${dir} ${nulls}, "enteredRounds" desc`;
+}
+
 export async function getPlayersData(
   filter: AnalyticsFilter,
   {
@@ -1486,36 +1866,90 @@ export async function getPlayersData(
     direction: SortDirection;
   },
 ): Promise<PlayersData> {
+  if (
+    isAllLeaguesScope(filter) &&
+    (await hasCompletedAllLeaguesMaterialization())
+  ) {
+    const rows = await db.execute<PlayerQueryRow>(sql`
+      with ranked_players as (
+        select
+          id,
+          name,
+          total_points as "totalPoints",
+          submissions,
+          entered_rounds as "enteredRounds",
+          points_per_submission as "pointsPerSubmission",
+          points_per_eligible_voter as "pointsPerEligibleVoter",
+          average_round_index as "averageRoundIndex",
+          average_round_percentile as "averageRoundPercentile",
+          round_wins as "roundWins",
+          top_quartile_rate as "topQuartileRate",
+          case
+            when entered_rounds >= ${minimumRounds}
+              then rank() over (
+                order by
+                  case when entered_rounds >= ${minimumRounds} then 0 else 1 end,
+                  average_round_index desc nulls last,
+                  entered_rounds desc,
+                  total_points desc,
+                  id
+              )::int
+            else null
+          end as "performanceRank"
+        from analytics_player_stats
+      )
+      select *
+      from ranked_players
+      where ${matPlayerSearchPredicate(search)}
+      order by ${matPlayerOrder(sort, minimumRounds, direction)}
+    `);
+
+    return {
+      direction,
+      minimumRounds,
+      rows: rows.map((row) => ({
+        ...row,
+        provisional: row.enteredRounds < minimumRounds,
+      })),
+      search,
+      sort,
+    };
+  }
+
   const rows = await db.execute<PlayerQueryRow>(sql`
-    with ${playerStatsCtes(filter)}
-    select
-      c.id,
-      ${competitorDisplayName("c")} as name,
-      pa.total_points as "totalPoints",
-      pa.submissions,
-      pa.entered_rounds as "enteredRounds",
-      case when pa.submissions > 0 then pa.total_points::double precision / pa.submissions else null end as "pointsPerSubmission",
-      case when pa.eligible_rows > 0 then pa.total_points::double precision / pa.eligible_rows else null end as "pointsPerEligibleVoter",
-      pa.average_round_index as "averageRoundIndex",
-      pa.average_round_percentile as "averageRoundPercentile",
-      pa.round_wins as "roundWins",
-      case when pa.entered_rounds > 0 then pa.top_quartile_rounds::double precision / pa.entered_rounds else null end as "topQuartileRate",
-      case
-        when pa.entered_rounds >= ${minimumRounds}
-          then rank() over (
-            order by
-              case when pa.entered_rounds >= ${minimumRounds} then 0 else 1 end,
-              pa.average_round_index desc nulls last,
-              pa.entered_rounds desc,
-              pa.total_points desc,
-              c.id
-          )::int
-        else null
-      end as "performanceRank"
-    from player_aggregates pa
-    join competitors c on c.id = pa.submitter_id
-    where ${playerSearchPredicate(search)}
-    order by ${playerOrder(sort, minimumRounds, direction)}
+    with ${playerStatsCtes(filter)},
+    ranked_players as (
+      select
+        c.id,
+        ${competitorDisplayName("c")} as name,
+        pa.total_points as "totalPoints",
+        pa.submissions,
+        pa.entered_rounds as "enteredRounds",
+        case when pa.submissions > 0 then pa.total_points::double precision / pa.submissions else null end as "pointsPerSubmission",
+        case when pa.eligible_rows > 0 then pa.total_points::double precision / pa.eligible_rows else null end as "pointsPerEligibleVoter",
+        pa.average_round_index as "averageRoundIndex",
+        pa.average_round_percentile as "averageRoundPercentile",
+        pa.round_wins as "roundWins",
+        case when pa.entered_rounds > 0 then pa.top_quartile_rounds::double precision / pa.entered_rounds else null end as "topQuartileRate",
+        case
+          when pa.entered_rounds >= ${minimumRounds}
+            then rank() over (
+              order by
+                case when pa.entered_rounds >= ${minimumRounds} then 0 else 1 end,
+                pa.average_round_index desc nulls last,
+                pa.entered_rounds desc,
+                pa.total_points desc,
+                c.id
+            )::int
+          else null
+        end as "performanceRank"
+      from player_aggregates pa
+      join competitors c on c.id = pa.submitter_id
+    )
+    select *
+    from ranked_players
+    where ${search ? sql`name ilike ${`%${search}%`}` : sql`true`}
+    order by ${matPlayerOrder(sort, minimumRounds, direction)}
   `);
 
   return {
@@ -1547,50 +1981,52 @@ export async function getPlayerProfileData(
   const player = playerRows[0];
   if (!player) return null;
 
-  const overviewPromise = db.execute<PlayerQueryRow>(sql`
-    with ${playerStatsCtes(filter)}
-    select
-      c.id,
-      ${competitorDisplayName("c")} as name,
-      pa.total_points as "totalPoints",
-      pa.submissions,
-      pa.entered_rounds as "enteredRounds",
-      case when pa.submissions > 0 then pa.total_points::double precision / pa.submissions else null end as "pointsPerSubmission",
-      case when pa.eligible_rows > 0 then pa.total_points::double precision / pa.eligible_rows else null end as "pointsPerEligibleVoter",
-      pa.average_round_index as "averageRoundIndex",
-      pa.average_round_percentile as "averageRoundPercentile",
-      pa.round_wins as "roundWins",
-      case when pa.entered_rounds > 0 then pa.top_quartile_rounds::double precision / pa.entered_rounds else null end as "topQuartileRate",
-      null::int as "performanceRank"
-    from player_aggregates pa
-    join competitors c on c.id = pa.submitter_id
-    where c.id = ${playerId}
-    limit 1
-  `);
-  const submissionsPromise = db.execute<SongQueryRow>(sql`
-    with ${songStatsCtes(filter)}, ranked_songs as (${songSelect()})
-    select * from ranked_songs
-    where "submitterId" = ${playerId}
-    order by "supportIndex" desc nulls last, points desc
-  `);
-  const distributionsPromise = db.execute<{
-    direction: "received" | "given";
-    points: number;
-    count: number;
-  }>(sql`
-    with ${voteOpportunityCtes(filter)}
-    select 'received' as direction, ev.points, count(*)::int as count
-    from effective_votes ev
-    where ev.submitter_id = ${playerId}
-    group by ev.points
-    union all
-    select 'given' as direction, ev.points, count(*)::int as count
-    from effective_votes ev
-    where ev.voter_id = ${playerId}
-    group by ev.points
-  `);
-  const relationshipsPromise = db.execute<DirectionalRelationship>(sql`
-    with ${voteOpportunityCtes(filter)},
+  if (
+    isAllLeaguesScope(filter) &&
+    (await hasCompletedAllLeaguesMaterialization())
+  ) {
+    return getMaterializedPlayerProfileData(player, minimumRounds);
+  }
+
+  const [packedRow] = await db.execute<PlayerProfilePackedQueryRow>(sql`
+    with ${songStatsCtes(filter)},
+    ${playerAggregateCtes()},
+    ${alignmentComparisonTailCtes(playerId)},
+    ranked_songs as (${songSelect()}),
+    overview_rows as (
+      select
+        c.id,
+        ${competitorDisplayName("c")} as name,
+        pa.total_points as "totalPoints",
+        pa.submissions,
+        pa.entered_rounds as "enteredRounds",
+        case when pa.submissions > 0 then pa.total_points::double precision / pa.submissions else null end as "pointsPerSubmission",
+        case when pa.eligible_rows > 0 then pa.total_points::double precision / pa.eligible_rows else null end as "pointsPerEligibleVoter",
+        pa.average_round_index as "averageRoundIndex",
+        pa.average_round_percentile as "averageRoundPercentile",
+        pa.round_wins as "roundWins",
+        case when pa.entered_rounds > 0 then pa.top_quartile_rounds::double precision / pa.entered_rounds else null end as "topQuartileRate",
+        null::int as "performanceRank"
+      from player_aggregates pa
+      join competitors c on c.id = pa.submitter_id
+      where c.id = ${playerId}
+      limit 1
+    ),
+    submission_rows as (
+      select * from ranked_songs
+      where "submitterId" = ${playerId}
+    ),
+    distribution_rows as (
+      select 'received' as direction, ev.points, count(*)::int as count
+      from effective_votes ev
+      where ev.submitter_id = ${playerId}
+      group by ev.points
+      union all
+      select 'given' as direction, ev.points, count(*)::int as count
+      from effective_votes ev
+      where ev.voter_id = ${playerId}
+      group by ev.points
+    ),
     relationship_rows as (
       select
         'received'::text as direction,
@@ -1613,26 +2049,24 @@ export async function getPlayerProfileData(
       from effective_votes ev
       where ev.voter_id = ${playerId}
       group by ev.submitter_id
-    )
-    select
-      rr.direction,
-      rr.competitor_id as "competitorId",
-      ${competitorDisplayName("c")} as "competitorName",
-      rr.points,
-      rr.encounters,
-      rr.shared_rounds as "sharedRounds",
-      (select scope_rounds from scope_thresholds) as "scopeRounds",
-      rr.points::double precision / rr.encounters as "pointsPerEncounter",
-      rr.positives::double precision / rr.encounters as "positiveRate"
-    from relationship_rows rr
-    join competitors c on c.id = rr.competitor_id
-    where rr.shared_rounds >= (
-      select minimum_shared_rounds from scope_thresholds
-    )
-    order by rr.direction, "pointsPerEncounter" desc, rr.encounters desc
-  `);
-  const mutualRelationshipsPromise = db.execute<MutualRelationship>(sql`
-    with ${voteOpportunityCtes(filter)},
+    ),
+    directional_relationships as (
+      select
+        rr.direction,
+        rr.competitor_id as "competitorId",
+        ${competitorDisplayName("c")} as "competitorName",
+        rr.points,
+        rr.encounters,
+        rr.shared_rounds as "sharedRounds",
+        (select scope_rounds from scope_thresholds) as "scopeRounds",
+        rr.points::double precision / rr.encounters as "pointsPerEncounter",
+        rr.positives::double precision / rr.encounters as "positiveRate"
+      from relationship_rows rr
+      join competitors c on c.id = rr.competitor_id
+      where rr.shared_rounds >= (
+        select minimum_shared_rounds from scope_thresholds
+      )
+    ),
     mutual_rows as (
       select
         case
@@ -1670,71 +2104,47 @@ export async function getPlayerProfileData(
         sum(ballot_points)::double precision as eligible_ballot_points
       from mutual_budget_rounds
       group by competitor_id
-    )
-    select
-      mr.competitor_id as "competitorId",
-      ${competitorDisplayName("c")} as "competitorName",
-      mr.points,
-      mr.opportunities,
-      mr.shared_rounds as "sharedRounds",
-      (select scope_rounds from scope_thresholds) as "scopeRounds",
-      mr.points::double precision / mr.opportunities as "pointsPerOpportunity",
-      mr.positives::double precision / mr.opportunities as "positiveRate",
-      mr.points::double precision / nullif(mb.eligible_ballot_points, 0) as "ballotPointShare"
-    from mutual_rows mr
-    join mutual_budgets mb on mb.competitor_id = mr.competitor_id
-    join competitors c on c.id = mr.competitor_id
-    where mr.opportunities > 0
-      and mb.eligible_ballot_points > 0
-      and mr.shared_rounds >= (
-        select minimum_shared_rounds from scope_thresholds
-      )
-    order by "pointsPerOpportunity" desc, mr.opportunities desc
-  `);
-  const alignmentsPromise = db.execute<{
-    competitorId: string;
-    competitorName: string;
-    alignment: number;
-    comparableFeatures: number;
-    sharedRounds: number;
-    scopeRounds: number;
-  }>(sql`
-    with ${alignmentComparisonCtes(filter, playerId)}
-    select
-      case
-        when pc.left_id = ${playerId} then pc.right_id
-        else pc.left_id
-      end as "competitorId",
-      ${competitorDisplayName("c")} as "competitorName",
-      pc.dot / nullif(pc.magnitude, 0) as alignment,
-      pc.comparable_features as "comparableFeatures",
-      pc.shared_rounds as "sharedRounds",
-      (select scope_rounds from scope_thresholds) as "scopeRounds"
-    from pair_comparisons pc
-    join competitors c
-      on c.id = case
-        when pc.left_id = ${playerId} then pc.right_id
-        else pc.left_id
-      end
-    where (pc.left_id = ${playerId} or pc.right_id = ${playerId})
-      and pc.magnitude > 0
-    order by alignment desc, "comparableFeatures" desc
-  `);
-  const timingPromise = db.execute<{
-    roundId: string;
-    roundName: string;
-    leagueName: string;
-    leagueMusicLeagueId: string | null;
-    sourceRoundId: string;
-    ordinal: number;
-    castAt: Date | string | null;
-    relativeOrder: number | null;
-    ballotRank: number | null;
-    tieCount: number | null;
-    observedVoters: number;
-    participation: "voted" | "did_not_vote";
-  }>(sql`
-    with ${voteOpportunityCtes(filter)},
+    ),
+    mutual_relationships as (
+      select
+        mr.competitor_id as "competitorId",
+        ${competitorDisplayName("c")} as "competitorName",
+        mr.points,
+        mr.opportunities,
+        mr.shared_rounds as "sharedRounds",
+        (select scope_rounds from scope_thresholds) as "scopeRounds",
+        mr.points::double precision / mr.opportunities as "pointsPerOpportunity",
+        mr.positives::double precision / mr.opportunities as "positiveRate",
+        mr.points::double precision / nullif(mb.eligible_ballot_points, 0) as "ballotPointShare"
+      from mutual_rows mr
+      join mutual_budgets mb on mb.competitor_id = mr.competitor_id
+      join competitors c on c.id = mr.competitor_id
+      where mr.opportunities > 0
+        and mb.eligible_ballot_points > 0
+        and mr.shared_rounds >= (
+          select minimum_shared_rounds from scope_thresholds
+        )
+    ),
+    alignment_rows as (
+      select
+        case
+          when pc.left_id = ${playerId} then pc.right_id
+          else pc.left_id
+        end as "competitorId",
+        ${competitorDisplayName("c")} as "competitorName",
+        pc.dot / nullif(pc.magnitude, 0) as alignment,
+        pc.comparable_features as "comparableFeatures",
+        pc.shared_rounds as "sharedRounds",
+        (select scope_rounds from scope_thresholds) as "scopeRounds"
+      from pair_comparisons pc
+      join competitors c
+        on c.id = case
+          when pc.left_id = ${playerId} then pc.right_id
+          else pc.left_id
+        end
+      where (pc.left_id = ${playerId} or pc.right_id = ${playerId})
+        and pc.magnitude > 0
+    ),
     round_ballot_counts as (
       select round_id, count(*)::int as observed_voters
       from active_ballots
@@ -1791,43 +2201,72 @@ export async function getPlayerProfileData(
           from player_submission_rounds psr
           where psr.round_id = sr.id
         )
+    ),
+    timing_rows as (
+      select
+        pp.round_id as "roundId",
+        sr.name as "roundName",
+        l.name as "leagueName",
+        l.slug as "leagueSlug",
+        l.music_league_id as "leagueMusicLeagueId",
+        sr.source_round_id as "sourceRoundId",
+        sr.ordinal,
+        sr.source_created_at as "sourceCreatedAt",
+        pp.cast_at as "castAt",
+        pp.relative_order as "relativeOrder",
+        pp.ballot_rank as "ballotRank",
+        pp.tie_count as "tieCount",
+        pp.observed_voters as "observedVoters",
+        pp.participation as "participation"
+      from player_participation pp
+      join selected_rounds sr on sr.id = pp.round_id
+      join leagues l on l.id = sr.league_id
     )
     select
-      pp.round_id as "roundId",
-      sr.name as "roundName",
-      l.name as "leagueName",
-      l.music_league_id as "leagueMusicLeagueId",
-      sr.source_round_id as "sourceRoundId",
-      sr.ordinal,
-      pp.cast_at as "castAt",
-      pp.relative_order as "relativeOrder",
-      pp.ballot_rank as "ballotRank",
-      pp.tie_count as "tieCount",
-      pp.observed_voters as "observedVoters",
-      pp.participation as "participation"
-    from player_participation pp
-    join selected_rounds sr on sr.id = pp.round_id
-    join leagues l on l.id = sr.league_id
-    order by sr.source_created_at desc, pp.cast_at desc nulls last
+      (select coalesce(json_agg(to_jsonb(overview_rows)), '[]'::json) from overview_rows) as overview,
+      (
+        select coalesce(json_agg(to_jsonb(submission_rows) order by "supportIndex" desc nulls last, points desc), '[]'::json)
+        from submission_rows
+      ) as submissions,
+      (
+        select coalesce(json_agg(to_jsonb(distribution_rows) order by direction, points), '[]'::json)
+        from distribution_rows
+      ) as distributions,
+      (
+        select coalesce(json_agg(to_jsonb(directional_relationships) order by direction, "pointsPerEncounter" desc, encounters desc), '[]'::json)
+        from directional_relationships
+      ) as relationships,
+      (
+        select coalesce(json_agg(to_jsonb(mutual_relationships) order by "pointsPerOpportunity" desc, opportunities desc), '[]'::json)
+        from mutual_relationships
+      ) as "mutualRelationships",
+      (
+        select coalesce(json_agg(to_jsonb(alignment_rows) order by alignment desc, "comparableFeatures" desc), '[]'::json)
+        from alignment_rows
+      ) as alignments,
+      (
+        select coalesce(json_agg(to_jsonb(timing_rows) order by "sourceCreatedAt" desc, "castAt" desc nulls last), '[]'::json)
+        from timing_rows
+      ) as timing
   `);
 
-  const [
-    overviewRows,
-    submissionRows,
-    distributionRows,
-    relationships,
-    mutualRelationships,
-    alignments,
-    timingRows,
-  ] = await Promise.all([
-    overviewPromise,
-    submissionsPromise,
-    distributionsPromise,
-    relationshipsPromise,
-    mutualRelationshipsPromise,
-    alignmentsPromise,
-    timingPromise,
-  ]);
+  const overviewRows = jsonRows<PlayerQueryRow>(packedRow?.overview);
+  const submissionRows = jsonRows<SongQueryRow>(packedRow?.submissions);
+  const distributionRows = jsonRows<{
+    direction: "received" | "given";
+    points: number;
+    count: number;
+  }>(packedRow?.distributions);
+  const relationships = jsonRows<DirectionalRelationship>(packedRow?.relationships);
+  const mutualRelationships = jsonRows<MutualRelationship>(
+    packedRow?.mutualRelationships,
+  );
+  const alignments = jsonRows<PlayerProfileData["alignments"][number]>(
+    packedRow?.alignments,
+  );
+  const timingRows = jsonRows<TimingRow & { sourceCreatedAt?: string }>(
+    packedRow?.timing,
+  );
 
   return {
     player,
@@ -1909,6 +2348,107 @@ async function focusPlayer(playerId: string | null) {
   return rows[0] ?? null;
 }
 
+async function getMaterializedRelationshipRows(
+  tab: RelationshipTab,
+  focus: string | null,
+): Promise<RelationshipTableRow[]> {
+  if (tab === "alignment") {
+    return db.execute<RelationshipTableRow>(sql`
+      select
+        left_id as "leftId",
+        left_name as "leftName",
+        right_id as "rightId",
+        right_name as "rightName",
+        null::int as points,
+        null::int as opportunities,
+        shared_rounds as "sharedRounds",
+        scope_rounds as "scopeRounds",
+        null::double precision as "pointsPerOpportunity",
+        null::double precision as "positiveRate",
+        null::double precision as "ballotPointShare",
+        alignment,
+        comparable_features as "comparableFeatures",
+        null::double precision as "averageTiming",
+        null::int as "votedRounds",
+        null::int as "missedBallots"
+      from analytics_relationship_alignment
+      where ${focus}::uuid is null or left_id = ${focus} or right_id = ${focus}
+    `);
+  }
+
+  if (tab === "mutual") {
+    return db.execute<RelationshipTableRow>(sql`
+      select
+        left_id as "leftId",
+        left_name as "leftName",
+        right_id as "rightId",
+        right_name as "rightName",
+        points,
+        opportunities,
+        shared_rounds as "sharedRounds",
+        scope_rounds as "scopeRounds",
+        points_per_opportunity as "pointsPerOpportunity",
+        positive_rate as "positiveRate",
+        ballot_point_share as "ballotPointShare",
+        null::double precision as alignment,
+        null::int as "comparableFeatures",
+        null::double precision as "averageTiming",
+        null::int as "votedRounds",
+        null::int as "missedBallots"
+      from analytics_relationship_mutual
+      where ${focus}::uuid is null or left_id = ${focus} or right_id = ${focus}
+    `);
+  }
+
+  if (tab === "timing") {
+    return db.execute<RelationshipTableRow>(sql`
+      select
+        player_id as "leftId",
+        player_name as "leftName",
+        null::uuid as "rightId",
+        null::text as "rightName",
+        null::int as points,
+        null::int as opportunities,
+        count(*)::int as "sharedRounds",
+        (select count(*)::int from rounds) as "scopeRounds",
+        null::double precision as "pointsPerOpportunity",
+        null::double precision as "positiveRate",
+        null::double precision as "ballotPointShare",
+        null::double precision as alignment,
+        null::int as "comparableFeatures",
+        avg(relative_order) as "averageTiming",
+        count(*) filter (where participation = 'voted')::int as "votedRounds",
+        count(*) filter (where participation = 'did_not_vote')::int as "missedBallots"
+      from analytics_player_timing
+      where ${focus}::uuid is null or player_id = ${focus}
+      group by player_id, player_name
+    `);
+  }
+
+  return db.execute<RelationshipTableRow>(sql`
+    select
+      left_id as "leftId",
+      left_name as "leftName",
+      right_id as "rightId",
+      right_name as "rightName",
+      points,
+      opportunities,
+      shared_rounds as "sharedRounds",
+      scope_rounds as "scopeRounds",
+      points_per_opportunity as "pointsPerOpportunity",
+      positive_rate as "positiveRate",
+      null::double precision as "ballotPointShare",
+      null::double precision as alignment,
+      null::int as "comparableFeatures",
+      null::double precision as "averageTiming",
+      null::int as "votedRounds",
+      null::int as "missedBallots"
+    from analytics_relationship_pairs
+    where direction = ${tab}
+      and (${focus}::uuid is null or left_id = ${focus})
+  `);
+}
+
 export async function getRelationshipsTableData(
   filter: AnalyticsFilter,
   {
@@ -1925,6 +2465,24 @@ export async function getRelationshipsTableData(
 ): Promise<RelationshipsTableData> {
   const focus = isUuid(focusPlayerId) ? focusPlayerId : null;
   const focusRowPromise = focusPlayer(focus);
+  if (
+    isAllLeaguesScope(filter) &&
+    (await hasCompletedAllLeaguesMaterialization())
+  ) {
+    const [focusPlayerRow, rows] = await Promise.all([
+      focusRowPromise,
+      getMaterializedRelationshipRows(tab, focus),
+    ]);
+
+    return {
+      direction,
+      focusPlayer: focusPlayerRow,
+      rows: sortRelationshipRows(rows, sort, direction),
+      sort,
+      tab,
+    };
+  }
+
   const rowsPromise =
     tab === "alignment"
       ? db.execute<RelationshipTableRow>(sql`
@@ -2151,19 +2709,9 @@ export async function getSubmissionFactsData(
   filter: AnalyticsFilter,
 ): Promise<SubmissionFactsData> {
   const scopeCte = selectedRoundsCte(filter);
-  const [
-    mostSubmittedArtists,
-    artistLoyalists,
-    repeatedSongs,
-    diverseArtists,
-    prolificSubmitters,
-    repeatSubmitterSongs,
-    longestTitles,
-    shortestTitles,
-    densestRounds,
-  ] = await Promise.all([
-    db.execute<SubmissionFactsData["mostSubmittedArtists"][number]>(sql`
-      with ${scopeCte}
+  const [row] = await db.execute<SubmissionFactsPackedQueryRow>(sql`
+      with ${scopeCte},
+      most_submitted_artists as (
       select
         min(s.artist_name) as artist,
         count(*)::int as submissions,
@@ -2173,9 +2721,7 @@ export async function getSubmissionFactsData(
       group by lower(trim(s.artist_name))
       order by submissions desc, submitters desc, artist asc
       limit 15
-    `),
-    db.execute<SubmissionFactsData["artistLoyalists"][number]>(sql`
-      with ${scopeCte},
+      ),
       player_artist_counts as (
         select
           s.submitter_id,
@@ -2189,6 +2735,8 @@ export async function getSubmissionFactsData(
         join selected_rounds sr on sr.id = s.round_id
         group by s.submitter_id, lower(trim(s.artist_name))
       )
+      ,
+      artist_loyalists as (
       select
         pac.submitter_id as "playerId",
         ${competitorDisplayName("c")} as "playerName",
@@ -2199,9 +2747,8 @@ export async function getSubmissionFactsData(
       where pac.artist_rank = 1 and pac.submissions > 1
       order by pac.submissions desc, "playerName" asc
       limit 15
-    `),
-    db.execute<SubmissionFactsData["repeatedSongs"][number]>(sql`
-      with ${scopeCte}
+      ),
+      repeated_songs as (
       select
         s.spotify_uri as "spotifyUri",
         min(s.song_title) as title,
@@ -2216,9 +2763,8 @@ export async function getSubmissionFactsData(
       having count(*) > 1
       order by submissions desc, submitters desc, title asc
       limit 25
-    `),
-    db.execute<SubmissionFactsData["diverseArtists"][number]>(sql`
-      with ${scopeCte}
+      ),
+      diverse_artists as (
       select
         min(s.artist_name) as artist,
         count(distinct s.submitter_id)::int as submitters,
@@ -2228,9 +2774,8 @@ export async function getSubmissionFactsData(
       group by lower(trim(s.artist_name))
       order by submitters desc, submissions desc, artist asc
       limit 15
-    `),
-    db.execute<SubmissionFactsData["prolificSubmitters"][number]>(sql`
-      with ${scopeCte}
+      ),
+      prolific_submitters as (
       select
         s.submitter_id as "playerId",
         ${competitorDisplayName("c")} as "playerName",
@@ -2242,9 +2787,8 @@ export async function getSubmissionFactsData(
       group by s.submitter_id, c.name_override, c.name
       order by submissions desc, artists desc, "playerName" asc
       limit 15
-    `),
-    db.execute<SubmissionFactsData["repeatSubmitterSongs"][number]>(sql`
-      with ${scopeCte}
+      ),
+      repeat_submitter_songs as (
       select
         s.submitter_id as "playerId",
         ${competitorDisplayName("c")} as "playerName",
@@ -2259,9 +2803,8 @@ export async function getSubmissionFactsData(
       having count(*) > 1
       order by submissions desc, "playerName" asc, title asc
       limit 25
-    `),
-    db.execute<SubmissionFactsData["longestTitles"][number]>(sql`
-      with ${scopeCte}
+      ),
+      longest_titles as (
       select
         s.song_title as title,
         s.artist_name as artist,
@@ -2272,9 +2815,8 @@ export async function getSubmissionFactsData(
       join competitors c on c.id = s.submitter_id
       order by char_length(s.song_title) desc, s.song_title asc
       limit 10
-    `),
-    db.execute<SubmissionFactsData["shortestTitles"][number]>(sql`
-      with ${scopeCte}
+      ),
+      shortest_titles as (
       select
         s.song_title as title,
         s.artist_name as artist,
@@ -2285,11 +2827,11 @@ export async function getSubmissionFactsData(
       join competitors c on c.id = s.submitter_id
       order by char_length(s.song_title) asc, s.song_title asc
       limit 10
-    `),
-    db.execute<SubmissionFactsData["densestRounds"][number]>(sql`
-      with ${scopeCte}
+      ),
+      densest_rounds as (
       select
         l.name as "leagueName",
+        l.slug as "leagueSlug",
         sr.name as "roundName",
         sr.ordinal as "roundOrdinal",
         count(s.id)::int as submissions,
@@ -2300,19 +2842,74 @@ export async function getSubmissionFactsData(
       group by l.id, sr.id, sr.name, sr.ordinal
       order by submissions desc, submitters desc, "leagueName" asc, "roundOrdinal" asc
       limit 15
-    `),
-  ]);
+      )
+      select
+        (
+          select coalesce(json_agg(to_jsonb(most_submitted_artists) order by submissions desc, submitters desc, artist asc), '[]'::json)
+          from most_submitted_artists
+        ) as "mostSubmittedArtists",
+        (
+          select coalesce(json_agg(to_jsonb(artist_loyalists) order by submissions desc, "playerName" asc), '[]'::json)
+          from artist_loyalists
+        ) as "artistLoyalists",
+        (
+          select coalesce(json_agg(to_jsonb(repeated_songs) order by submissions desc, submitters desc, title asc), '[]'::json)
+          from repeated_songs
+        ) as "repeatedSongs",
+        (
+          select coalesce(json_agg(to_jsonb(diverse_artists) order by submitters desc, submissions desc, artist asc), '[]'::json)
+          from diverse_artists
+        ) as "diverseArtists",
+        (
+          select coalesce(json_agg(to_jsonb(prolific_submitters) order by submissions desc, artists desc, "playerName" asc), '[]'::json)
+          from prolific_submitters
+        ) as "prolificSubmitters",
+        (
+          select coalesce(json_agg(to_jsonb(repeat_submitter_songs) order by submissions desc, "playerName" asc, title asc), '[]'::json)
+          from repeat_submitter_songs
+        ) as "repeatSubmitterSongs",
+        (
+          select coalesce(json_agg(to_jsonb(longest_titles) order by length desc, title asc), '[]'::json)
+          from longest_titles
+        ) as "longestTitles",
+        (
+          select coalesce(json_agg(to_jsonb(shortest_titles) order by length asc, title asc), '[]'::json)
+          from shortest_titles
+        ) as "shortestTitles",
+        (
+          select coalesce(json_agg(to_jsonb(densest_rounds) order by submissions desc, submitters desc, "leagueName" asc, "roundOrdinal" asc), '[]'::json)
+          from densest_rounds
+        ) as "densestRounds"
+    `);
 
   return {
-    artistLoyalists,
-    densestRounds,
-    diverseArtists,
-    longestTitles,
-    mostSubmittedArtists,
-    prolificSubmitters,
-    repeatedSongs,
-    repeatSubmitterSongs,
-    shortestTitles,
+    artistLoyalists: jsonRows<SubmissionFactsData["artistLoyalists"][number]>(
+      row?.artistLoyalists,
+    ),
+    densestRounds: jsonRows<SubmissionFactsData["densestRounds"][number]>(
+      row?.densestRounds,
+    ),
+    diverseArtists: jsonRows<SubmissionFactsData["diverseArtists"][number]>(
+      row?.diverseArtists,
+    ),
+    longestTitles: jsonRows<SubmissionFactsData["longestTitles"][number]>(
+      row?.longestTitles,
+    ),
+    mostSubmittedArtists: jsonRows<
+      SubmissionFactsData["mostSubmittedArtists"][number]
+    >(row?.mostSubmittedArtists),
+    prolificSubmitters: jsonRows<
+      SubmissionFactsData["prolificSubmitters"][number]
+    >(row?.prolificSubmitters),
+    repeatedSongs: jsonRows<SubmissionFactsData["repeatedSongs"][number]>(
+      row?.repeatedSongs,
+    ),
+    repeatSubmitterSongs: jsonRows<
+      SubmissionFactsData["repeatSubmitterSongs"][number]
+    >(row?.repeatSubmitterSongs),
+    shortestTitles: jsonRows<SubmissionFactsData["shortestTitles"][number]>(
+      row?.shortestTitles,
+    ),
   };
 }
 

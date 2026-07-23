@@ -27,11 +27,13 @@ import {
   encodeScopeIds,
   getCachedFilterOptions,
   getCachedSubmissionFactsData,
+  leagueTableLabel,
   loadAnalytics,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
   scopeQueryParams,
   spotifyTrackUrl,
+  truncateRoundName,
   type SearchParams,
 } from "@/lib/analytics";
 
@@ -231,11 +233,14 @@ export default async function FactsPage({
             render: (row) => (
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
-                  {row.leagueName}
+                  {leagueTableLabel({
+                    name: row.leagueName,
+                    slug: row.leagueSlug,
+                  })}
                 </p>
                 <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  R{row.roundOrdinal} · {row.roundName} · {row.submissions} songs
-                  from {row.submitters} submitters
+                  R{row.roundOrdinal} · {truncateRoundName(row.roundName)} ·{" "}
+                  {row.submissions} songs from {row.submitters} submitters
                 </p>
               </>
             ),

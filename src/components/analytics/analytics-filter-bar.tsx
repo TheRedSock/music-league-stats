@@ -87,22 +87,22 @@ function AnalyticsFilterBarContent({
     );
   }
 
-  function applyScope() {
+  function pushScope(nextLeagueIds = leagueIds, nextRoundIds = roundIds) {
     // Read the live query string at click time so this client component does
     // not subscribe to useSearchParams during SSR/hydration.
     const next = new URLSearchParams(window.location.search);
     next.delete("league");
     next.delete("round");
-    if (leagueIds.length) {
-      for (const leagueId of leagueIds) next.append("league", leagueId);
-    } else {
-      next.set("league", "all");
-    }
-    for (const roundId of roundIds) next.append("round", roundId);
+    for (const leagueId of nextLeagueIds) next.append("league", leagueId);
+    for (const roundId of nextRoundIds) next.append("round", roundId);
     next.delete("page");
     startTransition(() => {
       router.push(`${pathname}${next.size ? `?${next}` : ""}`);
     });
+  }
+
+  function applyScope() {
+    pushScope();
   }
 
   const scopeChanged =
@@ -114,6 +114,11 @@ function AnalyticsFilterBarContent({
   const selectedRounds = options.rounds.filter((round) =>
     roundIds.includes(round.id),
   );
+  const latestLeagueActive =
+    Boolean(options.defaultLeagueId) &&
+    leagueIds.length === 1 &&
+    leagueIds[0] === options.defaultLeagueId &&
+    roundIds.length === 0;
 
   return (
     <div
@@ -134,7 +139,28 @@ function AnalyticsFilterBarContent({
           )}
           Scope
         </div>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          {options.defaultLeagueId ? (
+            <button
+              aria-pressed={latestLeagueActive}
+              className={cn(
+                "h-9 shrink-0 rounded-full border px-3 text-xs font-medium transition",
+                latestLeagueActive
+                  ? "border-lime-300/40 bg-lime-300/10 text-lime-100"
+                  : "border-white/10 bg-zinc-900 text-zinc-300 hover:border-white/20",
+              )}
+              disabled={pending}
+              onClick={() => {
+                const latestLeagueIds = [options.defaultLeagueId!];
+                setLeagueIds(latestLeagueIds);
+                setRoundIds([]);
+                pushScope(latestLeagueIds, []);
+              }}
+              type="button"
+            >
+              Latest league
+            </button>
+          ) : null}
           <div className="relative shrink-0">
             <button
               aria-expanded={openMenu === "leagues"}

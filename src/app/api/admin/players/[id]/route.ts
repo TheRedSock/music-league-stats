@@ -6,12 +6,12 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { competitors } from "@/db/schema";
-import { revalidateAnalyticsCache } from "@/lib/analytics";
 import {
   AdminRequestError,
   adminErrorResponse,
   requireAdminMutation,
 } from "@/lib/admin-auth";
+import { refreshAllLeaguesMaterialization } from "@/lib/analytics-materialize";
 import { formatZodError } from "@/lib/import-data";
 import { playerNameInputSchema } from "@/lib/player-validation";
 
@@ -39,10 +39,15 @@ export async function PUT(
       throw new AdminRequestError("Player not found.", 404);
     }
 
-    revalidateAnalyticsCache();
-    revalidatePath("/");
-    revalidatePath("/songs");
-    revalidatePath("/players");
+    const job = await refreshAllLeaguesMaterialization(undefined, {
+      force: true,
+    });
+    if (job.status === "failed") {
+      throw new AdminRequestError(
+        job.errorMessage ?? "All-leagues analytics refresh failed.",
+        500,
+      );
+    }
     revalidatePath(`/players/${id}`);
     revalidatePath("/admin");
     return NextResponse.json({ player });

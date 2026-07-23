@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "db:bench": "tsx scripts/db-bench.ts",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -58,10 +59,12 @@
     "@types/react-dom": "^19.2.3",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.11",
     "postcss": "^8.5.22",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }

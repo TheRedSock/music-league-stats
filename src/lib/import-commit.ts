@@ -224,14 +224,12 @@ export async function commitImportBatch(
   batchId: string,
 ): Promise<ImportSummary> {
   return db.transaction(async (tx) => {
-    await tx.execute(
-      sql`select id from ${importBatches} where ${importBatches.id} = ${batchId} for update`,
-    );
     const [batch] = await tx
       .select()
       .from(importBatches)
       .where(eq(importBatches.id, batchId))
-      .limit(1);
+      .limit(1)
+      .for("update");
     if (!batch) throw new ImportCommitError("Import batch not found.");
     if (batch.status === "completed" && batch.summary) return batch.summary;
     if (batch.status === "processing") {
