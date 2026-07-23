@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import {
   AdminRequestError,
@@ -8,9 +9,15 @@ import {
   requireAdminMutation,
 } from "@/lib/admin-auth";
 import {
+  advanceMaterializationJob,
   getAllLeaguesMaterializationStatus,
-  refreshAllLeaguesMaterialization,
+  startMaterializationJob,
 } from "@/lib/analytics-materialize";
+
+const postBodySchema = z.object({
+  action: z.enum(["start", "advance"]),
+  jobId: z.uuid().optional(),
+});
 
 export async function GET() {
   try {
@@ -29,20 +36,27 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     requireAdminMutation(request);
-    const job = await refreshAllLeaguesMaterialization(undefined, {
-      force: true,
-    });
-    if (job.status === "failed") {
+    const parsed = postBodySchema.safeParse(await request.json());
+    if (!parsed.success) {
+      throw new AdminRequestError("Invalid analytics refresh request.", 400);
+    }
+
+    if (parsed.data.action === "start") {
+      return NextResponse.json(await startMaterializationJob());
+    }
+
+    if (!parsed.data.jobId) {
+      throw new AdminRequestError("A jobId is required to advance refresh.", 400);
+    }
+
+    const status = await advanceMaterializationJob(parsed.data.jobId);
+    if (status.status === "failed") {
       throw new AdminRequestError(
-        job.errorMessage ?? "All-leagues analytics refresh failed.",
+        status.job?.errorMessage ?? "All-leagues analytics refresh failed.",
         500,
       );
     }
-    return NextResponse.json({
-      analyticsRevision: job.analyticsRevision,
-      job,
-      status: job.status,
-    });
+    return NextResponse.json(status);
   } catch (error) {
     return adminErrorResponse(error);
   }

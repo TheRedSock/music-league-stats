@@ -11,7 +11,7 @@ import {
   adminErrorResponse,
   requireAdminMutation,
 } from "@/lib/admin-auth";
-import { refreshAllLeaguesMaterialization } from "@/lib/analytics-materialize";
+import { invalidateAllLeaguesMaterialization } from "@/lib/analytics-materialize";
 import { formatZodError } from "@/lib/import-data";
 import { leagueInputSchema } from "@/lib/league-validation";
 
@@ -42,15 +42,10 @@ export async function POST(request: NextRequest) {
         sourceLeagueId: `manual:${randomUUID()}`,
       })
       .returning();
-    const job = await refreshAllLeaguesMaterialization(undefined, {
-      force: true,
-    });
-    if (job.status === "failed") {
-      throw new AdminRequestError(
-        job.errorMessage ?? "All-leagues analytics refresh failed.",
-        500,
-      );
-    }
+    await invalidateAllLeaguesMaterialization(
+      undefined,
+      "Invalidated after league create.",
+    );
     revalidatePath("/admin");
     return NextResponse.json({ league }, { status: 201 });
   } catch (error) {

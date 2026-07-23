@@ -386,6 +386,18 @@ export type AnalyticsMaterializationSummary = {
   playerTiming: number;
 };
 
+export type AnalyticsMaterializationProgress = {
+  kind: "progress";
+  stepId: string;
+  stepLabel: string;
+  stepIndex: number;
+  stepCount: number;
+};
+
+export type AnalyticsMaterializationJobSummary =
+  | (AnalyticsMaterializationSummary & { kind?: "completed" })
+  | AnalyticsMaterializationProgress;
+
 export const analyticsMaterializationJobs = pgTable(
   "analytics_materialization_jobs",
   {
@@ -394,7 +406,7 @@ export const analyticsMaterializationJobs = pgTable(
     status: analyticsMaterializationStatus("status")
       .default("pending")
       .notNull(),
-    summary: jsonb("summary").$type<AnalyticsMaterializationSummary>(),
+    summary: jsonb("summary").$type<AnalyticsMaterializationJobSummary>(),
     errorMessage: text("error_message"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),

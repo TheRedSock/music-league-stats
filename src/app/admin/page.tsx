@@ -23,6 +23,8 @@ import {
   getAdminConfig,
   isAdminAuthenticated,
 } from "@/lib/admin-auth";
+import { getAllLeaguesMaterializationStatus } from "@/lib/analytics-materialize";
+import type { AnalyticsRefreshStatusResponse } from "@/lib/analytics-refresh-client";
 
 export const metadata: Metadata = {
   title: "Admin",
@@ -62,45 +64,68 @@ export default async function AdminPage() {
     );
   }
 
-  const [leagueRows, historyRows, playerRows] = await Promise.all([
-    db.select().from(leagues).orderBy(asc(leagues.name)),
-    db
-      .select({
-        id: importBatches.id,
-        leagueId: importBatches.leagueId,
-        leagueName: leagues.name,
-        leagueMusicLeagueId: leagues.musicLeagueId,
-        status: importBatches.status,
-        receivedRows: importBatches.receivedRows,
-        receivedChunks: importBatches.receivedChunks,
-        summary: importBatches.summary,
-        errorMessage: importBatches.errorMessage,
-        createdAt: importBatches.createdAt,
-        completedAt: importBatches.completedAt,
-      })
-      .from(importBatches)
-      .innerJoin(leagues, eq(importBatches.leagueId, leagues.id))
-      .orderBy(desc(importBatches.createdAt))
-      .limit(25),
-    db
-      .select({
-        id: competitors.id,
-        sourceCompetitorId: competitors.sourceCompetitorId,
-        importedName: competitors.name,
-        nameOverride: competitors.nameOverride,
-        displayName: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
-        leagueCount: sql<number>`count(${leagueMembers.leagueId})::int`,
-      })
-      .from(competitors)
-      .leftJoin(leagueMembers, eq(leagueMembers.competitorId, competitors.id))
-      .groupBy(
-        competitors.id,
-        competitors.sourceCompetitorId,
-        competitors.name,
-        competitors.nameOverride,
-      )
-      .orderBy(sql`coalesce(${competitors.nameOverride}, ${competitors.name}) asc`),
-  ]);
+  const [leagueRows, historyRows, playerRows, materialization] =
+    await Promise.all([
+      db.select().from(leagues).orderBy(asc(leagues.name)),
+      db
+        .select({
+          id: importBatches.id,
+          leagueId: importBatches.leagueId,
+          leagueName: leagues.name,
+          leagueMusicLeagueId: leagues.musicLeagueId,
+          status: importBatches.status,
+          receivedRows: importBatches.receivedRows,
+          receivedChunks: importBatches.receivedChunks,
+          summary: importBatches.summary,
+          errorMessage: importBatches.errorMessage,
+          createdAt: importBatches.createdAt,
+          completedAt: importBatches.completedAt,
+        })
+        .from(importBatches)
+        .innerJoin(leagues, eq(importBatches.leagueId, leagues.id))
+        .orderBy(desc(importBatches.createdAt))
+        .limit(25),
+      db
+        .select({
+          id: competitors.id,
+          sourceCompetitorId: competitors.sourceCompetitorId,
+          importedName: competitors.name,
+          nameOverride: competitors.nameOverride,
+          displayName: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
+          leagueCount: sql<number>`count(${leagueMembers.leagueId})::int`,
+        })
+        .from(competitors)
+        .leftJoin(leagueMembers, eq(leagueMembers.competitorId, competitors.id))
+        .groupBy(
+          competitors.id,
+          competitors.sourceCompetitorId,
+          competitors.name,
+          competitors.nameOverride,
+        )
+        .orderBy(
+          sql`coalesce(${competitors.nameOverride}, ${competitors.name}) asc`,
+        ),
+      getAllLeaguesMaterializationStatus().catch(() => null),
+    ]);
+  const materializationStatus: AnalyticsRefreshStatusResponse | null =
+    materialization
+      ? {
+          status: materialization.status,
+          analyticsRevision: materialization.analyticsRevision,
+          progress: materialization.progress,
+          job: materialization.job
+            ? {
+                id: materialization.job.id,
+                status: materialization.job.status,
+                errorMessage: materialization.job.errorMessage,
+                summary: materialization.job.summary as
+                  | Record<string, unknown>
+                  | null
+                  | undefined,
+              }
+            : null,
+        }
+      : null;
   const adminLeagues: AdminLeague[] = leagueRows.map((league) => ({
     id: league.id,
     name: league.name,
@@ -122,7 +147,12 @@ export default async function AdminPage() {
 
   return (
     <Container className="py-12">
-      <AdminDashboard history={history} leagues={adminLeagues} players={players} />
+      <AdminDashboard
+        history={history}
+        leagues={adminLeagues}
+        materializationStatus={materializationStatus}
+        players={players}
+      />
     </Container>
   );
 }

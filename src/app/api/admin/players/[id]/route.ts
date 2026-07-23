@@ -11,7 +11,7 @@ import {
   adminErrorResponse,
   requireAdminMutation,
 } from "@/lib/admin-auth";
-import { refreshAllLeaguesMaterialization } from "@/lib/analytics-materialize";
+import { invalidateAllLeaguesMaterialization } from "@/lib/analytics-materialize";
 import { formatZodError } from "@/lib/import-data";
 import { playerNameInputSchema } from "@/lib/player-validation";
 
@@ -39,15 +39,10 @@ export async function PUT(
       throw new AdminRequestError("Player not found.", 404);
     }
 
-    const job = await refreshAllLeaguesMaterialization(undefined, {
-      force: true,
-    });
-    if (job.status === "failed") {
-      throw new AdminRequestError(
-        job.errorMessage ?? "All-leagues analytics refresh failed.",
-        500,
-      );
-    }
+    await invalidateAllLeaguesMaterialization(
+      undefined,
+      "Invalidated after player name update.",
+    );
     revalidatePath(`/players/${id}`);
     revalidatePath("/admin");
     return NextResponse.json({ player });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { MusicLeagueLink } from "@/components/analytics/music-league-link";
+import { AnalyticsRefreshPanel } from "@/components/admin/analytics-refresh-panel";
 import { ImportPanel } from "@/components/admin/import-panel";
 import { LeagueForm } from "@/components/admin/league-form";
 import { PlayerNameEditor } from "@/components/admin/player-name-editor";
@@ -13,6 +14,7 @@ import type {
   AdminLeague,
   AdminPlayer,
 } from "@/components/admin/types";
+import type { AnalyticsRefreshStatusResponse } from "@/lib/analytics-refresh-client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,10 +39,12 @@ export function AdminDashboard({
   leagues,
   history,
   players,
+  materializationStatus,
 }: {
   leagues: AdminLeague[];
   history: AdminImportBatch[];
   players: AdminPlayer[];
+  materializationStatus: AnalyticsRefreshStatusResponse | null;
 }) {
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -133,6 +137,8 @@ export function AdminDashboard({
         )}
       </section>
 
+      <AnalyticsRefreshPanel initialStatus={materializationStatus} />
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -141,7 +147,8 @@ export function AdminDashboard({
           </CardTitle>
           <CardDescription>
             Upload all four exports. Existing rows are updated; missing rows
-            are left unchanged.
+            are left unchanged. Import marks the cache stale, then rebuilds it
+            in short steps.
           </CardDescription>
         </CardHeader>
         <CardContent>

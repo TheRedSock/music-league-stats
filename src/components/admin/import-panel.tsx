@@ -12,6 +12,7 @@ import {
   type ImportKind,
   type ImportManifest,
 } from "@/lib/import-data";
+import { runSteppedAnalyticsRefresh } from "@/lib/analytics-refresh-client";
 import {
   parseImportFile,
   sha256Json,
@@ -25,14 +26,6 @@ type ImportSummary = {
   rounds: number;
   submissions: number;
   votes: number;
-};
-
-type AnalyticsRefreshResponse = {
-  status: "missing" | "pending" | "processing" | "completed" | "failed";
-  job?: {
-    errorMessage?: string | null;
-    summary?: Record<string, number> | null;
-  } | null;
 };
 
 const emptyFiles: Files = {
@@ -58,36 +51,6 @@ async function responseJson<T>(response: Response): Promise<T> {
     throw new Error(result.error ?? "The import request failed.");
   }
   return result;
-}
-
-async function refreshAnalyticsMaterialization(
-  setStatus: (status: string) => void,
-): Promise<void> {
-  setStatus("Refreshing all-leagues analytics…");
-  const started = await responseJson<AnalyticsRefreshResponse>(
-    await fetch("/api/admin/analytics/refresh", { method: "POST" }),
-  );
-  if (started.status === "failed") {
-    throw new Error(
-      started.job?.errorMessage ?? "All-leagues analytics refresh failed.",
-    );
-  }
-  if (started.status === "completed") return;
-
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const status = await responseJson<AnalyticsRefreshResponse>(
-      await fetch("/api/admin/analytics/refresh"),
-    );
-    if (status.status === "completed") return;
-    if (status.status === "failed") {
-      throw new Error(
-        status.job?.errorMessage ?? "All-leagues analytics refresh failed.",
-      );
-    }
-    setStatus("Refreshing all-leagues analytics…");
-  }
-  throw new Error("All-leagues analytics refresh timed out.");
 }
 
 export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
@@ -175,7 +138,7 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
       );
       if (batch.status === "completed" && batch.summary) {
         setSummary(batch.summary);
-        await refreshAnalyticsMaterialization(setStatus);
+        await runSteppedAnalyticsRefresh((message) => setStatus(message));
         setStatus("This exact import was already completed; analytics are fresh.");
         router.refresh();
         return;
@@ -206,7 +169,7 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
         }),
       );
       setSummary(completed.summary);
-      await refreshAnalyticsMaterialization(setStatus);
+      await runSteppedAnalyticsRefresh((message) => setStatus(message));
       setStatus("Import completed successfully.");
       router.refresh();
     } catch (caught) {
