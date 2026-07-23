@@ -1378,13 +1378,13 @@ async function getMaterializedDashboardData(
           `
           : sql`
       select
-        submitter_id as id,
-        min(submitter_name) as name,
+        "submitterId" as id,
+        min("submitterName") as name,
         sum(points)::int as "totalPoints",
-        avg(support_index) as "normalizedIndex",
-        count(distinct round_id)::int as "enteredRounds"
+        avg("supportIndex") as "normalizedIndex",
+        count(distinct "roundId")::int as "enteredRounds"
       from ranked_songs
-      group by submitter_id
+      group by "submitterId"
       order by "totalPoints" desc, name asc
       limit 100
           `
