@@ -55,12 +55,21 @@ export async function runSteppedAnalyticsRefresh(
     );
   }
 
+  if (status.status === "completed") {
+    onProgress("All-leagues analytics refresh completed.", null);
+    return status;
+  }
+
   if (status.status === "failed") {
     throw new Error(
       status.job?.errorMessage ?? "All-leagues analytics refresh failed.",
     );
   }
 
-  onProgress("All-leagues analytics refresh completed.", null);
-  return status;
+  // pending/missing can happen if another admin action invalidated mats
+  // mid-refresh; do not treat that as success.
+  throw new Error(
+    status.job?.errorMessage ??
+      "All-leagues analytics refresh did not complete.",
+  );
 }
