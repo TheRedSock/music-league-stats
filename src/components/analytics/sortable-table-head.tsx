@@ -5,8 +5,8 @@ import { TableHead } from "@/components/ui/table";
 import {
   buildAnalyticsHref,
   type QueryValue,
-  type SortDirection,
-} from "@/lib/analytics";
+} from "@/lib/analytics-url";
+import type { SortDirection } from "@/lib/analytics";
 import { cn } from "@/lib/utils";
 
 export function SortableTableHead({

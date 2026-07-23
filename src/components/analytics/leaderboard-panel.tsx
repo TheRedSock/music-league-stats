@@ -5,11 +5,15 @@ import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  buildAnalyticsHref,
-  type DashboardData,
-  type QueryValue,
-} from "@/lib/analytics";
+import { buildAnalyticsHref, type QueryValue } from "@/lib/analytics-url";
+
+type LeaderboardRow = {
+  id: string;
+  name: string;
+  totalPoints: number;
+  normalizedIndex: number | null;
+  enteredRounds: number;
+};
 
 type Mode = "points" | "normalized";
 
@@ -20,7 +24,7 @@ export function LeaderboardPanel({
   rows,
 }: {
   filterParams?: Record<string, QueryValue>;
-  rows: DashboardData["leaderboard"];
+  rows: LeaderboardRow[];
 }) {
   const [mode, setMode] = useState<Mode>("points");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
