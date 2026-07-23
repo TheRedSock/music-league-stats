@@ -348,8 +348,10 @@ export type SubmissionFactsData = {
   densestRounds: Array<{
     leagueName: string;
     leagueSlug: string;
+    leagueMusicLeagueId: string | null;
     roundName: string;
     roundOrdinal: number;
+    sourceRoundId: string;
     submissions: number;
     submitters: number;
   }>;
@@ -357,17 +359,19 @@ export type SubmissionFactsData = {
     playerId: string;
     playerName: string;
     songs: number;
+    enteredRounds: number;
     avgPositiveReach: number;
     avgRoundPointShare: number;
-    appealRatio: number;
+    appealSpread: number;
   }>;
   nicheDevotionPlayers: Array<{
     playerId: string;
     playerName: string;
     songs: number;
+    enteredRounds: number;
     avgPositiveReach: number;
     avgRoundPointShare: number;
-    appealRatio: number;
+    appealSpread: number;
   }>;
   thinSpreadSongs: Array<{
     songId: string;
@@ -377,11 +381,13 @@ export type SubmissionFactsData = {
     submitterName: string;
     leagueName: string;
     leagueSlug: string;
+    leagueMusicLeagueId: string | null;
+    sourceRoundId: string;
     roundName: string;
     roundOrdinal: number;
     positiveReach: number;
     roundPointShare: number;
-    appealRatio: number;
+    appealSpread: number;
     points: number;
   }>;
   cultClassicSongs: Array<{
@@ -392,56 +398,65 @@ export type SubmissionFactsData = {
     submitterName: string;
     leagueName: string;
     leagueSlug: string;
+    leagueMusicLeagueId: string | null;
+    sourceRoundId: string;
     roundName: string;
     roundOrdinal: number;
     positiveReach: number;
     roundPointShare: number;
-    appealRatio: number;
+    appealSpread: number;
     points: number;
   }>;
   closestRaces: Array<{
     leagueName: string;
     leagueSlug: string;
+    leagueMusicLeagueId: string | null;
     roundId: string;
+    sourceRoundId: string;
     roundName: string;
     roundOrdinal: number;
     songs: number;
     maxRoundPointShare: number;
     topTwoShareGap: number;
+    topSongs: Array<{
+      title: string;
+      artist: string;
+      points: number;
+      roundPointShare: number | null;
+    }>;
   }>;
   biggestLandslides: Array<{
     leagueName: string;
     leagueSlug: string;
+    leagueMusicLeagueId: string | null;
     roundId: string;
+    sourceRoundId: string;
     roundName: string;
     roundOrdinal: number;
     songs: number;
     maxRoundPointShare: number;
     topTwoShareGap: number;
+    topSongs: Array<{
+      title: string;
+      artist: string;
+      points: number;
+      roundPointShare: number | null;
+    }>;
   }>;
-  submissionOrderBias: {
+  playlistPositionBias: {
     sampleSize: number;
+    indexedRounds: number;
     correlationPoints: number | null;
     correlationShare: number | null;
-    earlyHalfAvgPoints: number | null;
-    lateHalfAvgPoints: number | null;
-    earlyVsLatePointsDeltaPct: number | null;
+    buckets: Array<{
+      bucket: string;
+      bucketMin: number;
+      bucketMax: number;
+      songs: number;
+      avgPoints: number;
+      avgRoundPointShare: number | null;
+    }>;
   };
-  submissionOrderExtremes: Array<{
-    songId: string;
-    title: string;
-    artist: string;
-    submitterName: string;
-    leagueName: string;
-    leagueSlug: string;
-    roundName: string;
-    roundOrdinal: number;
-    orderPercentile: number;
-    points: number;
-    roundPointShare: number | null;
-    residual: number;
-    side: "early-over" | "late-over";
-  }>;
 };
 
 type SubmissionFactsPackedQueryRow = {
@@ -459,8 +474,7 @@ type SubmissionFactsPackedQueryRow = {
   cultClassicSongs: unknown;
   closestRaces: unknown;
   biggestLandslides: unknown;
-  submissionOrderBias: unknown;
-  submissionOrderExtremes: unknown;
+  playlistPositionBias: unknown;
 };
 
 const UUID_PATTERN =
@@ -648,10 +662,10 @@ export function safeRatio(
     : null;
 }
 
-/** Minimum entered rounds to qualify for round-adjusted rankings (half of scope, at least 1). */
+/** Minimum entered rounds to qualify for round-adjusted rankings (~1/3 of scope, at least 1). */
 export function qualificationRoundFloor(scopeRounds: number): number {
   if (!Number.isFinite(scopeRounds) || scopeRounds <= 0) return 1;
-  return Math.max(1, Math.ceil(scopeRounds / 2));
+  return Math.max(1, Math.ceil(scopeRounds / 3));
 }
 
 export function supportIndex(
@@ -992,10 +1006,10 @@ export function voteOpportunityCtes(filter: AnalyticsFilter): SQL {
     scope_thresholds as (
       select
         count(*)::int as scope_rounds,
-        greatest(1, ceil(count(*)::numeric / 2)::int) as minimum_shared_rounds,
+        greatest(1, ceil(count(*)::numeric / 3)::int) as minimum_shared_rounds,
         least(
           20,
-          greatest(5, ceil(count(*)::numeric / 2)::int * 5)
+          greatest(5, ceil(count(*)::numeric / 3)::int * 5)
         )::int as minimum_comparable_features
       from selected_rounds
     ),
@@ -3309,14 +3323,13 @@ function jsonObject<T>(value: unknown): T | null {
   return null;
 }
 
-const EMPTY_SUBMISSION_ORDER_BIAS: SubmissionFactsData["submissionOrderBias"] =
+const EMPTY_PLAYLIST_POSITION_BIAS: SubmissionFactsData["playlistPositionBias"] =
   {
     sampleSize: 0,
+    indexedRounds: 0,
     correlationPoints: null,
     correlationShare: null,
-    earlyHalfAvgPoints: null,
-    lateHalfAvgPoints: null,
-    earlyVsLatePointsDeltaPct: null,
+    buckets: [],
   };
 
 export async function getSubmissionFactsData(
@@ -3429,16 +3442,24 @@ export async function getSubmissionFactsData(
       select
         l.name as "leagueName",
         l.slug as "leagueSlug",
+        l.music_league_id as "leagueMusicLeagueId",
         sr.name as "roundName",
         sr.ordinal as "roundOrdinal",
+        sr.source_round_id as "sourceRoundId",
         count(s.id)::int as submissions,
         count(distinct s.submitter_id)::int as submitters
       from selected_rounds sr
       join leagues l on l.id = sr.league_id
       left join submissions s on s.round_id = sr.id
-      group by l.id, sr.id, sr.name, sr.ordinal
+      group by l.id, sr.id, sr.name, sr.ordinal, sr.source_round_id
       order by submissions desc, submitters desc, "leagueName" asc, "roundOrdinal" asc
       limit 100
+      ),
+      scope_meta as (
+        select
+          count(*)::int as scope_rounds,
+          greatest(1, ceil(count(*)::numeric / 3)::int) as minimum_rounds
+        from selected_rounds
       ),
       scoped_songs as (
         select
@@ -3449,45 +3470,51 @@ export async function getSubmissionFactsData(
           ss.submitter_name,
           ss.league_name,
           ss.league_slug,
+          ss.league_music_league_id,
           ss.round_id,
+          ss.source_round_id,
           ss.round_name,
           ss.round_ordinal,
-          ss.submitted_at,
           ss.points,
           ss.eligible_rows,
           ss.positive_reach,
-          ss.round_point_share
+          ss.round_point_share,
+          sub.playlist_index
         from analytics_song_stats ss
         join selected_rounds sr on sr.id = ss.round_id
+        join submissions sub on sub.id = ss.id
       ),
       player_appeal as (
         select
           ss.submitter_id as "playerId",
           min(ss.submitter_name) as "playerName",
           count(*)::int as songs,
+          count(distinct ss.round_id)::int as "enteredRounds",
           avg(ss.positive_reach)::double precision as "avgPositiveReach",
           avg(ss.round_point_share)::double precision as "avgRoundPointShare",
           (
-            avg(ss.round_point_share) / nullif(avg(ss.positive_reach), 0)
-          )::double precision as "appealRatio"
+            avg(ss.positive_reach) - avg(ss.round_point_share)
+          )::double precision as "appealSpread"
         from scoped_songs ss
         where ss.positive_reach is not null
           and ss.round_point_share is not null
           and ss.eligible_rows >= 5
         group by ss.submitter_id
         having count(*) >= 3
-          and avg(ss.positive_reach) > 0
+          and count(distinct ss.round_id) >= (select minimum_rounds from scope_meta)
       ),
       crowd_pleaser_players as (
         select *
         from player_appeal
-        order by "appealRatio" asc, "avgPositiveReach" desc, "playerName" asc
+        where "appealSpread" > 0
+        order by "appealSpread" desc, "avgPositiveReach" desc, "playerName" asc
         limit 100
       ),
       niche_devotion_players as (
         select *
         from player_appeal
-        order by "appealRatio" desc, "avgRoundPointShare" desc, "playerName" asc
+        where "appealSpread" < 0
+        order by "appealSpread" asc, "avgRoundPointShare" desc, "playerName" asc
         limit 100
       ),
       song_appeal as (
@@ -3499,30 +3526,33 @@ export async function getSubmissionFactsData(
           ss.submitter_name as "submitterName",
           ss.league_name as "leagueName",
           ss.league_slug as "leagueSlug",
+          ss.league_music_league_id as "leagueMusicLeagueId",
+          ss.source_round_id as "sourceRoundId",
           ss.round_name as "roundName",
           ss.round_ordinal as "roundOrdinal",
           ss.positive_reach as "positiveReach",
           ss.round_point_share as "roundPointShare",
           (
-            ss.round_point_share / nullif(ss.positive_reach, 0)
-          )::double precision as "appealRatio",
+            ss.positive_reach - ss.round_point_share
+          )::double precision as "appealSpread",
           ss.points
         from scoped_songs ss
         where ss.positive_reach is not null
           and ss.round_point_share is not null
-          and ss.positive_reach > 0
           and ss.eligible_rows >= 5
       ),
       thin_spread_songs as (
         select *
         from song_appeal
-        order by "appealRatio" asc, "positiveReach" desc, title asc
+        where "appealSpread" > 0
+        order by "appealSpread" desc, "positiveReach" desc, title asc
         limit 100
       ),
       cult_classic_songs as (
         select *
         from song_appeal
-        order by "appealRatio" desc, "roundPointShare" desc, title asc
+        where "appealSpread" < 0
+        order by "appealSpread" asc, "roundPointShare" desc, title asc
         limit 100
       ),
       round_share_ranks as (
@@ -3530,8 +3560,13 @@ export async function getSubmissionFactsData(
           ss.round_id,
           ss.league_name,
           ss.league_slug,
+          ss.league_music_league_id,
+          ss.source_round_id,
           ss.round_name,
           ss.round_ordinal,
+          ss.song_title,
+          ss.artist_name,
+          ss.points,
           ss.round_point_share,
           row_number() over (
             partition by ss.round_id
@@ -3545,7 +3580,9 @@ export async function getSubmissionFactsData(
         select
           r.league_name as "leagueName",
           r.league_slug as "leagueSlug",
+          r.league_music_league_id as "leagueMusicLeagueId",
           r.round_id as "roundId",
+          r.source_round_id as "sourceRoundId",
           r.round_name as "roundName",
           r.round_ordinal as "roundOrdinal",
           max(r.songs)::int as songs,
@@ -3554,13 +3591,31 @@ export async function getSubmissionFactsData(
           (
             max(case when r.share_rank = 1 then r.round_point_share end)
             - max(case when r.share_rank = 2 then r.round_point_share end)
-          )::double precision as "topTwoShareGap"
+          )::double precision as "topTwoShareGap",
+          (
+            select coalesce(
+              json_agg(
+                jsonb_build_object(
+                  'title', t.song_title,
+                  'artist', t.artist_name,
+                  'points', t.points,
+                  'roundPointShare', t.round_point_share
+                )
+                order by t.share_rank
+              ),
+              '[]'::json
+            )
+            from round_share_ranks t
+            where t.round_id = r.round_id and t.share_rank <= 3
+          ) as "topSongs"
         from round_share_ranks r
         where r.songs >= 3
         group by
           r.round_id,
           r.league_name,
           r.league_slug,
+          r.league_music_league_id,
+          r.source_round_id,
           r.round_name,
           r.round_ordinal
         having max(case when r.share_rank = 2 then r.round_point_share end) is not null
@@ -3579,100 +3634,82 @@ export async function getSubmissionFactsData(
       ),
       ordered_songs as (
         select
-          ss.id,
-          ss.song_title,
-          ss.artist_name,
-          ss.submitter_name,
-          ss.league_name,
-          ss.league_slug,
-          ss.round_id,
-          ss.round_name,
-          ss.round_ordinal,
           ss.points,
           ss.round_point_share,
           case
-            when count(*) over (partition by ss.round_id) <= 1 then 0.5
-            else (
-              row_number() over (
-                partition by ss.round_id
-                order by ss.submitted_at asc, ss.id asc
-              ) - 1
-            )::double precision
-              / (count(*) over (partition by ss.round_id) - 1)::double precision
-          end as order_percentile
+            when count(*) filter (where ss.playlist_index is not null)
+              over (partition by ss.round_id) <= 1
+            then null
+            when ss.playlist_index is null then null
+            else ss.playlist_index::double precision
+              / nullif(
+                (
+                  count(*) filter (where ss.playlist_index is not null)
+                    over (partition by ss.round_id)
+                  - 1
+                ),
+                0
+              )::double precision
+          end as position_percentile
         from scoped_songs ss
+        where ss.playlist_index is not null
       ),
-      order_bias_stats as (
+      playlist_buckets as (
+        select
+          case
+            when position_percentile < 0.25 then '0-25%'
+            when position_percentile < 0.5 then '25-50%'
+            when position_percentile < 0.75 then '50-75%'
+            else '75-100%'
+          end as bucket,
+          case
+            when position_percentile < 0.25 then 0.0
+            when position_percentile < 0.5 then 0.25
+            when position_percentile < 0.75 then 0.5
+            else 0.75
+          end as "bucketMin",
+          case
+            when position_percentile < 0.25 then 0.25
+            when position_percentile < 0.5 then 0.5
+            when position_percentile < 0.75 then 0.75
+            else 1.0
+          end as "bucketMax",
+          count(*)::int as songs,
+          avg(points)::double precision as "avgPoints",
+          avg(round_point_share)::double precision as "avgRoundPointShare"
+        from ordered_songs
+        where position_percentile is not null
+        group by 1, 2, 3
+      ),
+      playlist_bias_stats as (
         select
           count(*)::int as "sampleSize",
-          corr(order_percentile, points::double precision) as "correlationPoints",
-          corr(order_percentile, round_point_share) as "correlationShare",
-          avg(points) filter (where order_percentile <= 0.5)::double precision
-            as "earlyHalfAvgPoints",
-          avg(points) filter (where order_percentile > 0.5)::double precision
-            as "lateHalfAvgPoints",
-          case
-            when avg(points) filter (where order_percentile > 0.5) is null
-              or avg(points) filter (where order_percentile > 0.5) = 0
-            then null
-            else (
-              avg(points) filter (where order_percentile <= 0.5)
-              - avg(points) filter (where order_percentile > 0.5)
-            ) / avg(points) filter (where order_percentile > 0.5)
-          end as "earlyVsLatePointsDeltaPct"
-        from ordered_songs
-      ),
-      order_residuals as (
-        select
-          os.*,
           (
-            os.points::double precision
-            - avg(os.points::double precision) over (partition by os.round_id)
-          ) as residual
-        from ordered_songs os
-      ),
-      submission_order_extremes as (
-        (
-          select
-            id as "songId",
-            song_title as title,
-            artist_name as artist,
-            submitter_name as "submitterName",
-            league_name as "leagueName",
-            league_slug as "leagueSlug",
-            round_name as "roundName",
-            round_ordinal as "roundOrdinal",
-            order_percentile as "orderPercentile",
-            points,
-            round_point_share as "roundPointShare",
-            residual,
-            'early-over'::text as side
-          from order_residuals
-          where order_percentile <= 0.5
-          order by residual desc, points desc, title asc
-          limit 50
-        )
-        union all
-        (
-          select
-            id as "songId",
-            song_title as title,
-            artist_name as artist,
-            submitter_name as "submitterName",
-            league_name as "leagueName",
-            league_slug as "leagueSlug",
-            round_name as "roundName",
-            round_ordinal as "roundOrdinal",
-            order_percentile as "orderPercentile",
-            points,
-            round_point_share as "roundPointShare",
-            residual,
-            'late-over'::text as side
-          from order_residuals
-          where order_percentile > 0.5
-          order by residual desc, points desc, title asc
-          limit 50
-        )
+            select count(distinct ss.round_id)::int
+            from scoped_songs ss
+            where ss.playlist_index is not null
+          ) as "indexedRounds",
+          corr(position_percentile, points::double precision) as "correlationPoints",
+          corr(position_percentile, round_point_share) as "correlationShare",
+          (
+            select coalesce(
+              json_agg(
+                jsonb_build_object(
+                  'bucket', b.bucket,
+                  'bucketMin', b."bucketMin",
+                  'bucketMax', b."bucketMax",
+                  'songs', b.songs,
+                  'avgPoints', b."avgPoints",
+                  'avgRoundPointShare', b."avgRoundPointShare"
+                )
+                order by b."bucketMin"
+              ),
+              '[]'::json
+            )
+            from playlist_buckets b
+          ) as buckets
+        from ordered_songs
+        where position_percentile is not null
       )
       select
         (
@@ -3708,19 +3745,19 @@ export async function getSubmissionFactsData(
           from densest_rounds
         ) as "densestRounds",
         (
-          select coalesce(json_agg(to_jsonb(crowd_pleaser_players) order by "appealRatio" asc, "avgPositiveReach" desc, "playerName" asc), '[]'::json)
+          select coalesce(json_agg(to_jsonb(crowd_pleaser_players) order by "appealSpread" desc, "avgPositiveReach" desc, "playerName" asc), '[]'::json)
           from crowd_pleaser_players
         ) as "crowdPleaserPlayers",
         (
-          select coalesce(json_agg(to_jsonb(niche_devotion_players) order by "appealRatio" desc, "avgRoundPointShare" desc, "playerName" asc), '[]'::json)
+          select coalesce(json_agg(to_jsonb(niche_devotion_players) order by "appealSpread" asc, "avgRoundPointShare" desc, "playerName" asc), '[]'::json)
           from niche_devotion_players
         ) as "nicheDevotionPlayers",
         (
-          select coalesce(json_agg(to_jsonb(thin_spread_songs) order by "appealRatio" asc, "positiveReach" desc, title asc), '[]'::json)
+          select coalesce(json_agg(to_jsonb(thin_spread_songs) order by "appealSpread" desc, "positiveReach" desc, title asc), '[]'::json)
           from thin_spread_songs
         ) as "thinSpreadSongs",
         (
-          select coalesce(json_agg(to_jsonb(cult_classic_songs) order by "appealRatio" desc, "roundPointShare" desc, title asc), '[]'::json)
+          select coalesce(json_agg(to_jsonb(cult_classic_songs) order by "appealSpread" asc, "roundPointShare" desc, title asc), '[]'::json)
           from cult_classic_songs
         ) as "cultClassicSongs",
         (
@@ -3732,14 +3769,18 @@ export async function getSubmissionFactsData(
           from biggest_landslides
         ) as "biggestLandslides",
         (
-          select to_jsonb(order_bias_stats)
-          from order_bias_stats
-        ) as "submissionOrderBias",
-        (
-          select coalesce(json_agg(to_jsonb(submission_order_extremes) order by residual desc, title asc), '[]'::json)
-          from submission_order_extremes
-        ) as "submissionOrderExtremes"
+          select to_jsonb(playlist_bias_stats)
+          from playlist_bias_stats
+        ) as "playlistPositionBias"
     `);
+
+  const playlistBias =
+    jsonObject<SubmissionFactsData["playlistPositionBias"]>(
+      row?.playlistPositionBias,
+    ) ?? EMPTY_PLAYLIST_POSITION_BIAS;
+  const buckets = jsonRows<
+    SubmissionFactsData["playlistPositionBias"]["buckets"][number]
+  >(playlistBias.buckets);
 
   return {
     artistLoyalists: jsonRows<SubmissionFactsData["artistLoyalists"][number]>(
@@ -3747,10 +3788,16 @@ export async function getSubmissionFactsData(
     ),
     biggestLandslides: jsonRows<
       SubmissionFactsData["biggestLandslides"][number]
-    >(row?.biggestLandslides),
+    >(row?.biggestLandslides).map((race) => ({
+      ...race,
+      topSongs: jsonRows(race.topSongs),
+    })),
     closestRaces: jsonRows<SubmissionFactsData["closestRaces"][number]>(
       row?.closestRaces,
-    ),
+    ).map((race) => ({
+      ...race,
+      topSongs: jsonRows(race.topSongs),
+    })),
     crowdPleaserPlayers: jsonRows<
       SubmissionFactsData["crowdPleaserPlayers"][number]
     >(row?.crowdPleaserPlayers),
@@ -3772,6 +3819,7 @@ export async function getSubmissionFactsData(
     nicheDevotionPlayers: jsonRows<
       SubmissionFactsData["nicheDevotionPlayers"][number]
     >(row?.nicheDevotionPlayers),
+    playlistPositionBias: { ...playlistBias, buckets },
     prolificSubmitters: jsonRows<
       SubmissionFactsData["prolificSubmitters"][number]
     >(row?.prolificSubmitters),
@@ -3781,13 +3829,6 @@ export async function getSubmissionFactsData(
     shortestTitles: jsonRows<SubmissionFactsData["shortestTitles"][number]>(
       row?.shortestTitles,
     ),
-    submissionOrderBias:
-      jsonObject<SubmissionFactsData["submissionOrderBias"]>(
-        row?.submissionOrderBias,
-      ) ?? EMPTY_SUBMISSION_ORDER_BIAS,
-    submissionOrderExtremes: jsonRows<
-      SubmissionFactsData["submissionOrderExtremes"][number]
-    >(row?.submissionOrderExtremes),
     thinSpreadSongs: jsonRows<SubmissionFactsData["thinSpreadSongs"][number]>(
       row?.thinSpreadSongs,
     ),

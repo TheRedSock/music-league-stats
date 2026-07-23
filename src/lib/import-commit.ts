@@ -377,26 +377,37 @@ export async function commitImportBatch(
       roundRecords.map((row) => [row.sourceRoundId, row.id]),
     );
 
+    const playlistIndexBySubmission = new Map<string, number>();
+    const playlistCounters = new Map<string, number>();
+    for (const row of imported.submissions) {
+      const key = sourceSubmissionId(row.roundId, row.spotifyUri);
+      if (playlistIndexBySubmission.has(key)) continue;
+      const nextIndex = playlistCounters.get(row.roundId) ?? 0;
+      playlistIndexBySubmission.set(key, nextIndex);
+      playlistCounters.set(row.roundId, nextIndex + 1);
+    }
+
     for (const group of batches(imported.submissions)) {
       await tx
         .insert(submissions)
         .values(
-          group.map((row) => ({
-            leagueId: batch.leagueId,
-            roundId: roundIds.get(row.roundId)!,
-            sourceSubmissionId: sourceSubmissionId(
-              row.roundId,
-              row.spotifyUri,
-            ),
-            submitterId: competitorIds.get(row.submitterId)!,
-            spotifyUri: row.spotifyUri,
-            songTitle: row.title,
-            artistName: row.artists,
-            albumName: row.album,
-            comment: row.comment,
-            submittedAt: new Date(row.created),
-            visibleToVoters: row.visibleToVoters,
-          })),
+          group.map((row) => {
+            const key = sourceSubmissionId(row.roundId, row.spotifyUri);
+            return {
+              leagueId: batch.leagueId,
+              roundId: roundIds.get(row.roundId)!,
+              sourceSubmissionId: key,
+              submitterId: competitorIds.get(row.submitterId)!,
+              spotifyUri: row.spotifyUri,
+              songTitle: row.title,
+              artistName: row.artists,
+              albumName: row.album,
+              comment: row.comment,
+              submittedAt: new Date(row.created),
+              playlistIndex: playlistIndexBySubmission.get(key) ?? 0,
+              visibleToVoters: row.visibleToVoters,
+            };
+          }),
         )
         .onConflictDoUpdate({
           target: [submissions.roundId, submissions.spotifyUri],
@@ -408,6 +419,7 @@ export async function commitImportBatch(
             albumName: sql`excluded.album_name`,
             comment: sql`excluded.comment`,
             submittedAt: sql`excluded.submitted_at`,
+            playlistIndex: sql`excluded.playlist_index`,
             visibleToVoters: sql`excluded.visible_to_voters`,
             updatedAt: sql`now()`,
           },

@@ -67,9 +67,10 @@ describe("analytics metric helpers", () => {
     expect(safeRatio(Number.NaN, 2)).toBeNull();
   });
 
-  it("requires half of scope rounds for round-adjusted qualification", () => {
-    expect(qualificationRoundFloor(37)).toBe(19);
+  it("requires one third of scope rounds for round-adjusted qualification", () => {
+    expect(qualificationRoundFloor(37)).toBe(13);
     expect(qualificationRoundFloor(4)).toBe(2);
+    expect(qualificationRoundFloor(3)).toBe(1);
     expect(qualificationRoundFloor(1)).toBe(1);
     expect(qualificationRoundFloor(0)).toBe(1);
   });

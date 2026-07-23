@@ -167,6 +167,8 @@ export const submissions = pgTable(
     albumName: text("album_name"),
     comment: text("comment"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+    /** 0-based slate/playlist order within the round, from submissions.csv row order. */
+    playlistIndex: integer("playlist_index"),
     visibleToVoters: boolean("visible_to_voters").notNull(),
     ...timestamps,
   },

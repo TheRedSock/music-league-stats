@@ -149,7 +149,7 @@ function AlignmentPanel({
               </h2>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
                 Alignment appears after two voters have enough comparable ballot
-                features and shared voted rounds in at least half of the
+                features and shared voted rounds in at least one third of the
                 selected scope.
               </p>
             </>

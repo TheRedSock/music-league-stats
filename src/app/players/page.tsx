@@ -179,8 +179,8 @@ export default async function PlayersPage({
           {data.rows.length === 1 ? "player" : "players"}
         </p>
         <p className="text-xs text-zinc-500">
-          Fewer than {data.minimumRounds} entered rounds (half of this scope) is
-          marked provisional; avg round index shows as — until then
+          Fewer than {data.minimumRounds} entered rounds (one third of this scope)
+          is marked provisional; avg round index shows as — until then
         </p>
       </div>
 

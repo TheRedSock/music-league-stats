@@ -32,7 +32,7 @@ export function LeaderboardPanel({
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const normalizedMinimum = Math.max(
     1,
-    Math.ceil((Number.isFinite(scopeRounds) ? scopeRounds : 0) / 2),
+    Math.ceil((Number.isFinite(scopeRounds) ? scopeRounds : 0) / 3),
   );
   const ordered = useMemo(
     () =>
@@ -76,7 +76,7 @@ export function LeaderboardPanel({
             Raw points reward volume. The round index compares each
             player&apos;s points with the expected points for their submitted songs
             from that round&apos;s eligible ballot budgets. Round-adjusted rankings
-            require entering at least half of the selected rounds (
+            require entering at least one third of the selected rounds (
             {normalizedMinimum}+ of {scopeRounds || "—"}).
           </p>
         </div>

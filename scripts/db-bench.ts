@@ -119,10 +119,10 @@ function voteOpportunityCtes(scope: BenchScope): string {
     scope_thresholds as (
       select
         count(*)::int as scope_rounds,
-        greatest(1, ceil(count(*)::numeric / 2)::int) as minimum_shared_rounds,
+        greatest(1, ceil(count(*)::numeric / 3)::int) as minimum_shared_rounds,
         least(
           20,
-          greatest(5, ceil(count(*)::numeric / 2)::int * 5)
+          greatest(5, ceil(count(*)::numeric / 3)::int * 5)
         )::int as minimum_comparable_features
       from selected_rounds
     ),

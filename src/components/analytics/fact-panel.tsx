@@ -1,8 +1,6 @@
-"use client";
+import type { ReactNode } from "react";
 
-import { useState, type ReactNode } from "react";
-
-import { Button } from "@/components/ui/button";
+import { FactPanelDialog } from "@/components/analytics/fact-panel-dialog";
 import {
   Card,
   CardContent,
@@ -10,11 +8,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Dialog } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export const FACT_PREVIEW_LIMIT = 5;
 
+/** Server-friendly panel: preview stays on the server; only the dialog is client. */
 export function FactPanel({
   children,
   className,
@@ -34,45 +32,30 @@ export function FactPanel({
   itemCount: number;
   title: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const canViewAll = itemCount > FACT_PREVIEW_LIMIT && Boolean(dialog);
-
   return (
-    <>
-      <Card className={cn(className)}>
-        <CardHeader>
-          <CardTitle className="text-sm">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {itemCount > 0 ? (
-            children
-          ) : (
-            <p className="text-sm text-zinc-500">{emptyMessage}</p>
-          )}
-          {canViewAll ? (
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => setOpen(true)}
-              size="sm"
-              variant="secondary"
-            >
-              View all ({itemCount})
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
-      {dialog ? (
-        <Dialog
-          className={dialogClassName}
-          description={description}
-          onClose={() => setOpen(false)}
-          open={open}
-          title={title}
-        >
-          {dialog}
-        </Dialog>
-      ) : null}
-    </>
+    <Card className={cn(className)}>
+      <CardHeader>
+        <CardTitle className="text-sm">{title}</CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {itemCount > 0 ? (
+          children
+        ) : (
+          <p className="text-sm text-zinc-500">{emptyMessage}</p>
+        )}
+        {dialog ? (
+          <FactPanelDialog
+            description={description}
+            dialogClassName={dialogClassName}
+            itemCount={itemCount}
+            previewLimit={FACT_PREVIEW_LIMIT}
+            title={title}
+          >
+            {dialog}
+          </FactPanelDialog>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
