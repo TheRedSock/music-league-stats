@@ -45,7 +45,11 @@ function sleep(ms: number): Promise<void> {
 
 export async function runSteppedSpotifyEnrich(
   ambiguousOnly: boolean,
-  onProgress: (message: string, progress: SpotifyEnrichProgress | null) => void,
+  onProgress: (
+    message: string,
+    progress: SpotifyEnrichProgress | null,
+    status?: SpotifyEnrichStatusResponse,
+  ) => void,
 ): Promise<SpotifyEnrichStatusResponse> {
   onProgress(
     ambiguousOnly
@@ -62,27 +66,37 @@ export async function runSteppedSpotifyEnrich(
   );
 
   let lastProcessed = status.progress?.processed ?? 0;
+  onProgress(
+    status.progress?.message ?? "Seeded tracks…",
+    status.progress,
+    status,
+  );
 
   while (status.status === "processing" && status.job) {
     const progress = status.progress;
-    onProgress(
-      progress?.message ?? "Enriching Spotify track artists…",
-      progress,
-    );
-
     const waitMs = progress?.waitingMs ?? 0;
     if (waitMs > 0) {
+      onProgress(
+        progress?.message ??
+          `Waiting ${Math.ceil(waitMs / 1000)}s for Spotify rate limit…`,
+        progress,
+        status,
+      );
       await sleep(waitMs);
     } else if (
       progress != null &&
       progress.processed === lastProcessed &&
       progress.processed > 0
     ) {
-      // No forward progress on the last step — brief backoff before retrying.
       await sleep(1_000);
     }
 
     lastProcessed = progress?.processed ?? lastProcessed;
+    onProgress(
+      "Fetching next Spotify batch…",
+      progress,
+      status,
+    );
     status = await responseJson<SpotifyEnrichStatusResponse>(
       await fetch("/api/admin/enrich/artists", {
         method: "POST",
@@ -90,10 +104,18 @@ export async function runSteppedSpotifyEnrich(
         body: JSON.stringify({ action: "advance", jobId: status.job.id }),
       }),
     );
+    onProgress(
+      status.progress?.message ??
+        (status.status === "completed"
+          ? "Spotify artist enrich completed."
+          : "Enriching Spotify track artists…"),
+      status.progress,
+      status,
+    );
   }
 
   if (status.status === "completed") {
-    onProgress("Spotify artist enrich completed.", null);
+    onProgress("Spotify artist enrich completed.", null, status);
     return status;
   }
 

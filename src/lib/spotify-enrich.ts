@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 import { db, type Database } from "@/db";
@@ -23,8 +23,8 @@ import {
 const ENRICHMENT_LOCK_KEY = 73_730_011;
 /** Keep each advance under typical serverless limits. */
 const ADVANCE_BUDGET_MS = 8_000;
-/** Pending ids claimed per advance (multiple Spotify batches of 50). */
-const IDS_PER_ADVANCE = SPOTIFY_MAX_IDS_PER_REQUEST * 4;
+/** One Spotify batch per advance — avoids long per-track DB write loops. */
+const IDS_PER_ADVANCE = SPOTIFY_MAX_IDS_PER_REQUEST;
 
 /**
  * Music League CSV artist strings that look like multi-credit / collab labels.
@@ -67,6 +67,30 @@ function emptyCounts(): SpotifyEnrichmentCounts {
     error: 0,
     ambiguousPending: 0,
     allPending: 0,
+  };
+}
+
+export async function getSpotifyEnrichmentTableCounts(
+  database: Database = db,
+): Promise<Pick<SpotifyEnrichmentCounts, "enrichedOk" | "pending" | "notFound" | "error">> {
+  const [row] = await database.execute<{
+    enriched_ok: number;
+    pending: number;
+    not_found: number;
+    error: number;
+  }>(sql`
+    select
+      count(*) filter (where status = 'ok')::int as enriched_ok,
+      count(*) filter (where status = 'pending')::int as pending,
+      count(*) filter (where status = 'not_found')::int as not_found,
+      count(*) filter (where status = 'error')::int as error
+    from spotify_track_enrichments
+  `);
+  return {
+    enrichedOk: row?.enriched_ok ?? 0,
+    pending: row?.pending ?? 0,
+    notFound: row?.not_found ?? 0,
+    error: row?.error ?? 0,
   };
 }
 
@@ -301,50 +325,72 @@ export async function startSpotifyEnrichmentJob(
   };
 }
 
-async function applyTrackResult(
+async function applyTrackResultsBatch(
   database: Database,
-  trackId: string,
-  track: SpotifyTrackResult | null,
-): Promise<"ok" | "not_found"> {
+  entries: Array<{ id: string; track: SpotifyTrackResult | null }>,
+): Promise<{ ok: number; notFound: number }> {
+  if (entries.length === 0) return { ok: 0, notFound: 0 };
+
   return database.transaction(async (tx) => {
+    const ids = entries.map((entry) => entry.id);
     await tx
       .delete(spotifyTrackArtists)
-      .where(eq(spotifyTrackArtists.spotifyTrackId, trackId));
+      .where(inArray(spotifyTrackArtists.spotifyTrackId, ids));
 
-    if (!track) {
-      await tx
-        .update(spotifyTrackEnrichments)
-        .set({
-          enrichedAt: new Date(),
-          errorMessage: "Track not found on Spotify.",
-          status: "not_found",
-          updatedAt: new Date(),
-        })
-        .where(eq(spotifyTrackEnrichments.spotifyTrackId, trackId));
-      return "not_found";
-    }
+    const artistRows: Array<{
+      artistName: string;
+      artistSpotifyId: string;
+      position: number;
+      spotifyTrackId: string;
+    }> = [];
+    const okIds: string[] = [];
+    const notFoundIds: string[] = [];
 
-    if (track.artists.length > 0) {
-      await tx.insert(spotifyTrackArtists).values(
-        track.artists.map((artist, position) => ({
+    for (const { id, track } of entries) {
+      if (!track) {
+        notFoundIds.push(id);
+        continue;
+      }
+      okIds.push(id);
+      for (const [position, artist] of track.artists.entries()) {
+        artistRows.push({
           artistName: artist.name,
           artistSpotifyId: artist.id,
           position,
-          spotifyTrackId: trackId,
-        })),
-      );
+          spotifyTrackId: id,
+        });
+      }
     }
 
-    await tx
-      .update(spotifyTrackEnrichments)
-      .set({
-        enrichedAt: new Date(),
-        errorMessage: null,
-        status: "ok",
-        updatedAt: new Date(),
-      })
-      .where(eq(spotifyTrackEnrichments.spotifyTrackId, trackId));
-    return "ok";
+    if (artistRows.length > 0) {
+      await tx.insert(spotifyTrackArtists).values(artistRows);
+    }
+
+    const now = new Date();
+    if (okIds.length > 0) {
+      await tx
+        .update(spotifyTrackEnrichments)
+        .set({
+          enrichedAt: now,
+          errorMessage: null,
+          status: "ok",
+          updatedAt: now,
+        })
+        .where(inArray(spotifyTrackEnrichments.spotifyTrackId, okIds));
+    }
+    if (notFoundIds.length > 0) {
+      await tx
+        .update(spotifyTrackEnrichments)
+        .set({
+          enrichedAt: now,
+          errorMessage: "Track not found on Spotify.",
+          status: "not_found",
+          updatedAt: now,
+        })
+        .where(inArray(spotifyTrackEnrichments.spotifyTrackId, notFoundIds));
+    }
+
+    return { ok: okIds.length, notFound: notFoundIds.length };
   });
 }
 
@@ -451,50 +497,43 @@ export async function advanceSpotifyEnrichmentJob(
       },
     });
 
+    const remaining = new Set(remainingIds);
+    const entries = ids
+      .filter((id) => !remaining.has(id) && results.has(id))
+      .map((id) => ({ id, track: results.get(id) ?? null }));
+
     let okDelta = 0;
     let notFoundDelta = 0;
     let errorDelta = 0;
-    const remaining = new Set(remainingIds);
-
-    for (const id of ids) {
-      if (remaining.has(id)) continue;
-      if (!results.has(id)) continue;
-      try {
-        const outcome = await applyTrackResult(
-          database,
-          id,
-          results.get(id) ?? null,
-        );
-        if (outcome === "ok") okDelta += 1;
-        else notFoundDelta += 1;
-      } catch (error) {
-        errorDelta += 1;
+    try {
+      const applied = await applyTrackResultsBatch(database, entries);
+      okDelta = applied.ok;
+      notFoundDelta = applied.notFound;
+    } catch (error) {
+      errorDelta = entries.length;
+      const message =
+        error instanceof Error ? error.message.slice(0, 500) : "Unknown error";
+      const failedIds = entries.map((entry) => entry.id);
+      if (failedIds.length > 0) {
         await database.transaction(async (tx) => {
           await tx
             .delete(spotifyTrackArtists)
-            .where(eq(spotifyTrackArtists.spotifyTrackId, id));
+            .where(inArray(spotifyTrackArtists.spotifyTrackId, failedIds));
           await tx
             .update(spotifyTrackEnrichments)
             .set({
-              errorMessage:
-                error instanceof Error
-                  ? error.message.slice(0, 500)
-                  : "Unknown error",
+              errorMessage: message,
               status: "error",
               updatedAt: new Date(),
             })
-            .where(eq(spotifyTrackEnrichments.spotifyTrackId, id));
+            .where(inArray(spotifyTrackEnrichments.spotifyTrackId, failedIds));
         });
       }
     }
 
     const processedDelta = okDelta + notFoundDelta + errorDelta;
-    const [pendingLeft] = await database.execute<{ count: number }>(sql`
-      select count(*)::int as count
-      from spotify_track_enrichments
-      where status = 'pending'
-    `);
-    const pendingCount = pendingLeft?.count ?? 0;
+    const tableCounts = await getSpotifyEnrichmentTableCounts(database);
+    const pendingCount = tableCounts.pending;
     const stalledOnBudget =
       processedDelta === 0 && remainingIds.length > 0 && pendingCount > 0;
     const waitMs = stalledOnBudget ? 2_000 : undefined;
@@ -551,7 +590,15 @@ export async function advanceSpotifyEnrichmentJob(
       .returning();
 
     return {
-      ...(await getSpotifyEnrichmentStatus(database)),
+      counts: {
+        enrichedOk: tableCounts.enrichedOk,
+        pending: tableCounts.pending,
+        notFound: tableCounts.notFound,
+        error: tableCounts.error,
+        // Candidate totals are only needed for the start UI; keep cheap mid-job.
+        ambiguousPending: tableCounts.pending,
+        allPending: tableCounts.pending,
+      },
       job: updated ?? job,
       progress: nextProgress,
       status: "processing",
@@ -576,8 +623,16 @@ export async function advanceSpotifyEnrichmentJob(
         })
         .where(eq(spotifyEnrichmentJobs.id, jobId))
         .returning();
+      const tableCounts = await getSpotifyEnrichmentTableCounts(database);
       return {
-        ...(await getSpotifyEnrichmentStatus(database)),
+        counts: {
+          enrichedOk: tableCounts.enrichedOk,
+          pending: tableCounts.pending,
+          notFound: tableCounts.notFound,
+          error: tableCounts.error,
+          ambiguousPending: tableCounts.pending,
+          allPending: tableCounts.pending,
+        },
         job: updated ?? job,
         progress: nextProgress,
         status: "processing",

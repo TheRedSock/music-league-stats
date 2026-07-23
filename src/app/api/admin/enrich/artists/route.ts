@@ -14,6 +14,8 @@ import {
   startSpotifyEnrichmentJob,
 } from "@/lib/spotify-enrich";
 
+export const maxDuration = 60;
+
 const postBodySchema = z.object({
   action: z.enum(["start", "advance"]),
   jobId: z.uuid().optional(),

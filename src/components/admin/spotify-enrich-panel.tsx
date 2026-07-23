@@ -64,9 +64,10 @@ export function SpotifyEnrichPanel({
     try {
       const result = await runSteppedSpotifyEnrich(
         ambiguousOnly,
-        (nextMessage, nextProgress) => {
+        (nextMessage, nextProgress, nextStatus) => {
           setMessage(nextMessage);
           setProgress(nextProgress);
+          if (nextStatus) setStatus(nextStatus);
         },
       );
       setStatus(result);
