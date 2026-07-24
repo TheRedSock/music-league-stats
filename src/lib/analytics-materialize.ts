@@ -118,6 +118,7 @@ async function revalidateAfterMaterialization(): Promise<void> {
   revalidatePath("/songs");
   revalidatePath("/players");
   revalidatePath("/relationships");
+  revalidatePath("/relationships/graphs");
   revalidatePath("/facts");
   revalidatePath("/admin");
 }

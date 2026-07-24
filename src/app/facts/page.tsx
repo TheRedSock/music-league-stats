@@ -1009,7 +1009,7 @@ export default async function FactsPage({
 
       <FactPanel
         className="mt-4"
-        description="Average points and round share by Spotify playlist quartile. Order comes from submissions.csv row order within each round (playlist_index)."
+        description="Average points and round share by equal-count playlist quartiles (extras from n÷4 go to earlier slots: 19→5-5-5-4, 21→6-5-5-5). Order comes from submissions.csv row order within each round. Correlation still uses continuous position percentile."
         emptyMessage="Playlist position indices are missing for this scope. Re-sync submissions.csv, then refresh analytics."
         itemCount={
           hasIndices

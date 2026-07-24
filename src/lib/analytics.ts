@@ -3674,10 +3674,16 @@ export async function getSubmissionFactsData(
         order by "topTwoShareGap" desc, "maxRoundPointShare" desc, "leagueName" asc, "roundOrdinal" asc
         limit 100
       ),
+      -- Equal-count quartiles (see src/lib/playlist-quartiles.ts): extras from
+      -- n % 4 go to earlier buckets (19→5-5-5-4, 21→6-5-5-5). Correlation still
+      -- uses continuous index/(n-1) so boundary songs are not double-counted oddly.
       ordered_songs as (
         select
           ss.points,
           ss.round_point_share,
+          ss.playlist_index,
+          count(*) filter (where ss.playlist_index is not null)
+            over (partition by ss.round_id) as slate_size,
           case
             when count(*) filter (where ss.playlist_index is not null)
               over (partition by ss.round_id) <= 1
@@ -3696,31 +3702,64 @@ export async function getSubmissionFactsData(
         from scoped_songs ss
         where ss.playlist_index is not null
       ),
+      ordered_with_quartile as (
+        select
+          points,
+          round_point_share,
+          position_percentile,
+          slate_size,
+          case
+            when slate_size is null or slate_size < 2 or playlist_index is null
+              then null
+            when slate_size < 4
+              then least(
+                3,
+                floor(playlist_index::double precision * 4 / slate_size)::int
+              )
+            when playlist_index < (slate_size % 4) * ((slate_size / 4) + 1)
+              then floor(
+                playlist_index::double precision
+                  / ((slate_size / 4) + 1)
+              )::int
+            else least(
+              3,
+              (slate_size % 4)
+                + floor(
+                  (
+                    playlist_index
+                      - (slate_size % 4) * ((slate_size / 4) + 1)
+                  )::double precision
+                    / nullif(slate_size / 4, 0)
+                )::int
+            )
+          end as quartile
+        from ordered_songs
+      ),
       playlist_buckets as (
         select
-          case
-            when position_percentile < 0.25 then '0-25%'
-            when position_percentile < 0.5 then '25-50%'
-            when position_percentile < 0.75 then '50-75%'
+          case quartile
+            when 0 then '0-25%'
+            when 1 then '25-50%'
+            when 2 then '50-75%'
             else '75-100%'
           end as bucket,
-          case
-            when position_percentile < 0.25 then 0.0
-            when position_percentile < 0.5 then 0.25
-            when position_percentile < 0.75 then 0.5
+          case quartile
+            when 0 then 0.0
+            when 1 then 0.25
+            when 2 then 0.5
             else 0.75
           end as "bucketMin",
-          case
-            when position_percentile < 0.25 then 0.25
-            when position_percentile < 0.5 then 0.5
-            when position_percentile < 0.75 then 0.75
+          case quartile
+            when 0 then 0.25
+            when 1 then 0.5
+            when 2 then 0.75
             else 1.0
           end as "bucketMax",
           count(*)::int as songs,
           avg(points)::double precision as "avgPoints",
           avg(round_point_share)::double precision as "avgRoundPointShare"
-        from ordered_songs
-        where position_percentile is not null
+        from ordered_with_quartile
+        where quartile is not null
         group by 1, 2, 3
       ),
       playlist_bias_stats as (
@@ -3750,7 +3789,7 @@ export async function getSubmissionFactsData(
             )
             from playlist_buckets b
           ) as buckets
-        from ordered_songs
+        from ordered_with_quartile
         where position_percentile is not null
       )
       select

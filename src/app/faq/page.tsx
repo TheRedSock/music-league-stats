@@ -72,8 +72,16 @@ const sections = [
     body: "Compare is the full-table version of the player profile relationship panels. Profile section titles link there with the current scope, focused player, and matching sort already selected.",
   },
   {
+    title: "What is the Graphs page?",
+    body: "Graphs visualizes player relationships from the same metrics as Compare: Bubbles (alignment communities), Flow (directed points-given), Matrix (affinity heatmap), and Ego (one player’s neighbors). Sliders use a robust “typical range” for the current scope so defaults stay readable across leagues. These describe ballot patterns only — not friendship or listening habits.",
+  },
+  {
     title: "What is the Facts page?",
     body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion via standardized reach vs share), round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Player appeal panels use the same ~1/3-of-scope participation floor as other rankings. It uses the same league scope filter as the analytics pages.",
+  },
+  {
+    title: "How are playlist-position quartiles assigned?",
+    body: "Each round’s slate is split into four equal-count buckets (sizes differ by at most one song). When the slate length is not divisible by 4, leftover slots go to earlier buckets first — e.g. 19 songs → 5-5-5-4 and 21 → 6-5-5-5 — so a boundary song is not pushed into 75–100% by continuous percentile cuts. Correlation vs points still uses continuous position (index ÷ (n−1)).",
   },
 ];
 

@@ -8,10 +8,17 @@ import { cn } from "@/lib/utils";
 
 const navigation = [
   { href: "/relationships", label: "Compare" },
+  { href: "/relationships/graphs", label: "Graphs" },
   { href: "/facts", label: "Facts" },
   { href: "/songs", label: "Songs" },
   { href: "/players", label: "Players" },
 ];
+
+function navItemActive(pathname: string, href: string): boolean {
+  // Compare owns exact /relationships only; Graphs owns /relationships/graphs.
+  if (href === "/relationships") return pathname === "/relationships";
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
 
 export function StaticSiteHeaderNav() {
   return (
@@ -55,7 +62,7 @@ export function SiteHeaderNav() {
             <ScopedLink
               className={cn(
                 "rounded-full px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3",
-                (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
+                navItemActive(pathname, item.href) &&
                   "bg-white/[0.06] text-lime-200",
               )}
               href={item.href}
