@@ -28,6 +28,16 @@ export type ForceLink = {
 export type ForceGraphLayout = {
   chargeStrength?: number;
   collideRadius?: number;
+  /**
+   * Padding (px) around nodes when auto-fitting the camera after layout.
+   * Larger = more zoomed out.
+   */
+  fitPadding?: number;
+  /**
+   * Extra pull-back after fit (e.g. 0.85 = 15% more zoomed out).
+   * Applied once when the simulation first settles for the current graph.
+   */
+  fitScale?: number;
   height?: number;
   labelMinPx?: number;
   linkDistance?: number;
@@ -54,6 +64,8 @@ export function RelationshipForceGraph({
   const {
     chargeStrength = -180,
     collideRadius = 18,
+    fitPadding = 48,
+    fitScale = 1,
     height = 560,
     labelMinPx = 11,
     linkDistance = 90,
@@ -66,8 +78,16 @@ export function RelationshipForceGraph({
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
+  const fittedForRef = useRef<string>("");
   const [width, setWidth] = useState(640);
   const graphData = useMemo(() => ({ links, nodes }), [links, nodes]);
+  const graphKey = useMemo(
+    () =>
+      `${nodes.map((n) => n.id).join(",")}|${links
+        .map((l) => `${l.source}->${l.target}:${l.weight}`)
+        .join(",")}`,
+    [links, nodes],
+  );
 
   useEffect(() => {
     const el = containerRef.current;
@@ -125,6 +145,20 @@ export function RelationshipForceGraph({
         backgroundColor="rgba(0,0,0,0)"
         graphData={graphData}
         height={height}
+        onEngineStop={() => {
+          const graph = graphRef.current;
+          if (!graph || fittedForRef.current === graphKey) return;
+          fittedForRef.current = graphKey;
+          // Fit first (instant), then ease to a slightly wider framing so
+          // animated zoomToFit + immediate zoom() don't fight each other.
+          graph.zoomToFit?.(0, fitPadding);
+          if (typeof graph.zoom === "function") {
+            const current = graph.zoom();
+            if (typeof current === "number" && Number.isFinite(current)) {
+              graph.zoom(current * fitScale, 400);
+            }
+          }
+        }}
         linkColor={(link) => {
           const typed = link as ForceLink;
           if (typed.color) return typed.color;
@@ -136,11 +170,36 @@ export function RelationshipForceGraph({
             : `rgba(190, 242, 100, ${opacity})`;
         }}
         linkCurvature="curvature"
-        linkDirectionalArrowLength={directed ? 6 : 0}
+        // Arrowheads at the target join. Size scales a bit with weight so
+        // strong edges stay readable without dominating soft ones.
+        linkDirectionalArrowLength={
+          directed
+            ? (link) => {
+                const typed = link as ForceLink;
+                return 7 + (typed.weight / maxWeight) * 5;
+              }
+            : 0
+        }
         linkDirectionalArrowRelPos={1}
+        // One slow particle per directed edge — a subtle motion cue for
+        // giver → receiver without a dashed arrow pattern.
+        linkDirectionalParticles={directed ? 1 : 0}
+        linkDirectionalParticleSpeed={0.004}
+        linkDirectionalParticleWidth={(link) => {
+          const typed = link as ForceLink;
+          return 1.2 + (typed.weight / maxWeight) * 1.6;
+        }}
         linkWidth={(link) => {
           const typed = link as ForceLink;
           return 1 + (typed.weight / maxWeight) * 4;
+        }}
+        // Library places link ends / arrows at sqrt(val)*nodeRelSize. Match
+        // our custom-drawn radii so arrowheads sit on the node perimeter
+        // instead of under the fill.
+        nodeRelSize={1}
+        nodeVal={(node) => {
+          const r = nodeRadius(node as ForceNode);
+          return r * r;
         }}
         nodeCanvasObject={(node, ctx, globalScale) => {
           const typed = node as ForceNode & { x?: number; y?: number };

@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
 import { db, type Database } from "@/db";
 import {
@@ -111,16 +112,27 @@ async function countRows(database: SqlExecutor, tableName: string): Promise<numb
   return row?.count ?? 0;
 }
 
-async function revalidateAfterMaterialization(): Promise<void> {
-  const { revalidateAnalyticsCache } = await import("@/lib/analytics");
-  revalidateAnalyticsCache();
-  revalidatePath("/");
-  revalidatePath("/songs");
-  revalidatePath("/players");
-  revalidatePath("/relationships");
-  revalidatePath("/relationships/graphs");
-  revalidatePath("/facts");
-  revalidatePath("/admin");
+/**
+ * Schedule cache bust after the current request finishes.
+ * Combo materialization advances during RSC render (relationships pages),
+ * where calling revalidateTag/revalidatePath synchronously is unsupported.
+ */
+function revalidateAfterMaterialization(): void {
+  after(async () => {
+    try {
+      const { revalidateAnalyticsCache } = await import("@/lib/analytics");
+      revalidateAnalyticsCache();
+      revalidatePath("/");
+      revalidatePath("/songs");
+      revalidatePath("/players");
+      revalidatePath("/relationships");
+      revalidatePath("/relationships/graphs");
+      revalidatePath("/facts");
+      revalidatePath("/admin");
+    } catch (error) {
+      console.error("Deferred analytics cache revalidation failed.", error);
+    }
+  });
 }
 
 function progressSummary(
@@ -213,20 +225,20 @@ export async function invalidateAllLeaguesMaterialization(
     await tx.execute(sql`
       delete from analytics_relationship_pairs where position(',' in scope_key) > 0
     `);
-    await tx
-      .update(analyticsScopeJobs)
-      .set({
-        completedAt: new Date(),
-        errorMessage: reason,
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(analyticsScopeJobs.analyticsRevision, ANALYTICS_REVISION),
-          eq(analyticsScopeJobs.status, "processing"),
-        ),
-      );
+    // Multi-league combo rows were just deleted — mark matching scope jobs
+    // stale (including completed) so the next visit recomputes instead of
+    // trusting an empty cache.
+    await tx.execute(sql`
+      update analytics_scope_jobs
+      set
+        status = 'failed',
+        error_message = ${reason},
+        completed_at = now(),
+        updated_at = now()
+      where analytics_revision = ${ANALYTICS_REVISION}
+        and position(',' in scope_key) > 0
+        and status in ('processing', 'completed')
+    `);
     const [job] = await tx
       .insert(analyticsMaterializationJobs)
       .values({
@@ -487,14 +499,7 @@ export async function advanceMaterializationJob(
         status: "completed",
         summary: { ...summary, kind: "completed" },
       });
-      try {
-        await revalidateAfterMaterialization();
-      } catch (error) {
-        console.error(
-          "Analytics materialization completed but cache revalidation failed.",
-          error,
-        );
-      }
+      revalidateAfterMaterialization();
       return {
         analyticsRevision: ANALYTICS_REVISION,
         job: completed,
@@ -522,14 +527,7 @@ export async function advanceMaterializationJob(
       errorMessage: message,
       status: "failed",
     });
-    try {
-      await revalidateAfterMaterialization();
-    } catch (revalidateError) {
-      console.error(
-        "Failed analytics materialization cache revalidation also failed.",
-        revalidateError,
-      );
-    }
+    revalidateAfterMaterialization();
     return {
       analyticsRevision: ANALYTICS_REVISION,
       job: failed,
@@ -1251,11 +1249,7 @@ export async function advanceScopeMaterializationJob(
         })
         .where(eq(analyticsScopeJobs.id, job.id))
         .returning();
-      try {
-        await revalidateAfterMaterialization();
-      } catch (error) {
-        console.error("Scope materialization revalidation failed.", error);
-      }
+      revalidateAfterMaterialization();
       return {
         analyticsRevision: ANALYTICS_REVISION,
         job: completed,
