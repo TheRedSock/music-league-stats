@@ -524,7 +524,7 @@ export default async function FactsPage({
                   sourceRoundId={row.sourceRoundId}
                 />
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {row.submissions} songs from {row.submitters} submitters
+                  {`${row.submissions} songs from ${row.submitters} submitters`}
                 </p>
               </>
             ),

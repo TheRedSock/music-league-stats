@@ -94,11 +94,24 @@ function compareRows(
       left.submitterName.localeCompare(right.submitterName) ||
       compareVotedSongsByPoints(left, right);
   } else if (sort === "round") {
-    primary =
-      right.roundOrdinal - left.roundOrdinal ||
-      left.roundName.localeCompare(right.roundName) ||
+    const leftTime = Date.parse(left.roundSourceCreatedAt);
+    const rightTime = Date.parse(right.roundSourceCreatedAt);
+    const leftMs = Number.isFinite(leftTime) ? leftTime : Number.NEGATIVE_INFINITY;
+    const rightMs = Number.isFinite(rightTime)
+      ? rightTime
+      : Number.NEGATIVE_INFINITY;
+    const leftPlaylist = left.playlistIndex ?? Number.POSITIVE_INFINITY;
+    const rightPlaylist = right.playlistIndex ?? Number.POSITIVE_INFINITY;
+    // Date follows the active direction; playlist position stays earliest-first.
+    const dateCmp =
+      direction === "desc" ? rightMs - leftMs : leftMs - rightMs;
+    return (
+      dateCmp ||
+      leftPlaylist - rightPlaylist ||
+      left.roundOrdinal - right.roundOrdinal ||
       left.leagueName.localeCompare(right.leagueName) ||
-      compareVotedSongsByPoints(left, right);
+      compareVotedSongsByPoints(left, right)
+    );
   } else {
     primary =
       left.title.localeCompare(right.title) ||
@@ -108,8 +121,7 @@ function compareRows(
   const naturalDesc =
     sort === "points" ||
     sort === "ballotBlowout" ||
-    sort === "crowdContrast" ||
-    sort === "round";
+    sort === "crowdContrast";
   if (naturalDesc) {
     return direction === "desc" ? primary : -primary;
   }
@@ -261,10 +273,7 @@ export function HighestVotedSongsPanel({
         <ListMusic aria-hidden="true" className="mb-2 size-5 text-lime-300" />
         <CardTitle>Highest votes given</CardTitle>
         <CardDescription>
-          Songs {playerName} scored most highly. Ties on points break by ballot
-          blowout — how far the vote sat above a fair share of that player&apos;s
-          own ballot that round. Crowd contrast is the same idea versus other
-          voters on the song.
+          {`Songs ${playerName} scored most highly. Ties on points break by ballot blowout — how far the vote sat above a fair share of that player's own ballot that round. Crowd contrast is the same idea versus other voters on the song.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -356,10 +365,13 @@ export function HighestVotedSongsPanel({
                 </div>
 
                 <p className="text-xs text-zinc-500">
-                  Showing {sorted.length} of {rows.length}
-                  {sort === "points"
-                    ? " · sorted by points (ballot blowout tiebreak)"
-                    : ` · sorted by ${sort}`}
+                  {`Showing ${sorted.length} of ${rows.length}${
+                    sort === "points"
+                      ? " · sorted by points (ballot blowout tiebreak)"
+                      : sort === "round"
+                        ? " · sorted by round date (playlist position tiebreak)"
+                        : ` · sorted by ${sort}`
+                  }`}
                 </p>
 
                 {sorted.length ? (
@@ -387,6 +399,7 @@ export function HighestVotedSongsPanel({
                           className="w-[30%]"
                           direction={direction}
                           onClick={() => toggleSort("round")}
+                          title="Sort by round date; ties break by playlist position within the round"
                         >
                           Round
                         </SortHeader>

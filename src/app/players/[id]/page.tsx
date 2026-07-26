@@ -529,10 +529,7 @@ export default async function PlayerProfilePage({
             </Link>
           </CardTitle>
           <CardDescription>
-            Combined points between {player.name} and another player in both
-            directions, shown both as totals and as the share of eligible ballot
-            points allocated to each other. Comparisons must cover at least one third
-            of the selected scope.
+            {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons must cover at least one third of the selected scope.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-7 sm:grid-cols-2 xl:grid-cols-4">

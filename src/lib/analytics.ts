@@ -2131,6 +2131,8 @@ type PlayerVotedSongQueryRow = {
   sourceRoundId: string;
   roundName: string;
   roundOrdinal: number;
+  roundSourceCreatedAt: string | Date;
+  playlistIndex: number | null;
   pointsGiven: number;
   ballotPoints: number;
   eligibleOpportunities: number;
@@ -2155,6 +2157,11 @@ function mapVotedSong(row: PlayerVotedSongQueryRow): PlayerVotedSongRow {
       row.songEligibleVoters,
       row.votersAtLeast,
     ),
+    playlistIndex:
+      row.playlistIndex === null || row.playlistIndex === undefined
+        ? null
+        : Number(row.playlistIndex),
+    roundSourceCreatedAt: isoTimestamp(row.roundSourceCreatedAt),
     spotifyUrl: spotifyTrackUrl(row.spotifyUri),
   };
 }
@@ -2300,6 +2307,8 @@ async function getMaterializedPlayerProfileData(
         r.source_round_id as "sourceRoundId",
         r.name as "roundName",
         r.ordinal as "roundOrdinal",
+        r.source_created_at as "roundSourceCreatedAt",
+        s.playlist_index as "playlistIndex",
         ev.points as "pointsGiven",
         bt.ballot_points as "ballotPoints",
         bt.eligible_opportunities as "eligibleOpportunities",
@@ -2932,6 +2941,8 @@ export async function getPlayerProfileData(
         sr.source_round_id as "sourceRoundId",
         sr.name as "roundName",
         sr.ordinal as "roundOrdinal",
+        sr.source_created_at as "roundSourceCreatedAt",
+        s.playlist_index as "playlistIndex",
         ev.points as "pointsGiven",
         bt.ballot_points as "ballotPoints",
         bt.eligible_opportunities as "eligibleOpportunities",

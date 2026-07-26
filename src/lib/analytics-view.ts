@@ -74,6 +74,10 @@ export type PlayerVotedSongRow = {
   sourceRoundId: string;
   roundName: string;
   roundOrdinal: number;
+  /** Round start/create time from Music League export; used for chronological sort. */
+  roundSourceCreatedAt: string;
+  /** 0-based slate/playlist order within the round; null when missing. */
+  playlistIndex: number | null;
   pointsGiven: number;
   ballotPoints: number;
   eligibleOpportunities: number;
