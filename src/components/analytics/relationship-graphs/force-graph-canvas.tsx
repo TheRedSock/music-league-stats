@@ -79,7 +79,15 @@ export function RelationshipForceGraph({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
   const fittedForRef = useRef<string>("");
-  const [width, setWidth] = useState(640);
+  const forcesReadyRef = useRef(false);
+  const fitPaddingRef = useRef(fitPadding);
+  const fitScaleRef = useRef(fitScale);
+  fitPaddingRef.current = fitPadding;
+  fitScaleRef.current = fitScale;
+
+  // Start unset so we don't mount the canvas at a placeholder 640px width —
+  // that first paint + early zoomToFit is what makes first load look wrong.
+  const [width, setWidth] = useState(0);
   const graphData = useMemo(() => ({ links, nodes }), [links, nodes]);
   const graphKey = useMemo(
     () =>
@@ -88,6 +96,21 @@ export function RelationshipForceGraph({
         .join(",")}`,
     [links, nodes],
   );
+
+  function fitCamera(force = false) {
+    const graph = graphRef.current;
+    if (!graph || !forcesReadyRef.current || width < 320) return;
+    const fitKey = `${graphKey}@${width}x${height}`;
+    if (!force && fittedForRef.current === fitKey) return;
+    fittedForRef.current = fitKey;
+    graph.zoomToFit?.(0, fitPaddingRef.current);
+    if (typeof graph.zoom === "function") {
+      const current = graph.zoom();
+      if (typeof current === "number" && Number.isFinite(current)) {
+        graph.zoom(current * fitScaleRef.current, 400);
+      }
+    }
+  }
 
   useEffect(() => {
     const el = containerRef.current;
@@ -102,10 +125,31 @@ export function RelationshipForceGraph({
   }, []);
 
   useEffect(() => {
-    const graph = graphRef.current;
-    if (!graph) return;
+    // Width changed after a prior fit — allow reframing for the new viewport.
+    fittedForRef.current = "";
+  }, [width, height]);
 
-    void import("d3-force").then((d3Force) => {
+  useEffect(() => {
+    if (width < 320) return;
+
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    let fitTimer: number | undefined;
+    forcesReadyRef.current = false;
+    fittedForRef.current = "";
+
+    // ForceGraph2D is next/dynamic — on first visit the ref is often still
+    // null when this effect runs. Retry until the instance exists (tabbing
+    // back is usually sync because the chunk is already cached).
+    const setup = (d3Force: typeof import("d3-force")) => {
+      const graph = graphRef.current;
+      if (!graph) {
+        retryTimer = window.setTimeout(() => {
+          if (!cancelled) setup(d3Force);
+        }, 50);
+        return;
+      }
+
       const linkForce = graph.d3Force("link");
       if (linkForce?.distance) linkForce.distance(linkDistance);
 
@@ -124,9 +168,27 @@ export function RelationshipForceGraph({
           .strength(0.85),
       );
       graph.d3Force("center", d3Force.forceCenter(0, 0).strength(0.12));
+      forcesReadyRef.current = true;
       graph.d3ReheatSimulation?.();
+      // Refit after the reheated layout has had a moment to settle.
+      fitTimer = window.setTimeout(() => {
+        if (!cancelled) fitCamera(true);
+      }, 450);
+    };
+
+    void import("d3-force").then((d3Force) => {
+      if (!cancelled) setup(d3Force);
     });
-  }, [chargeStrength, collideRadius, linkDistance, links, nodes]);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer != null) window.clearTimeout(retryTimer);
+      if (fitTimer != null) window.clearTimeout(fitTimer);
+    };
+    // fitCamera closes over width/graphKey; force setup intentionally depends
+    // on layout + data + measured width (mount graph only when width ready).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chargeStrength, collideRadius, linkDistance, links, nodes, width]);
 
   const maxWeight = Math.max(...links.map((link) => link.weight), 0.0001);
 
@@ -141,23 +203,14 @@ export function RelationshipForceGraph({
       ref={containerRef}
       style={{ height }}
     >
+      {width < 320 ? null : (
       <ForceGraph2D
         backgroundColor="rgba(0,0,0,0)"
         graphData={graphData}
         height={height}
         onEngineStop={() => {
-          const graph = graphRef.current;
-          if (!graph || fittedForRef.current === graphKey) return;
-          fittedForRef.current = graphKey;
-          // Fit first (instant), then ease to a slightly wider framing so
-          // animated zoomToFit + immediate zoom() don't fight each other.
-          graph.zoomToFit?.(0, fitPadding);
-          if (typeof graph.zoom === "function") {
-            const current = graph.zoom();
-            if (typeof current === "number" && Number.isFinite(current)) {
-              graph.zoom(current * fitScale, 400);
-            }
-          }
+          // Ignore the default-force cool-down; only frame after our forces run.
+          fitCamera(false);
         }}
         linkColor={(link) => {
           const typed = link as ForceLink;
@@ -240,6 +293,7 @@ export function RelationshipForceGraph({
         ref={graphRef}
         width={width}
       />
+      )}
     </div>
   );
 }

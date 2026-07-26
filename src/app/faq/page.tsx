@@ -68,6 +68,10 @@ const sections = [
     body: "Mutual ballot share looks at points two players gave to each other's songs and divides them by the eligible ballot points involved. It is budget-aware, so a large ballot and a small ballot can be compared more fairly.",
   },
   {
+    title: "What are ballot blowout and crowd contrast?",
+    body: "On a player profile, Highest votes given ranks songs by points that player allocated. Ballot blowout is the points-sort tiebreaker: points ÷ fair share of that player's own ballot that round, then diluted by how many songs on the same ballot got at least that many points. Crowd contrast uses the same fair-share idea against other voters on that song (song points ÷ eligible voters), diluted by how many voters gave ≥ that score. A unique personal 5 on a sparse ballot scores high on ballot blowout even if others also liked the song; a 5 that is the only top score on a crowded song scores high on crowd contrast.",
+  },
+  {
     title: "What is the Compare page?",
     body: "Compare is the full-table version of the player profile relationship panels. Profile section titles link there with the current scope, focused player, and matching sort already selected.",
   },
@@ -95,6 +99,14 @@ const glossary = [
   ["Scope", "The selected league and/or round filter."],
   ["Comparable features", "The ballot items used when comparing two voters."],
   ["Provisional", "A player with fewer entered rounds than the selected ranking threshold."],
+  [
+    "Ballot blowout",
+    "Points ÷ fair share of the voter's own ballot, diluted by tied top scores.",
+  ],
+  [
+    "Crowd contrast",
+    "Points ÷ fair share among voters on that song, diluted by tied top scores.",
+  ],
 ] as const;
 
 export default function FaqPage() {

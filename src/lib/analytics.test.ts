@@ -28,7 +28,10 @@ import {
   supportIndexEb,
   supportZ,
   timingMidpointPercentile,
+  truncateArtistForMeta,
   truncateRoundName,
+  compareVotedSongsByPoints,
+  fairShareBlowout,
   type FilterOptions,
 } from "@/lib/analytics";
 
@@ -79,6 +82,43 @@ describe("analytics metric helpers", () => {
     expect(supportIndex(20, 20)).toBe(1);
     expect(supportIndex(40, 20)).toBe(2);
     expect(supportIndex(0, 0)).toBeNull();
+  });
+
+  it("scores fair-share blowout as multiples diluted by tied peers", () => {
+    // Unique 5 with fifteen 1s on a 16-song, 20-point ballot.
+    const uniqueFive = fairShareBlowout(5, 20, 16, 1);
+    // Four 5s (rest zeroes) on the same slate size and budget.
+    const oneOfFourFives = fairShareBlowout(5, 20, 16, 4);
+    // Unique 4 among 1s can outrank a diluted 5 when sorting by blowout alone.
+    const uniqueFour = fairShareBlowout(4, 20, 16, 1);
+
+    expect(uniqueFive).toBe(4);
+    expect(oneOfFourFives).toBe(1);
+    expect(uniqueFour).toBe(3.2);
+    expect(uniqueFive!).toBeGreaterThan(oneOfFourFives!);
+    expect(uniqueFour!).toBeGreaterThan(oneOfFourFives!);
+    expect(fairShareBlowout(5, 0, 16, 1)).toBeNull();
+  });
+
+  it("breaks equal points with higher ballot blowout when ranking voted songs", () => {
+    const uniqueFive = {
+      pointsGiven: 5,
+      ballotBlowout: fairShareBlowout(5, 20, 16, 1),
+      title: "Solo favorite",
+    };
+    const sharedFive = {
+      pointsGiven: 5,
+      ballotBlowout: fairShareBlowout(5, 20, 16, 4),
+      title: "Shared favorite",
+    };
+    expect(compareVotedSongsByPoints(uniqueFive, sharedFive)).toBeLessThan(0);
+  });
+
+  it("separates ballot blowout from crowd contrast on the same 5", () => {
+    // Own ballot: unique 5 on 25 points / 46 songs → 9.2×
+    expect(fairShareBlowout(5, 25, 46, 1)).toBeCloseTo(9.2, 5);
+    // Same song field: 5 among 13 total points / 22 voters, unique top → ~8.46×
+    expect(fairShareBlowout(5, 13, 22, 1)).toBeCloseTo((5 * 22) / 13, 5);
   });
 
   it("keeps average songs at 1.0 across different ballot budgets", () => {
@@ -250,6 +290,28 @@ describe("analytics filter helpers", () => {
     expect(truncateRoundName("Short round")).toBe("Short round");
     expect(truncateRoundName("A".repeat(60))).toHaveLength(50);
     expect(truncateRoundName("A".repeat(60)).endsWith("…")).toBe(true);
+  });
+
+  it("soft-caps artist on meta lines only when the full line is over budget", () => {
+    const longArtist = "A".repeat(40);
+    const shortScope = truncateArtistForMeta(
+      longArtist,
+      "lg",
+      1,
+      "Round",
+    );
+    // artist(40) + " · "(3) + "lg · R1 · Round"(14) = 57 ≤ 80 → keep full artist
+    expect(shortScope).toBe(longArtist);
+
+    const longScope = truncateArtistForMeta(
+      longArtist,
+      "spring-2025",
+      9,
+      "Alien reproducing music (intercourse) (1 Song p.p.)",
+    );
+    expect(longScope.length).toBe(30);
+    expect(longScope.endsWith("…")).toBe(true);
+    expect(longScope.startsWith("A".repeat(29))).toBe(true);
   });
 
   it("drops round ids from resolved filters", () => {

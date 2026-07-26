@@ -11,6 +11,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
+import { HighestVotedSongsPanel } from "@/components/analytics/highest-voted-songs-panel";
 import { MusicLeagueScopeLinks } from "@/components/analytics/music-league-link";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
 import { VoteDistributions } from "@/components/analytics/vote-distributions";
@@ -33,6 +34,7 @@ import {
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
+  truncateArtistForMeta,
   truncateRoundName,
   type DirectionalRelationship,
   type MutualRelationship,
@@ -110,54 +112,76 @@ function SubmissionList({
         {label}
       </h3>
       <ol className="mt-2 divide-y divide-white/[0.06]">
-        {rows.map((song) => (
-          <li className="flex items-center justify-between gap-4 py-3" key={song.id}>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-zinc-100">
-                {song.spotifyUrl ? (
-                  <a
-                    className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
-                    href={song.spotifyUrl}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <span className="truncate">{song.title}</span>
-                    <ExternalLink className="size-3 shrink-0" />
-                  </a>
-                ) : (
-                  song.title
-                )}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-zinc-500">
-                {song.artist} ·{" "}
-                <MusicLeagueScopeLinks
-                  leagueHref={musicLeagueUrl(song.leagueMusicLeagueId)}
-                  leagueLabel={leagueTableLabel({
-                    name: song.leagueName,
-                    slug: song.leagueSlug,
-                  })}
-                  leagueTitle={song.leagueName}
-                  roundHref={musicLeagueUrl(
-                    song.leagueMusicLeagueId,
-                    song.sourceRoundId,
+        {rows.map((song) => {
+          const leagueLabel = leagueTableLabel({
+            name: song.leagueName,
+            slug: song.leagueSlug,
+          });
+          const artist = truncateArtistForMeta(
+            song.artist,
+            leagueLabel,
+            song.roundOrdinal,
+            song.roundName,
+          );
+          const metaTitle = [
+            song.artist,
+            song.leagueName,
+            `R${song.roundOrdinal} ${song.roundName}`,
+          ].join(" · ");
+
+          return (
+            <li
+              className="flex items-center justify-between gap-4 py-3"
+              key={song.id}
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-zinc-100">
+                  {song.spotifyUrl ? (
+                    <a
+                      className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
+                      href={song.spotifyUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      <span className="truncate">{song.title}</span>
+                      <ExternalLink className="size-3 shrink-0" />
+                    </a>
+                  ) : (
+                    song.title
                   )}
-                  roundLabel={
-                    <>
-                      R{song.roundOrdinal} · {truncateRoundName(song.roundName)}
-                    </>
-                  }
-                  roundTitle={song.roundName}
-                />
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="font-mono text-sm text-lime-200">
-                {metric(song.supportIndex)}×
-              </p>
-              <p className="text-[11px] text-zinc-600">{song.points} pts</p>
-            </div>
-          </li>
-        ))}
+                </p>
+                <p
+                  className="mt-0.5 truncate text-xs text-zinc-500"
+                  title={metaTitle}
+                >
+                  {artist}
+                  {" · "}
+                  <MusicLeagueScopeLinks
+                    leagueHref={musicLeagueUrl(song.leagueMusicLeagueId)}
+                    leagueLabel={leagueLabel}
+                    leagueTitle={song.leagueName}
+                    roundHref={musicLeagueUrl(
+                      song.leagueMusicLeagueId,
+                      song.sourceRoundId,
+                    )}
+                    roundLabel={
+                      <>
+                        R{song.roundOrdinal} · {song.roundName}
+                      </>
+                    }
+                    roundTitle={song.roundName}
+                  />
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-mono text-sm text-lime-200">
+                  {metric(song.supportIndexEb ?? song.supportIndex)}×
+                </p>
+                <p className="text-[11px] text-zinc-600">{song.points} pts</p>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </div>
   );
@@ -255,14 +279,21 @@ export default async function PlayerProfilePage({
   const { filter, options, profile } = result.data;
   const { overview, player } = profile;
   const filterParams = scopeQueryParams(filter);
-  const rankedSubmissions = profile.submissions.filter(
-    (song) => song.supportIndex !== null,
-  );
+  const submissionSupport = (song: SongAnalyticsRow) =>
+    song.supportIndexEb ?? song.supportIndex;
+  const rankedSubmissions = [...profile.submissions]
+    .filter((song) => submissionSupport(song) !== null)
+    .sort(
+      (left, right) =>
+        submissionSupport(right)! - submissionSupport(left)! ||
+        right.points - left.points ||
+        left.title.localeCompare(right.title),
+    );
   const high = rankedSubmissions.slice(0, 5);
   const low = [...rankedSubmissions]
     .sort(
       (left, right) =>
-        left.supportIndex! - right.supportIndex! ||
+        submissionSupport(left)! - submissionSupport(right)! ||
         left.points - right.points ||
         left.title.localeCompare(right.title),
     )
@@ -364,8 +395,10 @@ export default async function PlayerProfilePage({
             <Medal aria-hidden="true" className="mb-2 size-5 text-lime-300" />
             <CardTitle>Submission range</CardTitle>
             <CardDescription>
-              Highest and lowest are ordered by round-local support index, not
-              an objective judgment of the songs.
+              Highest and lowest are ordered by empirical-Bayes support index
+              (SI_eb), which shrinks noisy small-sample extremes toward expected
+              support when comparing across rounds — not an objective judgment
+              of the songs.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-8 lg:grid-cols-2">
@@ -391,6 +424,12 @@ export default async function PlayerProfilePage({
           />
         </CardContent>
       </Card>
+
+      <HighestVotedSongsPanel
+        filterParams={filterParams}
+        playerName={player.name}
+        rows={profile.highestVotedSongs}
+      />
 
       <section className="mt-6 grid gap-6 xl:grid-cols-2" aria-label="Directional relationships">
         {[

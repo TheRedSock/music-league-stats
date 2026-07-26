@@ -175,19 +175,22 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
       />
       <p className="text-xs text-zinc-500">
         Arrows point giver → receiver (points given per opportunity).{" "}
-        <span className="text-orange-300">Orange</span> is one-way above
-        cutoff; <span className="text-sky-300">blue</span> is reciprocal.
+        <span className="text-orange-300">Orange</span>
+        {" is one-way above cutoff; "}
+        <span className="text-sky-300">blue</span>
+        {" is reciprocal."}
         {keepEveryone ? (
           <>
             {" "}
-            <span className="text-zinc-400">Gray</span> soft arrows are each
-            missing player&apos;s strongest edge just below the cutoff
-            (thinner).
+            <span className="text-zinc-400">Gray</span>
+            {
+              " soft arrows are each missing player's strongest edge just below the cutoff (thinner)."
+            }
           </>
-        ) : null}{" "}
-        {primary.length} above cutoff
-        {soft.length > 0 ? ` · ${soft.length} soft` : ""} · {pairKeys.size}{" "}
-        unique pairs · {nodes.length} players.
+        ) : null}
+        {` ${primary.length} above cutoff`}
+        {soft.length > 0 ? ` · ${soft.length} soft` : ""}
+        {` · ${pairKeys.size} unique pairs · ${nodes.length} players.`}
       </p>
       {links.length === 0 ? (
         <GraphEmptyState message="No directed edges above this threshold." />

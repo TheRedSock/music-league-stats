@@ -126,18 +126,25 @@ export type SongAnalyticsRow = {
 };
 
 export {
+  compareVotedSongsByPoints,
   defaultSongSortDirection,
+  fairShareBlowout,
   leagueTableLabel,
   songSorts,
   sortDirections,
+  truncateArtistForMeta,
   truncateRoundName,
+  type PlayerVotedSongRow,
   type SongSort,
   type SortDirection,
 } from "@/lib/analytics-view";
 import {
+  compareVotedSongsByPoints,
   defaultSongSortDirection,
+  fairShareBlowout,
   songSorts,
   sortDirections,
+  type PlayerVotedSongRow,
   type SongSort,
   type SortDirection,
 } from "@/lib/analytics-view";
@@ -234,6 +241,7 @@ export type PlayerProfileData = {
   player: { id: string; name: string };
   overview: PlayerDirectoryRow | null;
   submissions: SongAnalyticsRow[];
+  highestVotedSongs: PlayerVotedSongRow[];
   receivedDistribution: PointBucket[];
   givenDistribution: PointBucket[];
   relationships: DirectionalRelationship[];
@@ -2100,12 +2108,56 @@ type PlayerQueryRow = {
 type PlayerProfilePackedQueryRow = {
   overview: unknown;
   submissions: unknown;
+  highestVotedSongs: unknown;
   distributions: unknown;
   relationships: unknown;
   mutualRelationships: unknown;
   alignments: unknown;
   timing: unknown;
 };
+
+type PlayerVotedSongQueryRow = {
+  submissionId: string;
+  title: string;
+  artist: string;
+  spotifyUri: string;
+  submitterId: string;
+  submitterName: string;
+  leagueId: string;
+  leagueName: string;
+  leagueSlug: string;
+  leagueMusicLeagueId: string | null;
+  roundId: string;
+  sourceRoundId: string;
+  roundName: string;
+  roundOrdinal: number;
+  pointsGiven: number;
+  ballotPoints: number;
+  eligibleOpportunities: number;
+  songsAtLeast: number;
+  songPoints: number;
+  songEligibleVoters: number;
+  votersAtLeast: number;
+};
+
+function mapVotedSong(row: PlayerVotedSongQueryRow): PlayerVotedSongRow {
+  return {
+    ...row,
+    ballotBlowout: fairShareBlowout(
+      row.pointsGiven,
+      row.ballotPoints,
+      row.eligibleOpportunities,
+      row.songsAtLeast,
+    ),
+    crowdContrast: fairShareBlowout(
+      row.pointsGiven,
+      row.songPoints,
+      row.songEligibleVoters,
+      row.votersAtLeast,
+    ),
+    spotifyUrl: spotifyTrackUrl(row.spotifyUri),
+  };
+}
 
 async function getMaterializedPlayerProfileData(
   player: { id: string; name: string },
@@ -2213,10 +2265,99 @@ async function getMaterializedPlayerProfileData(
                 sql`, `,
               )})`
         }
+    ),
+    player_ballot_totals as (
+      select
+        ev.round_id,
+        ev.voter_id,
+        sum(ev.points)::double precision as ballot_points,
+        count(*)::int as eligible_opportunities
+      from analytics_effective_votes ev
+      where ev.voter_id = ${player.id}
+        and ${
+          leagueIds.length === 0
+            ? sql`true`
+            : sql`ev.league_id in (${sql.join(
+                leagueIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+        }
+      group by ev.round_id, ev.voter_id
+    ),
+    highest_voted_song_rows as (
+      select
+        s.id as "submissionId",
+        s.song_title as title,
+        s.artist_name as artist,
+        s.spotify_uri as "spotifyUri",
+        s.submitter_id as "submitterId",
+        ${competitorDisplayName("c")} as "submitterName",
+        s.league_id as "leagueId",
+        l.name as "leagueName",
+        l.slug as "leagueSlug",
+        l.music_league_id as "leagueMusicLeagueId",
+        s.round_id as "roundId",
+        r.source_round_id as "sourceRoundId",
+        r.name as "roundName",
+        r.ordinal as "roundOrdinal",
+        ev.points as "pointsGiven",
+        bt.ballot_points as "ballotPoints",
+        bt.eligible_opportunities as "eligibleOpportunities",
+        (
+          select count(*)::int
+          from analytics_effective_votes peer
+          where peer.round_id = ev.round_id
+            and peer.voter_id = ev.voter_id
+            and peer.points >= ev.points
+        ) as "songsAtLeast",
+        (
+          select coalesce(sum(peer.points), 0)::double precision
+          from analytics_effective_votes peer
+          where peer.submission_id = ev.submission_id
+        ) as "songPoints",
+        (
+          select count(*)::int
+          from analytics_effective_votes peer
+          where peer.submission_id = ev.submission_id
+        ) as "songEligibleVoters",
+        (
+          select count(*)::int
+          from analytics_effective_votes peer
+          where peer.submission_id = ev.submission_id
+            and peer.points >= ev.points
+        ) as "votersAtLeast"
+      from analytics_effective_votes ev
+      join player_ballot_totals bt
+        on bt.round_id = ev.round_id
+       and bt.voter_id = ev.voter_id
+      join submissions s on s.id = ev.submission_id
+      join rounds r on r.id = ev.round_id
+      join leagues l on l.id = ev.league_id
+      join competitors c on c.id = ev.submitter_id
+      where ev.voter_id = ${player.id}
+        and ev.points > 0
+        and ${
+          leagueIds.length === 0
+            ? sql`true`
+            : sql`ev.league_id in (${sql.join(
+                leagueIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+        }
     )
     select
       (select coalesce(json_agg(to_jsonb(overview_rows)), '[]'::json) from overview_rows) as overview,
       (select coalesce(json_agg(to_jsonb(submission_rows) order by "supportIndex" desc nulls last, points desc), '[]'::json) from submission_rows) as submissions,
+      (
+        select coalesce(
+          json_agg(
+            to_jsonb(highest_voted_song_rows)
+            order by "pointsGiven" desc, "songsAtLeast" asc, "eligibleOpportunities" desc, title asc
+          ),
+          '[]'::json
+        )
+        from highest_voted_song_rows
+      ) as "highestVotedSongs",
       (select coalesce(json_agg(to_jsonb(distribution_rows) order by direction, points), '[]'::json) from distribution_rows) as distributions,
       (select coalesce(json_agg(to_jsonb(directional_relationships) order by direction, "pointsPerEncounter" desc, encounters desc), '[]'::json) from directional_relationships) as relationships,
       (select coalesce(json_agg(to_jsonb(mutual_relationships) order by "pointsPerOpportunity" desc, opportunities desc), '[]'::json) from mutual_relationships) as "mutualRelationships",
@@ -2231,6 +2372,11 @@ async function getMaterializedPlayerProfileData(
     count: number;
   }>(packedRow?.distributions);
   const timingRows = jsonRows<TimingRow>(packedRow?.timing);
+  const highestVotedSongs = jsonRows<PlayerVotedSongQueryRow>(
+    packedRow?.highestVotedSongs,
+  )
+    .map(mapVotedSong)
+    .sort(compareVotedSongsByPoints);
 
   return {
     alignments: jsonRows<PlayerProfileData["alignments"][number]>(
@@ -2239,6 +2385,7 @@ async function getMaterializedPlayerProfileData(
     givenDistribution: createPointDistribution(
       distributionRows.filter(({ direction }) => direction === "given"),
     ),
+    highestVotedSongs,
     mutualRelationships: jsonRows<MutualRelationship>(
       packedRow?.mutualRelationships,
     ),
@@ -2800,6 +2947,59 @@ export async function getPlayerProfileData(
       from player_participation pp
       join selected_rounds sr on sr.id = pp.round_id
       join leagues l on l.id = sr.league_id
+    ),
+    highest_voted_song_rows as (
+      select
+        s.id as "submissionId",
+        s.song_title as title,
+        s.artist_name as artist,
+        s.spotify_uri as "spotifyUri",
+        s.submitter_id as "submitterId",
+        ${competitorDisplayName("c")} as "submitterName",
+        s.league_id as "leagueId",
+        l.name as "leagueName",
+        l.slug as "leagueSlug",
+        l.music_league_id as "leagueMusicLeagueId",
+        s.round_id as "roundId",
+        sr.source_round_id as "sourceRoundId",
+        sr.name as "roundName",
+        sr.ordinal as "roundOrdinal",
+        ev.points as "pointsGiven",
+        bt.ballot_points as "ballotPoints",
+        bt.eligible_opportunities as "eligibleOpportunities",
+        (
+          select count(*)::int
+          from effective_votes peer
+          where peer.round_id = ev.round_id
+            and peer.voter_id = ev.voter_id
+            and peer.points >= ev.points
+        ) as "songsAtLeast",
+        (
+          select coalesce(sum(peer.points), 0)::double precision
+          from effective_votes peer
+          where peer.submission_id = ev.submission_id
+        ) as "songPoints",
+        (
+          select count(*)::int
+          from effective_votes peer
+          where peer.submission_id = ev.submission_id
+        ) as "songEligibleVoters",
+        (
+          select count(*)::int
+          from effective_votes peer
+          where peer.submission_id = ev.submission_id
+            and peer.points >= ev.points
+        ) as "votersAtLeast"
+      from effective_votes ev
+      join ballot_totals bt
+        on bt.round_id = ev.round_id
+       and bt.voter_id = ev.voter_id
+      join submissions s on s.id = ev.submission_id
+      join selected_rounds sr on sr.id = ev.round_id
+      join leagues l on l.id = ev.league_id
+      join competitors c on c.id = ev.submitter_id
+      where ev.voter_id = ${playerId}
+        and ev.points > 0
     )
     select
       (select coalesce(json_agg(to_jsonb(overview_rows)), '[]'::json) from overview_rows) as overview,
@@ -2807,6 +3007,16 @@ export async function getPlayerProfileData(
         select coalesce(json_agg(to_jsonb(submission_rows) order by "supportIndex" desc nulls last, points desc), '[]'::json)
         from submission_rows
       ) as submissions,
+      (
+        select coalesce(
+          json_agg(
+            to_jsonb(highest_voted_song_rows)
+            order by "pointsGiven" desc, "songsAtLeast" asc, "eligibleOpportunities" desc, title asc
+          ),
+          '[]'::json
+        )
+        from highest_voted_song_rows
+      ) as "highestVotedSongs",
       (
         select coalesce(json_agg(to_jsonb(distribution_rows) order by direction, points), '[]'::json)
         from distribution_rows
@@ -2846,6 +3056,11 @@ export async function getPlayerProfileData(
   const timingRows = jsonRows<TimingRow & { sourceCreatedAt?: string }>(
     packedRow?.timing,
   );
+  const highestVotedSongs = jsonRows<PlayerVotedSongQueryRow>(
+    packedRow?.highestVotedSongs,
+  )
+    .map(mapVotedSong)
+    .sort(compareVotedSongsByPoints);
 
   return {
     player,
@@ -2856,6 +3071,7 @@ export async function getPlayerProfileData(
         }
       : null,
     submissions: submissionRows.map(mapSong),
+    highestVotedSongs,
     receivedDistribution: createPointDistribution(
       distributionRows.filter(({ direction }) => direction === "received"),
     ),

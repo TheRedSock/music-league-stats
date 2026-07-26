@@ -52,6 +52,7 @@ export function MusicLeagueScopeLinks({
   roundHref,
   roundLabel,
   roundTitle,
+  showIcon = true,
 }: {
   className?: string;
   leagueHref: string | null;
@@ -60,55 +61,54 @@ export function MusicLeagueScopeLinks({
   roundHref: string | null;
   roundLabel: ReactNode;
   roundTitle?: string;
+  showIcon?: boolean;
 }) {
   const iconHref = roundHref ?? leagueHref;
 
+  // Stay inline (no nested truncate/flex): parents with `truncate` should ellipsize
+  // at the end of the full line instead of collapsing this whole segment to "…".
   return (
-    <span
-      className={cn(
-        "inline-flex max-w-full min-w-0 items-center gap-1",
-        className,
-      )}
-    >
-      <span className="min-w-0 truncate">
-        {leagueHref ? (
-          <a
-            className="hover:text-lime-200"
-            href={leagueHref}
-            rel="noreferrer"
-            target="_blank"
-            title={leagueTitle}
-          >
-            {leagueLabel}
-          </a>
-        ) : (
-          <span title={leagueTitle}>{leagueLabel}</span>
-        )}
-        <span className="text-zinc-600"> · </span>
-        {roundHref ? (
-          <a
-            className="hover:text-lime-200"
-            href={roundHref}
-            rel="noreferrer"
-            target="_blank"
-            title={roundTitle}
-          >
-            {roundLabel}
-          </a>
-        ) : (
-          <span title={roundTitle}>{roundLabel}</span>
-        )}
-      </span>
-      {iconHref ? (
+    <span className={cn("inline", className)}>
+      {leagueHref ? (
         <a
-          aria-label="Open in Music League"
-          className="shrink-0 text-zinc-500 hover:text-lime-200"
-          href={iconHref}
+          className="hover:text-lime-200"
+          href={leagueHref}
           rel="noreferrer"
           target="_blank"
+          title={leagueTitle}
         >
-          <ExternalLink aria-hidden="true" className="size-3" />
+          {leagueLabel}
         </a>
+      ) : (
+        <span title={leagueTitle}>{leagueLabel}</span>
+      )}
+      <span className="text-zinc-600"> · </span>
+      {roundHref ? (
+        <a
+          className="hover:text-lime-200"
+          href={roundHref}
+          rel="noreferrer"
+          target="_blank"
+          title={roundTitle}
+        >
+          {roundLabel}
+        </a>
+      ) : (
+        <span title={roundTitle}>{roundLabel}</span>
+      )}
+      {showIcon && iconHref ? (
+        <>
+          {" "}
+          <a
+            aria-label="Open in Music League"
+            className="inline-block text-zinc-500 align-[-0.125em] hover:text-lime-200"
+            href={iconHref}
+            rel="noreferrer"
+            target="_blank"
+          >
+            <ExternalLink aria-hidden="true" className="size-3" />
+          </a>
+        </>
       ) : null}
     </span>
   );
