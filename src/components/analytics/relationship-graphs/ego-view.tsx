@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   FocusPlayerSelect,
@@ -25,29 +25,24 @@ import {
 export function EgoView({ graph }: { graph: RelationshipGraphData }) {
   const [metric, setMetric] = useState<UndirectedMetric>("alignment");
   const [focusId, setFocusId] = useState(graph.nodes[0]?.id ?? "");
-
-  useEffect(() => {
-    if (graph.nodes.length === 0) {
-      if (focusId) setFocusId("");
-      return;
-    }
-    if (!graph.nodes.some((node) => node.id === focusId)) {
-      setFocusId(graph.nodes[0].id);
-    }
-  }, [focusId, graph.nodes]);
+  // Derive a valid focus when the graph changes — avoid syncing via effect.
+  const resolvedFocusId = graph.nodes.some((node) => node.id === focusId)
+    ? focusId
+    : (graph.nodes[0]?.id ?? "");
 
   const focusEdges = useMemo(() => {
-    if (!focusId) return [];
+    if (!resolvedFocusId) return [];
     return graph.undirectedEdges.filter(
-      (edge) => edge.source === focusId || edge.target === focusId,
+      (edge) =>
+        edge.source === resolvedFocusId || edge.target === resolvedFocusId,
     );
-  }, [focusId, graph.undirectedEdges]);
+  }, [resolvedFocusId, graph.undirectedEdges]);
 
   const scale = useMemo(
     () => undirectedWeightScale(focusEdges, metric),
     [focusEdges, metric],
   );
-  const scaleKey = `ego:${focusId}:${metric}:${scale.low.toFixed(4)}:${scale.high.toFixed(4)}:${scale.sampleSize}`;
+  const scaleKey = `ego:${resolvedFocusId}:${metric}:${scale.low.toFixed(4)}:${scale.high.toFixed(4)}:${scale.sampleSize}`;
   const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(
     scale,
     scaleKey,
@@ -55,7 +50,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
   );
 
   const neighborEdges = useMemo(() => {
-    if (!focusId) return [];
+    if (!resolvedFocusId) return [];
     return focusEdges
       .map((edge) => ({
         edge,
@@ -66,7 +61,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
           item.weight != null && item.weight >= rawThreshold,
       )
       .sort((a, b) => b.weight - a.weight);
-  }, [focusEdges, focusId, metric, rawThreshold]);
+  }, [focusEdges, resolvedFocusId, metric, rawThreshold]);
 
   const maxNeighborWeight = Math.max(
     ...neighborEdges.map((item) => item.weight),
@@ -78,12 +73,13 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
   );
 
   const nodes: ForceNode[] = useMemo(() => {
-    if (!focusId) return [];
-    const focus = graph.nodes.find((node) => node.id === focusId);
+    if (!resolvedFocusId) return [];
+    const focus = graph.nodes.find((node) => node.id === resolvedFocusId);
     if (!focus) return [];
     const weightByNeighbor = new Map<string, number>();
     for (const { edge, weight } of neighborEdges) {
-      const other = edge.source === focusId ? edge.target : edge.source;
+      const other =
+        edge.source === resolvedFocusId ? edge.target : edge.source;
       weightByNeighbor.set(other, weight);
     }
     const span = Math.max(maxNeighborWeight - minNeighborWeight, 1e-6);
@@ -104,7 +100,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         }),
     ];
   }, [
-    focusId,
+    resolvedFocusId,
     graph.nodes,
     maxNeighborWeight,
     minNeighborWeight,
@@ -141,7 +137,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         <FocusPlayerSelect
           nodes={graph.nodes}
           onChange={setFocusId}
-          value={focusId}
+          value={resolvedFocusId}
         />
       </LabsControls>
       <p className="text-xs text-zinc-500">
@@ -153,7 +149,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         <GraphEmptyState message="No neighbors above this threshold for the focused player." />
       ) : (
         <RelationshipForceGraph
-          highlightId={focusId}
+          highlightId={resolvedFocusId}
           layout={{
             chargeStrength: -200,
             collideRadius: 22,

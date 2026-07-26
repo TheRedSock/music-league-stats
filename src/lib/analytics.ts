@@ -2408,38 +2408,6 @@ async function getMaterializedPlayerProfileData(
   };
 }
 
-function playerSearchPredicate(search: string): SQL {
-  return search ? sql`${competitorDisplayName("c")} ilike ${`%${search}%`}` : sql`true`;
-}
-
-function playerOrder(
-  sort: PlayerSort,
-  minimumRounds: number,
-  direction: SortDirection,
-): SQL {
-  const provisional = sql`case when pa.entered_rounds >= ${minimumRounds} then 0 else 1 end`;
-  const dir = sortKeyword(direction);
-  const nulls = nullsKeyword();
-  if (sort === "points")
-    return sql`${provisional}, pa.total_points ${dir}, name asc`;
-  if (sort === "songs")
-    return sql`${provisional}, pa.submissions ${dir}, pa.total_points desc`;
-  if (sort === "rounds")
-    return sql`${provisional}, pa.entered_rounds ${dir}, pa.total_points desc`;
-  if (sort === "name") return sql`name ${dir}`;
-  if (sort === "points-per-song")
-    return sql`${provisional}, "pointsPerSubmission" ${dir} ${nulls}, pa.total_points desc`;
-  if (sort === "points-per-voter")
-    return sql`${provisional}, "pointsPerEligibleVoter" ${dir} ${nulls}, pa.total_points desc`;
-  if (sort === "percentile")
-    return sql`${provisional}, pa.average_round_percentile ${dir} ${nulls}, pa.total_points desc`;
-  if (sort === "wins")
-    return sql`${provisional}, pa.round_wins ${dir}, pa.total_points desc`;
-  if (sort === "top-quartile")
-    return sql`${provisional}, "topQuartileRate" ${dir} ${nulls}, pa.total_points desc`;
-  return sql`${provisional}, pa.average_round_index ${dir} ${nulls}, pa.entered_rounds desc`;
-}
-
 function matPlayerSearchPredicate(search: string): SQL {
   return search ? sql`name ilike ${`%${search}%`}` : sql`true`;
 }

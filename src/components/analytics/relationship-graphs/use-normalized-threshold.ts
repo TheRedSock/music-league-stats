@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { WeightScale } from "@/lib/relationship-graph-shared";
 import { normalizedToRaw } from "@/lib/relationship-graph-shared";
@@ -17,10 +17,14 @@ export function useNormalizedThreshold(
 ) {
   const resolvedDefault = defaultNormalized ?? scale.defaultNormalized;
   const [normalized, setNormalized] = useState(resolvedDefault);
+  const [trackedKey, setTrackedKey] = useState(scaleKey);
 
-  useEffect(() => {
+  // Adjust state during render when the scale identity changes (React-recommended
+  // replacement for syncing via useEffect).
+  if (trackedKey !== scaleKey) {
+    setTrackedKey(scaleKey);
     setNormalized(resolvedDefault);
-  }, [scaleKey, resolvedDefault]);
+  }
 
   const rawThreshold = useMemo(
     () => normalizedToRaw(normalized, scale),

@@ -82,12 +82,15 @@ export function RelationshipForceGraph({
   const forcesReadyRef = useRef(false);
   const fitPaddingRef = useRef(fitPadding);
   const fitScaleRef = useRef(fitScale);
-  fitPaddingRef.current = fitPadding;
-  fitScaleRef.current = fitScale;
 
   // Start unset so we don't mount the canvas at a placeholder 640px width —
   // that first paint + early zoomToFit is what makes first load look wrong.
   const [width, setWidth] = useState(0);
+
+  useEffect(() => {
+    fitPaddingRef.current = fitPadding;
+    fitScaleRef.current = fitScale;
+  }, [fitPadding, fitScale]);
   const graphData = useMemo(() => ({ links, nodes }), [links, nodes]);
   const graphKey = useMemo(
     () =>
