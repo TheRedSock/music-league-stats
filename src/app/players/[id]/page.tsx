@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
 import { HighestVotedSongsPanel } from "@/components/analytics/highest-voted-songs-panel";
@@ -28,10 +28,13 @@ import {
   encodeScopeIds,
   getCachedFilterOptions,
   getCachedPlayerProfileData,
+  isUuid,
   loadAnalytics,
   leagueTableLabel,
   parseAnalyticsFilters,
+  playerPath,
   resolveAnalyticsFilter,
+  resolveCompetitorRef,
   selectedFilterLabel,
   scopeQueryParams,
   truncateArtistForMeta,
@@ -252,16 +255,20 @@ export default async function PlayerProfilePage({
   params: Promise<{ id: string }>;
   searchParams: Promise<SearchParams>;
 }) {
-  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const [{ id: slugOrId }, query] = await Promise.all([params, searchParams]);
   const result = await loadAnalytics(async () => {
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(query), options);
+    const resolved = await resolveCompetitorRef(slugOrId);
+    if (!resolved) {
+      return { filter, options, profile: null, resolved: null };
+    }
     const profile = await getCachedPlayerProfileData(
-      id,
+      resolved.id,
       encodeScopeIds(filter.leagueIds),
       encodeScopeIds(filter.roundIds),
     );
-    return { filter, options, profile };
+    return { filter, options, profile, resolved };
   });
 
   if (result.status !== "ready") {
@@ -274,7 +281,23 @@ export default async function PlayerProfilePage({
       </Container>
     );
   }
-  if (!result.data.profile) notFound();
+  if (!result.data.resolved || !result.data.profile) notFound();
+
+  // Prefer the canonical slug URL when someone hits the UUID fallback.
+  const { resolved } = result.data;
+  if (isUuid(slugOrId) && resolved.slug && slugOrId !== resolved.slug) {
+    const next = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined) continue;
+      if (Array.isArray(value)) {
+        for (const entry of value) next.append(key, entry);
+      } else {
+        next.set(key, value);
+      }
+    }
+    const suffix = next.size ? `?${next.toString()}` : "";
+    redirect(`${playerPath(resolved)}${suffix}`);
+  }
 
   const { filter, options, profile } = result.data;
   const { overview, player } = profile;
@@ -478,7 +501,10 @@ export default async function PlayerProfilePage({
                           <Link
                             className="truncate text-sm font-medium text-zinc-100 hover:text-lime-200"
                             href={buildAnalyticsHref(
-                              `/players/${row.competitorId}`,
+                              playerPath({
+                                id: row.competitorId,
+                                slug: row.competitorSlug,
+                              }),
                               filterParams,
                               {},
                             )}
@@ -571,7 +597,10 @@ export default async function PlayerProfilePage({
                       <Link
                         className="truncate text-sm font-medium text-zinc-100 hover:text-lime-200"
                         href={buildAnalyticsHref(
-                          `/players/${row.competitorId}`,
+                          playerPath({
+                            id: row.competitorId,
+                            slug: row.competitorSlug,
+                          }),
                           filterParams,
                           {},
                         )}
@@ -655,7 +684,10 @@ export default async function PlayerProfilePage({
                             <Link
                               className="text-sm font-medium text-zinc-100 hover:text-lime-200"
                               href={buildAnalyticsHref(
-                                `/players/${alignment.competitorId}`,
+                                playerPath({
+                                  id: alignment.competitorId,
+                                  slug: alignment.competitorSlug,
+                                }),
                                 filterParams,
                                 {},
                               )}

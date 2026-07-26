@@ -26,6 +26,7 @@ import {
   type SubmissionImportRow,
   type VoteImportRow,
 } from "@/lib/import-data";
+import { allocateUniquePlayerSlug } from "@/lib/player-slug";
 import { sha256Json } from "@/lib/server-hash";
 
 export class ImportCommitError extends Error {
@@ -279,6 +280,43 @@ export async function commitImportBatch(
       })
       .where(eq(importBatches.id, batchId));
 
+    const existingCompetitorRows = imported.competitors.length
+      ? await tx
+          .select({
+            sourceCompetitorId: competitors.sourceCompetitorId,
+            slug: competitors.slug,
+          })
+          .from(competitors)
+          .where(
+            inArray(
+              competitors.sourceCompetitorId,
+              imported.competitors.map((row) => row.sourceCompetitorId),
+            ),
+          )
+      : [];
+    const existingBySource = new Map(
+      existingCompetitorRows.map((row) => [row.sourceCompetitorId, row]),
+    );
+    const usedSlugs = new Set(
+      (
+        await tx
+          .select({ slug: competitors.slug })
+          .from(competitors)
+      ).map((row) => row.slug),
+    );
+    const slugBySource = new Map<string, string>();
+    for (const row of imported.competitors) {
+      const existing = existingBySource.get(row.sourceCompetitorId);
+      if (existing) {
+        slugBySource.set(row.sourceCompetitorId, existing.slug);
+        continue;
+      }
+      slugBySource.set(
+        row.sourceCompetitorId,
+        allocateUniquePlayerSlug(row.name, usedSlugs),
+      );
+    }
+
     for (const group of batches(imported.competitors)) {
       await tx
         .insert(competitors)
@@ -286,6 +324,7 @@ export async function commitImportBatch(
           group.map((row) => ({
             sourceCompetitorId: row.sourceCompetitorId,
             name: row.name,
+            slug: slugBySource.get(row.sourceCompetitorId)!,
           })),
         )
         .onConflictDoUpdate({

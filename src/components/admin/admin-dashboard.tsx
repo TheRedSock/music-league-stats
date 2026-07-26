@@ -166,11 +166,12 @@ export function AdminDashboard({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <UserRoundCog aria-hidden="true" className="size-4 text-lime-300" />
-            Player names
+            Player names &amp; slugs
           </CardTitle>
           <CardDescription>
-            Set a global display-name override without changing the imported
-            source name.
+            Override the display name and edit the unique profile slug used in
+            /players/… URLs. Imports seed the slug from the Music League name
+            and never overwrite admin edits.
           </CardDescription>
         </CardHeader>
         <CardContent>

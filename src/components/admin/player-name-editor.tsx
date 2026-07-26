@@ -17,6 +17,7 @@ function matchesQuery(player: AdminPlayer, query: string): boolean {
     player.displayName,
     player.importedName,
     player.nameOverride,
+    player.slug,
     player.sourceCompetitorId,
   ]
     .filter((value): value is string => Boolean(value))
@@ -28,6 +29,7 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(players[0]?.id ?? "");
   const [override, setOverride] = useState(players[0]?.nameOverride ?? "");
+  const [slug, setSlug] = useState(players[0]?.slug ?? "");
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState<{
     kind: "success" | "error";
@@ -45,6 +47,7 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
     const player = players.find((candidate) => candidate.id === id);
     setSelectedId(id);
     setOverride(player?.nameOverride ?? "");
+    setSlug(player?.slug ?? "");
     setMessage(null);
   }
 
@@ -57,6 +60,7 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
       const nextPlayer = nextPlayers[0] ?? null;
       setSelectedId(nextPlayer?.id ?? "");
       setOverride(nextPlayer?.nameOverride ?? "");
+      setSlug(nextPlayer?.slug ?? "");
       setMessage(null);
     }
   }
@@ -70,17 +74,15 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
       const response = await fetch(`/api/admin/players/${selectedPlayer.id}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ nameOverride: override }),
+        body: JSON.stringify({ nameOverride: override, slug }),
       });
       const result = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(result.error ?? "Could not update the player name.");
+        throw new Error(result.error ?? "Could not update the player.");
       }
       setMessage({
         kind: "success",
-        text: override.trim()
-          ? "Player display name updated."
-          : "Player display name now follows imports.",
+        text: "Player display name and slug updated.",
       });
       router.refresh();
     } catch (caught) {
@@ -89,7 +91,7 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
         text:
           caught instanceof Error
             ? caught.message
-            : "Could not update the player name.",
+            : "Could not update the player.",
       });
     } finally {
       setPending(false);
@@ -115,7 +117,7 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
           id="player-search"
           maxLength={100}
           onChange={(event) => updateQuery(event.target.value)}
-          placeholder="Search name or source ID"
+          placeholder="Search name, slug, or source ID"
           type="search"
           value={query}
         />
@@ -132,7 +134,7 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
           {filteredPlayers.length ? (
             filteredPlayers.map((player) => (
               <option key={player.id} value={player.id}>
-                {player.displayName}
+                {player.displayName} ({player.slug})
               </option>
             ))
           ) : (
@@ -160,6 +162,12 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
             </dd>
           </div>
           <div className="flex items-center justify-between gap-3">
+            <dt className="text-zinc-500">Profile URL</dt>
+            <dd className="truncate font-mono text-zinc-200" title={`/players/${selectedPlayer?.slug ?? ""}`}>
+              /players/{selectedPlayer?.slug}
+            </dd>
+          </div>
+          <div className="flex items-center justify-between gap-3">
             <dt className="text-zinc-500">Leagues</dt>
             <dd className="font-mono text-zinc-200">
               {selectedPlayer?.leagueCount.toLocaleString()}
@@ -182,9 +190,28 @@ export function PlayerNameEditor({ players }: { players: AdminPlayer[] }) {
           Leave blank to use the latest imported name. Future CSV imports update
           the imported name, but not this override.
         </p>
+
+        <label className={`${labelClass} mt-4`} htmlFor="player-slug">
+          Profile slug
+        </label>
+        <input
+          className={inputClass}
+          id="player-slug"
+          maxLength={80}
+          onChange={(event) => setSlug(event.target.value)}
+          pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+          required
+          value={slug}
+        />
+        <p className="mt-2 text-xs leading-5 text-zinc-500">
+          Unique lowercase URL key for{" "}
+          <span className="font-mono text-zinc-400">/players/…</span>. Imports
+          seed this from the Music League name and do not overwrite admin edits.
+        </p>
+
         <div className="mt-4 flex flex-wrap items-center gap-3">
           <Button disabled={pending || !selectedPlayer} size="sm" type="submit">
-            {pending ? "Saving..." : "Save player name"}
+            {pending ? "Saving..." : "Save player"}
           </Button>
           <Button
             disabled={pending || !override}

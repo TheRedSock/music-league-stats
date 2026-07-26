@@ -57,6 +57,13 @@
       "when": 1784840000000,
       "tag": "0007_spotify_artist_enrichment",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784850000000,
+      "tag": "0008_competitor_slug",
+      "breakpoints": true
     }
   ]
 }

@@ -5,10 +5,12 @@ import { useMemo, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { playerPath } from "@/lib/player-slug";
 import { buildAnalyticsHref, type QueryValue } from "@/lib/analytics-url";
 
 type LeaderboardRow = {
   id: string;
+  slug: string;
   name: string;
   totalPoints: number;
   normalizedIndex: number | null;
@@ -126,7 +128,7 @@ export function LeaderboardPanel({
                   <Link
                     className="hover:text-lime-200"
                     href={buildAnalyticsHref(
-                      `/players/${row.id}`,
+                      playerPath(row),
                       filterParams,
                       {},
                     )}

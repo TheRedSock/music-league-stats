@@ -3,6 +3,8 @@
  * Keep this module free of server-only imports (db, next/cache, etc.).
  */
 
+export { playerPath } from "@/lib/player-slug";
+
 export const songSorts = [
   "title",
   "submitter",
@@ -65,6 +67,7 @@ export type PlayerVotedSongRow = {
   spotifyUri: string;
   spotifyUrl: string | null;
   submitterId: string;
+  submitterSlug: string;
   submitterName: string;
   leagueId: string;
   leagueName: string;

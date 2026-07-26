@@ -75,6 +75,7 @@ export type DashboardData = {
   };
   leaderboard: Array<{
     id: string;
+    slug: string;
     name: string;
     totalPoints: number;
     normalizedIndex: number | null;
@@ -102,6 +103,7 @@ export type SongAnalyticsRow = {
   spotifyUri: string;
   spotifyUrl: string | null;
   submitterId: string;
+  submitterSlug: string;
   submitterName: string;
   leagueId: string;
   leagueName: string;
@@ -130,6 +132,7 @@ export {
   defaultSongSortDirection,
   fairShareBlowout,
   leagueTableLabel,
+  playerPath,
   songSorts,
   sortDirections,
   truncateArtistForMeta,
@@ -175,6 +178,7 @@ export type PlayerSort = (typeof playerSorts)[number];
 
 export type PlayerDirectoryRow = {
   id: string;
+  slug: string;
   name: string;
   totalPoints: number;
   submissions: number;
@@ -200,6 +204,7 @@ export type PlayersData = {
 export type DirectionalRelationship = {
   direction: "received" | "given";
   competitorId: string;
+  competitorSlug: string;
   competitorName: string;
   points: number;
   encounters: number;
@@ -211,6 +216,7 @@ export type DirectionalRelationship = {
 
 export type MutualRelationship = {
   competitorId: string;
+  competitorSlug: string;
   competitorName: string;
   points: number;
   opportunities: number;
@@ -238,7 +244,7 @@ export type TimingRow = {
 };
 
 export type PlayerProfileData = {
-  player: { id: string; name: string };
+  player: { id: string; slug: string; name: string };
   overview: PlayerDirectoryRow | null;
   submissions: SongAnalyticsRow[];
   highestVotedSongs: PlayerVotedSongRow[];
@@ -248,6 +254,7 @@ export type PlayerProfileData = {
   mutualRelationships: MutualRelationship[];
   alignments: Array<{
     competitorId: string;
+    competitorSlug: string;
     competitorName: string;
     alignment: number;
     comparableFeatures: number;
@@ -1276,6 +1283,7 @@ type DashboardCoreQueryRow = DashboardSummaryRow & {
 
 type LeaderboardQueryRow = {
   id: string;
+  slug: string;
   name: string;
   totalPoints: number;
   normalizedIndex: number | null;
@@ -1289,6 +1297,7 @@ type SongQueryRow = {
   album: string | null;
   spotifyUri: string;
   submitterId: string;
+  submitterSlug: string;
   submitterName: string;
   leagueId: string;
   leagueName: string;
@@ -1340,6 +1349,7 @@ export function songSelect(): SQL {
       ss.album_name as "album",
       ss.spotify_uri as "spotifyUri",
       ss.submitter_id as "submitterId",
+      c.slug as "submitterSlug",
       ${competitorDisplayName("c")} as "submitterName",
       ss.league_id as "leagueId",
       l.name as "leagueName",
@@ -1596,41 +1606,43 @@ async function countScopeRounds(filter: AnalyticsFilter): Promise<number> {
 function matSongSelect(leagueIds: readonly string[] = []): SQL {
   const leagueFilter =
     leagueIds.length > 0
-      ? sql`where league_id in (${sql.join(
+      ? sql`where s.league_id in (${sql.join(
           leagueIds.map((id) => sql`${id}`),
           sql`, `,
         )})`
       : sql``;
   return sql`
     select
-      id,
-      title,
-      artist,
-      album,
-      spotify_uri as "spotifyUri",
-      submitter_id as "submitterId",
-      submitter_name as "submitterName",
-      league_id as "leagueId",
-      league_name as "leagueName",
-      league_slug as "leagueSlug",
-      league_music_league_id as "leagueMusicLeagueId",
-      round_id as "roundId",
-      source_round_id as "sourceRoundId",
-      round_name as "roundName",
-      round_ordinal as "roundOrdinal",
-      submitted_at as "submittedAt",
-      points,
-      expected_points as "expectedPoints",
-      eligible_rows as "eligibleRows",
-      positive_rows as "positiveRows",
-      points_per_eligible_voter as "pointsPerEligibleVoter",
-      positive_reach as "positiveReach",
-      round_point_share as "roundPointShare",
-      support_index as "supportIndex",
-      support_index_eb as "supportIndexEb",
-      support_z as "supportZ",
-      performance_percentile as "performancePercentile"
-    from analytics_song_stats
+      s.id,
+      s.title,
+      s.artist,
+      s.album,
+      s.spotify_uri as "spotifyUri",
+      s.submitter_id as "submitterId",
+      c.slug as "submitterSlug",
+      s.submitter_name as "submitterName",
+      s.league_id as "leagueId",
+      s.league_name as "leagueName",
+      s.league_slug as "leagueSlug",
+      s.league_music_league_id as "leagueMusicLeagueId",
+      s.round_id as "roundId",
+      s.source_round_id as "sourceRoundId",
+      s.round_name as "roundName",
+      s.round_ordinal as "roundOrdinal",
+      s.submitted_at as "submittedAt",
+      s.points,
+      s.expected_points as "expectedPoints",
+      s.eligible_rows as "eligibleRows",
+      s.positive_rows as "positiveRows",
+      s.points_per_eligible_voter as "pointsPerEligibleVoter",
+      s.positive_reach as "positiveReach",
+      s.round_point_share as "roundPointShare",
+      s.support_index as "supportIndex",
+      s.support_index_eb as "supportIndexEb",
+      s.support_z as "supportZ",
+      s.performance_percentile as "performancePercentile"
+    from analytics_song_stats s
+    join competitors c on c.id = s.submitter_id
     ${leagueFilter}
   `;
 }
@@ -1684,19 +1696,22 @@ async function getMaterializedDashboardData(
         useEagerPlayers
           ? sql`
       select
-        id,
-        name,
-        total_points as "totalPoints",
-        average_round_index as "normalizedIndex",
-        entered_rounds as "enteredRounds"
-      from analytics_player_stats
-      where scope_key = ${scopeKey}
-      order by total_points desc, name asc
+        aps.id,
+        c.slug,
+        aps.name,
+        aps.total_points as "totalPoints",
+        aps.average_round_index as "normalizedIndex",
+        aps.entered_rounds as "enteredRounds"
+      from analytics_player_stats aps
+      join competitors c on c.id = aps.id
+      where aps.scope_key = ${scopeKey}
+      order by aps.total_points desc, aps.name asc
       limit 100
           `
           : sql`
       select
         "submitterId" as id,
+        min("submitterSlug") as slug,
         min("submitterName") as name,
         sum(points)::int as "totalPoints",
         avg("supportIndex") as "normalizedIndex",
@@ -1828,6 +1843,7 @@ export async function getDashboardData(
     leaderboard_rows as (
       select
         c.id,
+        c.slug,
         ${competitorDisplayName("c")} as name,
         sum(pr.points)::int as "totalPoints",
         avg(case when pr.expected_points > 0
@@ -1835,7 +1851,7 @@ export async function getDashboardData(
         count(*)::int as "enteredRounds"
       from player_round pr
       join competitors c on c.id = pr.submitter_id
-      group by c.id, c.name_override, c.name
+      group by c.id, c.slug, c.name_override, c.name
       order by "totalPoints" desc, name asc
       limit 100
     ),
@@ -2092,6 +2108,7 @@ export function playerStatsCtes(filter: AnalyticsFilter): SQL {
 
 type PlayerQueryRow = {
   id: string;
+  slug: string;
   name: string;
   totalPoints: number;
   submissions: number;
@@ -2122,6 +2139,7 @@ type PlayerVotedSongQueryRow = {
   artist: string;
   spotifyUri: string;
   submitterId: string;
+  submitterSlug: string;
   submitterName: string;
   leagueId: string;
   leagueName: string;
@@ -2167,7 +2185,7 @@ function mapVotedSong(row: PlayerVotedSongQueryRow): PlayerVotedSongRow {
 }
 
 async function getMaterializedPlayerProfileData(
-  player: { id: string; name: string },
+  player: { id: string; slug: string; name: string },
   minimumRounds: number,
   scopeKey: string,
   leagueIds: readonly string[],
@@ -2183,20 +2201,22 @@ async function getMaterializedPlayerProfileData(
     ),
     overview_rows as (
       select
-        id,
-        name,
-        total_points as "totalPoints",
-        submissions,
-        entered_rounds as "enteredRounds",
-        points_per_submission as "pointsPerSubmission",
-        points_per_eligible_voter as "pointsPerEligibleVoter",
-        average_round_index as "averageRoundIndex",
-        average_round_percentile as "averageRoundPercentile",
-        round_wins as "roundWins",
-        top_quartile_rate as "topQuartileRate",
-        performance_rank as "performanceRank"
-      from analytics_player_stats
-      where scope_key = ${scopeKey} and id = ${player.id}
+        aps.id,
+        c.slug,
+        aps.name,
+        aps.total_points as "totalPoints",
+        aps.submissions,
+        aps.entered_rounds as "enteredRounds",
+        aps.points_per_submission as "pointsPerSubmission",
+        aps.points_per_eligible_voter as "pointsPerEligibleVoter",
+        aps.average_round_index as "averageRoundIndex",
+        aps.average_round_percentile as "averageRoundPercentile",
+        aps.round_wins as "roundWins",
+        aps.top_quartile_rate as "topQuartileRate",
+        aps.performance_rank as "performanceRank"
+      from analytics_player_stats aps
+      join competitors c on c.id = aps.id
+      where aps.scope_key = ${scopeKey} and aps.id = ${player.id}
       limit 1
     ),
     distribution_rows as (
@@ -2206,44 +2226,58 @@ async function getMaterializedPlayerProfileData(
     ),
     directional_relationships as (
       select
-        direction,
-        right_id as "competitorId",
-        right_name as "competitorName",
-        points,
-        opportunities as encounters,
-        shared_rounds as "sharedRounds",
-        scope_rounds as "scopeRounds",
-        points_per_opportunity as "pointsPerEncounter",
-        positive_rate as "positiveRate"
-      from analytics_relationship_pairs
-      where scope_key = ${scopeKey} and left_id = ${player.id}
+        arp.direction,
+        arp.right_id as "competitorId",
+        c.slug as "competitorSlug",
+        arp.right_name as "competitorName",
+        arp.points,
+        arp.opportunities as encounters,
+        arp.shared_rounds as "sharedRounds",
+        arp.scope_rounds as "scopeRounds",
+        arp.points_per_opportunity as "pointsPerEncounter",
+        arp.positive_rate as "positiveRate"
+      from analytics_relationship_pairs arp
+      join competitors c on c.id = arp.right_id
+      where arp.scope_key = ${scopeKey} and arp.left_id = ${player.id}
     ),
     mutual_relationships as (
       select
-        case when left_id = ${player.id} then right_id else left_id end as "competitorId",
-        case when left_id = ${player.id} then right_name else left_name end as "competitorName",
-        points,
-        opportunities,
-        shared_rounds as "sharedRounds",
-        scope_rounds as "scopeRounds",
-        points_per_opportunity as "pointsPerOpportunity",
-        positive_rate as "positiveRate",
-        ballot_point_share as "ballotPointShare"
-      from analytics_relationship_mutual
-      where scope_key = ${scopeKey}
-        and (left_id = ${player.id} or right_id = ${player.id})
+        case when arm.left_id = ${player.id} then arm.right_id else arm.left_id end as "competitorId",
+        c.slug as "competitorSlug",
+        case when arm.left_id = ${player.id} then arm.right_name else arm.left_name end as "competitorName",
+        arm.points,
+        arm.opportunities,
+        arm.shared_rounds as "sharedRounds",
+        arm.scope_rounds as "scopeRounds",
+        arm.points_per_opportunity as "pointsPerOpportunity",
+        arm.positive_rate as "positiveRate",
+        arm.ballot_point_share as "ballotPointShare"
+      from analytics_relationship_mutual arm
+      join competitors c
+        on c.id = case
+          when arm.left_id = ${player.id} then arm.right_id
+          else arm.left_id
+        end
+      where arm.scope_key = ${scopeKey}
+        and (arm.left_id = ${player.id} or arm.right_id = ${player.id})
     ),
     alignment_rows as (
       select
-        case when left_id = ${player.id} then right_id else left_id end as "competitorId",
-        case when left_id = ${player.id} then right_name else left_name end as "competitorName",
-        alignment,
-        comparable_features as "comparableFeatures",
-        shared_rounds as "sharedRounds",
-        scope_rounds as "scopeRounds"
-      from analytics_relationship_alignment
-      where scope_key = ${scopeKey}
-        and (left_id = ${player.id} or right_id = ${player.id})
+        case when ara.left_id = ${player.id} then ara.right_id else ara.left_id end as "competitorId",
+        c.slug as "competitorSlug",
+        case when ara.left_id = ${player.id} then ara.right_name else ara.left_name end as "competitorName",
+        ara.alignment,
+        ara.comparable_features as "comparableFeatures",
+        ara.shared_rounds as "sharedRounds",
+        ara.scope_rounds as "scopeRounds"
+      from analytics_relationship_alignment ara
+      join competitors c
+        on c.id = case
+          when ara.left_id = ${player.id} then ara.right_id
+          else ara.left_id
+        end
+      where ara.scope_key = ${scopeKey}
+        and (ara.left_id = ${player.id} or ara.right_id = ${player.id})
     ),
     timing_rows as (
       select
@@ -2298,6 +2332,7 @@ async function getMaterializedPlayerProfileData(
         s.artist_name as artist,
         s.spotify_uri as "spotifyUri",
         s.submitter_id as "submitterId",
+        c.slug as "submitterSlug",
         ${competitorDisplayName("c")} as "submitterName",
         s.league_id as "leagueId",
         l.name as "leagueName",
@@ -2472,31 +2507,33 @@ export async function getPlayersData(
     const rows = await db.execute<PlayerQueryRow>(sql`
       with ranked_players as (
         select
-          id,
-          name,
-          total_points as "totalPoints",
-          submissions,
-          entered_rounds as "enteredRounds",
-          points_per_submission as "pointsPerSubmission",
-          points_per_eligible_voter as "pointsPerEligibleVoter",
-          average_round_index as "averageRoundIndex",
-          average_round_percentile as "averageRoundPercentile",
-          round_wins as "roundWins",
-          top_quartile_rate as "topQuartileRate",
+          aps.id,
+          c.slug,
+          aps.name,
+          aps.total_points as "totalPoints",
+          aps.submissions,
+          aps.entered_rounds as "enteredRounds",
+          aps.points_per_submission as "pointsPerSubmission",
+          aps.points_per_eligible_voter as "pointsPerEligibleVoter",
+          aps.average_round_index as "averageRoundIndex",
+          aps.average_round_percentile as "averageRoundPercentile",
+          aps.round_wins as "roundWins",
+          aps.top_quartile_rate as "topQuartileRate",
           case
-            when entered_rounds >= ${minimumRounds}
+            when aps.entered_rounds >= ${minimumRounds}
               then rank() over (
                 order by
-                  case when entered_rounds >= ${minimumRounds} then 0 else 1 end,
-                  average_round_index desc nulls last,
-                  entered_rounds desc,
-                  total_points desc,
-                  id
+                  case when aps.entered_rounds >= ${minimumRounds} then 0 else 1 end,
+                  aps.average_round_index desc nulls last,
+                  aps.entered_rounds desc,
+                  aps.total_points desc,
+                  aps.id
               )::int
             else null
           end as "performanceRank"
-        from analytics_player_stats
-        where scope_key = ${scopeKey}
+        from analytics_player_stats aps
+        join competitors c on c.id = aps.id
+        where aps.scope_key = ${scopeKey}
       )
       select *
       from ranked_players
@@ -2525,6 +2562,7 @@ export async function getPlayersData(
       player_round as (
         select
           "submitterId" as submitter_id,
+          min("submitterSlug") as slug,
           min("submitterName") as name,
           "roundId" as round_id,
           sum(points)::int as points,
@@ -2556,6 +2594,7 @@ export async function getPlayersData(
       player_aggregates as (
         select
           pri.submitter_id,
+          min(pri.slug) as slug,
           min(pri.name) as name,
           sum(pri.points)::int as total_points,
           sum(pri.submissions)::int as submissions,
@@ -2571,6 +2610,7 @@ export async function getPlayersData(
       ranked_players as (
         select
           pa.submitter_id as id,
+          pa.slug,
           pa.name,
           pa.total_points as "totalPoints",
           pa.submissions,
@@ -2617,6 +2657,7 @@ export async function getPlayersData(
     ranked_players as (
       select
         c.id,
+        c.slug,
         ${competitorDisplayName("c")} as name,
         pa.total_points as "totalPoints",
         pa.submissions,
@@ -2660,6 +2701,36 @@ export async function getPlayersData(
   };
 }
 
+export async function resolveCompetitorRef(
+  slugOrId: string,
+): Promise<{ id: string; slug: string; name: string } | null> {
+  const trimmed = slugOrId.trim();
+  if (!trimmed) return null;
+
+  const bySlug = await db
+    .select({
+      id: competitors.id,
+      slug: competitors.slug,
+      name: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
+    })
+    .from(competitors)
+    .where(eq(competitors.slug, trimmed.toLowerCase()))
+    .limit(1);
+  if (bySlug[0]) return bySlug[0];
+
+  if (!isUuid(trimmed)) return null;
+  const byId = await db
+    .select({
+      id: competitors.id,
+      slug: competitors.slug,
+      name: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
+    })
+    .from(competitors)
+    .where(eq(competitors.id, trimmed))
+    .limit(1);
+  return byId[0] ?? null;
+}
+
 export async function getPlayerProfileData(
   playerId: string,
   filter: AnalyticsFilter,
@@ -2668,6 +2739,7 @@ export async function getPlayerProfileData(
   const playerRows = await db
     .select({
       id: competitors.id,
+      slug: competitors.slug,
       name: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
     })
     .from(competitors)
@@ -2699,6 +2771,7 @@ export async function getPlayerProfileData(
     overview_rows as (
       select
         c.id,
+        c.slug,
         ${competitorDisplayName("c")} as name,
         pa.total_points as "totalPoints",
         pa.submissions,
@@ -2757,6 +2830,7 @@ export async function getPlayerProfileData(
       select
         rr.direction,
         rr.competitor_id as "competitorId",
+        c.slug as "competitorSlug",
         ${competitorDisplayName("c")} as "competitorName",
         rr.points,
         rr.encounters,
@@ -2811,6 +2885,7 @@ export async function getPlayerProfileData(
     mutual_relationships as (
       select
         mr.competitor_id as "competitorId",
+        c.slug as "competitorSlug",
         ${competitorDisplayName("c")} as "competitorName",
         mr.points,
         mr.opportunities,
@@ -2834,6 +2909,7 @@ export async function getPlayerProfileData(
           when pc.left_id = ${playerId} then pc.right_id
           else pc.left_id
         end as "competitorId",
+        c.slug as "competitorSlug",
         ${competitorDisplayName("c")} as "competitorName",
         pc.dot / nullif(pc.magnitude, 0) as alignment,
         pc.comparable_features as "comparableFeatures",
@@ -2932,6 +3008,7 @@ export async function getPlayerProfileData(
         s.artist_name as artist,
         s.spotify_uri as "spotifyUri",
         s.submitter_id as "submitterId",
+        c.slug as "submitterSlug",
         ${competitorDisplayName("c")} as "submitterName",
         s.league_id as "leagueId",
         l.name as "leagueName",

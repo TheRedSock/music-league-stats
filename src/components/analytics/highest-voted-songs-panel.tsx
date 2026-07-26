@@ -26,6 +26,7 @@ import { buildAnalyticsHref, type QueryValue } from "@/lib/analytics-url";
 import {
   compareVotedSongsByPoints,
   leagueTableLabel,
+  playerPath,
   truncateRoundName,
   type PlayerVotedSongRow,
   type SortDirection,
@@ -202,7 +203,11 @@ function VotedSongMeta({
       {row.artist} ·{" "}
       <Link
         className="hover:text-lime-200"
-        href={buildAnalyticsHref(`/players/${row.submitterId}`, filterParams, {})}
+        href={buildAnalyticsHref(
+          playerPath({ id: row.submitterId, slug: row.submitterSlug }),
+          filterParams,
+          {},
+        )}
       >
         {row.submitterName}
       </Link>{" "}
@@ -451,7 +456,10 @@ export function HighestVotedSongsPanel({
                             <Link
                               className="block truncate hover:text-lime-200"
                               href={buildAnalyticsHref(
-                                `/players/${row.submitterId}`,
+                                playerPath({
+                                  id: row.submitterId,
+                                  slug: row.submitterSlug,
+                                }),
                                 filterParams,
                                 {},
                               )}

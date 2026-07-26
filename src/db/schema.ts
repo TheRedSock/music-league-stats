@@ -92,10 +92,12 @@ export const competitors = pgTable(
     sourceCompetitorId: text("source_competitor_id").notNull(),
     name: text("name").notNull(),
     nameOverride: text("name_override"),
+    slug: text("slug").notNull(),
     ...timestamps,
   },
   (table) => [
     uniqueIndex("competitors_source_id_unique").on(table.sourceCompetitorId),
+    uniqueIndex("competitors_slug_unique").on(table.slug),
     index("competitors_name_idx").on(table.name),
   ],
 );

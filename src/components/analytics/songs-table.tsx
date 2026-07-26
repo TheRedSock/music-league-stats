@@ -25,6 +25,7 @@ import {
 import {
   defaultSongSortDirection,
   leagueTableLabel,
+  playerPath,
   truncateRoundName,
   type SongSort,
   type SortDirection,
@@ -245,7 +246,10 @@ export function SongsTable({
                   <Link
                     className="block truncate text-zinc-200 hover:text-lime-200"
                     href={buildAnalyticsHref(
-                      `/players/${song.submitterId}`,
+                      playerPath({
+                        id: song.submitterId,
+                        slug: song.submitterSlug,
+                      }),
                       currentParams,
                       { dir: null, q: null, sort: null },
                     )}

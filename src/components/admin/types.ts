@@ -36,6 +36,7 @@ export type AdminPlayer = {
   sourceCompetitorId: string;
   importedName: string;
   nameOverride: string | null;
+  slug: string;
   displayName: string;
   leagueCount: number;
 };

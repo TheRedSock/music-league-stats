@@ -38,6 +38,7 @@ import {
   parsePlayerSort,
   parsePlayerSortDirection,
   parseSearch,
+  playerPath,
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
@@ -242,7 +243,7 @@ export default async function PlayersPage({
                         <PendingLink
                           className="truncate font-medium text-zinc-100 hover:text-lime-200"
                           href={buildAnalyticsHref(
-                            `/players/${player.id}`,
+                            playerPath(player),
                             currentParams,
                             { dir: null, q: null, sort: null },
                           )}

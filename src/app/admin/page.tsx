@@ -93,6 +93,7 @@ export default async function AdminPage() {
           sourceCompetitorId: competitors.sourceCompetitorId,
           importedName: competitors.name,
           nameOverride: competitors.nameOverride,
+          slug: competitors.slug,
           displayName: sql<string>`coalesce(${competitors.nameOverride}, ${competitors.name})`,
           leagueCount: sql<number>`count(${leagueMembers.leagueId})::int`,
         })
@@ -103,6 +104,7 @@ export default async function AdminPage() {
           competitors.sourceCompetitorId,
           competitors.name,
           competitors.nameOverride,
+          competitors.slug,
         )
         .orderBy(
           sql`coalesce(${competitors.nameOverride}, ${competitors.name}) asc`,
