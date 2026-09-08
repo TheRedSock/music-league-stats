@@ -21,6 +21,8 @@ import {
   parseSongSortDirection,
   percentileRank,
   qualificationRoundFloor,
+  qualificationFeatureFloor,
+  meetsRelationshipSampleFloor,
   resolveAnalyticsFilter,
   safeRatio,
   estimateSupportIndexVarianceComponents,
@@ -76,6 +78,40 @@ describe("analytics metric helpers", () => {
     expect(qualificationRoundFloor(3)).toBe(1);
     expect(qualificationRoundFloor(1)).toBe(1);
     expect(qualificationRoundFloor(0)).toBe(1);
+  });
+
+  it("scales alignment feature floor with the round floor", () => {
+    expect(qualificationFeatureFloor(76)).toBe(20);
+    expect(qualificationFeatureFloor(38)).toBe(20);
+    expect(qualificationFeatureFloor(6)).toBe(10);
+    expect(qualificationFeatureFloor(3)).toBe(5);
+    expect(qualificationFeatureFloor(1)).toBe(5);
+  });
+
+  it("uses the sample-round denominator for relationship floors", () => {
+    expect(
+      meetsRelationshipSampleFloor({ sampleRounds: 76, sharedRounds: 20 }),
+    ).toBe(false);
+    expect(
+      meetsRelationshipSampleFloor({ sampleRounds: 38, sharedRounds: 20 }),
+    ).toBe(true);
+    expect(
+      meetsRelationshipSampleFloor({ sampleRounds: 38, sharedRounds: 12 }),
+    ).toBe(false);
+    expect(
+      meetsRelationshipSampleFloor({
+        comparableFeatures: 19,
+        sampleRounds: 76,
+        sharedRounds: 26,
+      }),
+    ).toBe(false);
+    expect(
+      meetsRelationshipSampleFloor({
+        comparableFeatures: 20,
+        sampleRounds: 76,
+        sharedRounds: 26,
+      }),
+    ).toBe(true);
   });
 
   it("expresses support relative to expected eligible ballot points", () => {

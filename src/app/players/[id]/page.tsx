@@ -528,14 +528,14 @@ export default async function PlayerProfilePage({
               {!groups.most.length ? (
                 <p className="text-sm leading-6 text-zinc-500 sm:col-span-2">
                   No comparison has eligible opportunities in at least one third of
-                  the selected rounds.
+                  this player's entered rounds.
                 </p>
               ) : (
                 <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
                   The displayed rate is points per eligible opportunity,
                   including inferred zeroes. Comparisons must cover at least
-                  one third of the selected rounds; the required sample therefore
-                  scales down for league and round filters.
+                  one third of the rounds this player entered in the selected
+                  scope.
                 </p>
               )}
             </CardContent>
@@ -555,7 +555,7 @@ export default async function PlayerProfilePage({
             </Link>
           </CardTitle>
           <CardDescription>
-            {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons must cover at least one third of the selected scope.`}
+            {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons must cover at least one third of the rounds this player entered.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-7 sm:grid-cols-2 xl:grid-cols-4">
@@ -624,7 +624,7 @@ export default async function PlayerProfilePage({
           {!mutual.mostPoints.length ? (
             <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
               No mutual comparison has eligible opportunities in at least one third
-              of the selected rounds.
+              of this player's entered rounds.
             </p>
           ) : null}
         </CardContent>
@@ -711,7 +711,7 @@ export default async function PlayerProfilePage({
             ) : (
               <p className="text-sm leading-6 text-zinc-500">
                 No comparison has enough features and shared voted rounds
-                across at least one third of the selected scope.
+                across at least one third of this player's entered rounds.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">

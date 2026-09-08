@@ -229,7 +229,9 @@ function RatioPie({
                 }}
               />
               <p className="font-mono text-sm font-semibold text-zinc-50">
-                {hover.slice.bucket.label} points
+                {hover.slice.bucket.label === "1"
+                  ? "1 point"
+                  : `${hover.slice.bucket.label} points`}
               </p>
             </div>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]">

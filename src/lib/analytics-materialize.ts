@@ -866,7 +866,6 @@ async function insertRelationshipPairs(
     from relationship_rows rr
     join competitors left_player on left_player.id = rr.left_id
     join competitors right_player on right_player.id = rr.right_id
-    where rr.shared_rounds >= (select minimum_shared_rounds from scope_thresholds)
   `);
 }
 
@@ -932,7 +931,6 @@ async function insertRelationshipMutual(
     join competitors right_player on right_player.id = mr.right_id
     where mr.opportunities > 0
       and mb.eligible_ballot_points > 0
-      and mr.shared_rounds >= (select minimum_shared_rounds from scope_thresholds)
   `);
 }
 

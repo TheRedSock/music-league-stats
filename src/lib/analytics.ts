@@ -684,6 +684,102 @@ export function qualificationRoundFloor(scopeRounds: number): number {
   return Math.max(1, Math.ceil(scopeRounds / 3));
 }
 
+/** Minimum comparable alignment features (~5× round floor, clamped 5–20). */
+export function qualificationFeatureFloor(scopeRounds: number): number {
+  return Math.min(20, Math.max(5, qualificationRoundFloor(scopeRounds) * 5));
+}
+
+/** Whether a pair has enough overlapping sample for the given round denominator. */
+export function meetsRelationshipSampleFloor({
+  sharedRounds,
+  sampleRounds,
+  comparableFeatures = null,
+}: {
+  sharedRounds: number | null | undefined;
+  sampleRounds: number;
+  comparableFeatures?: number | null;
+}): boolean {
+  if ((sharedRounds ?? 0) < qualificationRoundFloor(sampleRounds)) return false;
+  if (
+    comparableFeatures != null &&
+    comparableFeatures < qualificationFeatureFloor(sampleRounds)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function applyPlayerRelationshipSample<
+  T extends { comparableFeatures?: number; scopeRounds: number; sharedRounds: number },
+>(rows: T[], enteredRounds: number, requireFeatures = false): T[] {
+  return rows
+    .filter((row) =>
+      meetsRelationshipSampleFloor({
+        comparableFeatures: requireFeatures ? (row.comparableFeatures ?? 0) : null,
+        sampleRounds: enteredRounds,
+        sharedRounds: row.sharedRounds,
+      }),
+    )
+    .map((row) => ({ ...row, scopeRounds: enteredRounds }));
+}
+
+function filterScopeRelationshipRows(
+  rows: RelationshipTableRow[],
+  tab: RelationshipTab,
+): RelationshipTableRow[] {
+  if (tab === "timing") return rows;
+  return rows.filter((row) =>
+    meetsRelationshipSampleFloor({
+      comparableFeatures: tab === "alignment" ? (row.comparableFeatures ?? 0) : null,
+      sampleRounds: row.scopeRounds ?? 0,
+      sharedRounds: row.sharedRounds,
+    }),
+  );
+}
+
+function topScopeAlignments(
+  rows: DashboardData["alignment"],
+  limit: number,
+): DashboardData["alignment"] {
+  return rows
+    .filter((row) =>
+      meetsRelationshipSampleFloor({
+        comparableFeatures: row.comparableFeatures,
+        sampleRounds: row.scopeRounds,
+        sharedRounds: row.sharedRounds,
+      }),
+    )
+    .sort((left, right) => {
+      if (right.alignment !== left.alignment) {
+        return right.alignment - left.alignment;
+      }
+      return right.comparableFeatures - left.comparableFeatures;
+    })
+    .slice(0, limit);
+}
+
+function withPlayerScopedRelationships(
+  profile: PlayerProfileData,
+): PlayerProfileData {
+  const enteredRounds = profile.overview?.enteredRounds ?? 0;
+  return {
+    ...profile,
+    alignments: applyPlayerRelationshipSample(
+      profile.alignments,
+      enteredRounds,
+      true,
+    ),
+    mutualRelationships: applyPlayerRelationshipSample(
+      profile.mutualRelationships,
+      enteredRounds,
+    ),
+    relationships: applyPlayerRelationshipSample(
+      profile.relationships,
+      enteredRounds,
+    ),
+  };
+}
+
 export function supportIndex(
   songPoints: number,
   expectedPoints: number,
@@ -1020,13 +1116,7 @@ export function voteOpportunityCtes(filter: AnalyticsFilter): SQL {
   return sql`
     ${selectedRoundsCte(filter)},
     scope_thresholds as (
-      select
-        count(*)::int as scope_rounds,
-        greatest(1, ceil(count(*)::numeric / 3)::int) as minimum_shared_rounds,
-        least(
-          20,
-          greatest(5, ceil(count(*)::numeric / 3)::int * 5)
-        )::int as minimum_comparable_features
+      select count(*)::int as scope_rounds
       from selected_rounds
     ),
     active_ballots as (
@@ -1526,12 +1616,6 @@ export function alignmentComparisonTailCtes(playerId?: string): SQL {
         sqrt(sum(cf.left_value * cf.left_value) * sum(cf.right_value * cf.right_value)) as magnitude
       from comparison_features cf
       group by cf.left_id, cf.right_id
-      having count(*) >= (
-          select minimum_comparable_features from scope_thresholds
-        )
-         and count(distinct cf.round_id) >= (
-          select minimum_shared_rounds from scope_thresholds
-        )
     )
   `;
 }
@@ -1808,9 +1892,8 @@ async function getMaterializedDashboardAlignmentData(
     from analytics_relationship_alignment
     where scope_key = ${scopeKey}
     order by alignment desc, comparable_features desc
-    limit 3
   `);
-  return rows;
+  return topScopeAlignments(rows, 3);
 }
 
 export async function getDashboardData(
@@ -1949,9 +2032,8 @@ export async function getDashboardAlignmentData(
     join competitors right_player on right_player.id = pc.right_id
     where pc.magnitude > 0
     order by alignment desc
-    limit 3
   `);
-  return alignments;
+  return topScopeAlignments(alignments, 3);
 }
 
 function songSearchPredicate(search: string): SQL {
@@ -2422,7 +2504,7 @@ async function getMaterializedPlayerProfileData(
     .map(mapVotedSong)
     .sort(compareVotedSongsByPoints);
 
-  return {
+  return withPlayerScopedRelationships({
     alignments: jsonRows<PlayerProfileData["alignments"][number]>(
       packedRow?.alignments,
     ),
@@ -2449,7 +2531,7 @@ async function getMaterializedPlayerProfileData(
       ...row,
       castAt: row.castAt ? isoTimestamp(row.castAt) : null,
     })),
-  };
+  });
 }
 
 function matPlayerSearchPredicate(search: string): SQL {
@@ -2840,9 +2922,6 @@ export async function getPlayerProfileData(
         rr.positives::double precision / rr.encounters as "positiveRate"
       from relationship_rows rr
       join competitors c on c.id = rr.competitor_id
-      where rr.shared_rounds >= (
-        select minimum_shared_rounds from scope_thresholds
-      )
     ),
     mutual_rows as (
       select
@@ -2899,9 +2978,6 @@ export async function getPlayerProfileData(
       join competitors c on c.id = mr.competitor_id
       where mr.opportunities > 0
         and mb.eligible_ballot_points > 0
-        and mr.shared_rounds >= (
-          select minimum_shared_rounds from scope_thresholds
-        )
     ),
     alignment_rows as (
       select
@@ -3118,7 +3194,7 @@ export async function getPlayerProfileData(
     .map(mapVotedSong)
     .sort(compareVotedSongsByPoints);
 
-  return {
+  return withPlayerScopedRelationships({
     player,
     overview: overviewRows[0]
       ? {
@@ -3141,7 +3217,7 @@ export async function getPlayerProfileData(
       ...row,
       castAt: row.castAt ? isoTimestamp(row.castAt) : null,
     })),
-  };
+  });
 }
 
 function sortRelationshipRows(
@@ -3349,7 +3425,11 @@ export async function getRelationshipsTableData(
     return {
       direction,
       focusPlayer: focusPlayerRow,
-      rows: sortRelationshipRows(rows, sort, direction),
+      rows: sortRelationshipRows(
+        filterScopeRelationshipRows(rows, tab),
+        sort,
+        direction,
+      ),
       sort,
       tab,
     };
@@ -3452,9 +3532,6 @@ export async function getRelationshipsTableData(
             join competitors right_player on right_player.id = mr.right_id
             where mr.opportunities > 0
               and mb.eligible_ballot_points > 0
-              and mr.shared_rounds >= (
-                select minimum_shared_rounds from scope_thresholds
-              )
               and (${focus}::uuid is null or mr.left_id = ${focus} or mr.right_id = ${focus})
           `)
         : tab === "timing"
@@ -3567,9 +3644,6 @@ export async function getRelationshipsTableData(
               from relationship_rows rr
               join competitors left_player on left_player.id = rr.left_id
               join competitors right_player on right_player.id = rr.right_id
-              where rr.shared_rounds >= (
-                select minimum_shared_rounds from scope_thresholds
-              )
             `);
 
   const [focusPlayerValue, rows] = await Promise.all([focusRowPromise, rowsPromise]);
@@ -3583,7 +3657,11 @@ export async function getRelationshipsTableData(
   return {
     direction,
     focusPlayer: focusPlayerValue,
-    rows: sortRelationshipRows(filteredRows, sort, direction),
+    rows: sortRelationshipRows(
+      filterScopeRelationshipRows(filteredRows, tab),
+      sort,
+      direction,
+    ),
     sort,
     tab,
   };
