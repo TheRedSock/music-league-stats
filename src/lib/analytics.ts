@@ -34,6 +34,8 @@ export type AnalyticsFilter = {
 };
 
 export type LeagueOption = {
+  /** Position in newest-first start-date order (undated leagues last). */
+  chronologicalOrder?: number;
   id: string;
   name: string;
   slug: string;
@@ -1046,7 +1048,7 @@ export async function getFilterOptions(): Promise<FilterOptions> {
 
   return {
     defaultLeagueId: leagueRows[0]?.id ?? null,
-    leagues: [...leagueRows].sort((left, right) =>
+    leagues: leagueRows.map((league, chronologicalOrder) => ({ ...league, chronologicalOrder })).sort((left, right) =>
       left.name.localeCompare(right.name),
     ),
     rounds: roundRows,
@@ -4282,6 +4284,32 @@ export async function getCachedFilterOptions(): Promise<FilterOptions> {
   cacheLife("hours");
   cacheTag(ANALYTICS_CACHE_TAG);
   return getFilterOptions();
+}
+
+export async function getCachedScoreProgression(
+  leagueKey: string,
+  roundKey: string,
+): Promise<import("@/lib/score-progression").ProgressionRow[]> {
+  "use cache";
+  cacheLife("hours");
+  cacheTag(ANALYTICS_CACHE_TAG);
+  const rows = await db.execute<import("@/lib/score-progression").ProgressionRow>(sql`
+    with ${selectedRoundsCte(analyticsFilter(leagueKey, roundKey))}
+    select r.league_id as "leagueId", l.name as "leagueName",
+      r.id as "roundId", r.name as "roundName", r.ordinal,
+      c.id as "playerId", ${competitorDisplayName()} as "playerName",
+      coalesce(sum(v.points), 0)::int as points
+    from selected_rounds r
+    join leagues l on l.id = r.league_id
+    join submissions s on s.round_id = r.id
+    join competitors c on c.id = s.submitter_id
+    left join votes v on v.submission_id = s.id and v.voter_id <> s.submitter_id
+    where exists (select 1 from votes rv where rv.round_id = r.id)
+      and (s.visible_to_voters or exists (select 1 from votes sv where sv.submission_id = s.id))
+    group by r.league_id, l.name, r.id, r.name, r.ordinal, c.id
+    order by l.name, r.ordinal, c.id
+  `);
+  return [...rows];
 }
 
 export async function getCachedDashboardData(

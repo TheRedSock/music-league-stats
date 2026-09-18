@@ -11,6 +11,8 @@ import {
   parseGraphView,
 } from "@/components/analytics/relationship-graphs/graphs-shell";
 import { MatrixView } from "@/components/analytics/relationship-graphs/matrix-view";
+import { ProgressionView } from "@/components/analytics/relationship-graphs/progression-view";
+import { encodeScopeIds, getCachedFilterOptions, getCachedScoreProgression, loadAnalytics, parseAnalyticsFilters, resolveAnalyticsFilter } from "@/lib/analytics";
 import {
   Card,
   CardContent,
@@ -23,7 +25,7 @@ import type { SearchParams } from "@/lib/analytics";
 export const metadata: Metadata = {
   title: "Graphs",
   description:
-    "Interactive relationship graphs for vote-pattern alignment, mutual support, and directed voting flow.",
+    "Score progression across rounds and interactive voting relationship graphs.",
 };
 
 export default async function RelationshipGraphsPage({
@@ -33,6 +35,19 @@ export default async function RelationshipGraphsPage({
 }) {
   const params = await searchParams;
   const view = parseGraphView(params.view);
+  if (view === "progression") {
+    const progression = await loadAnalytics(async () => {
+      const options = await getCachedFilterOptions();
+      const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
+      const rows = await getCachedScoreProgression(encodeScopeIds(filter.leagueIds), encodeScopeIds(filter.roundIds));
+      return { options, filter, rows };
+    });
+    if (progression.status !== "ready") return <GraphsUnavailable result={progression} />;
+    const { options, filter, rows } = progression.data;
+    return <GraphsShell activeView={view} filter={filter} options={options}>
+      <ProgressionView rows={rows} leagues={options.leagues} subset={filter.roundIds.length > 0} />
+    </GraphsShell>;
+  }
   const result = await loadRelationshipGraphs(searchParams);
 
   if (result.status !== "ready") {

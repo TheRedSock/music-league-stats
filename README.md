@@ -59,6 +59,13 @@ database cannot be queried. URL parameters keep analytics views shareable:
   alignment, and relative ballot order
 - `/relationships` — full tables for player-to-player relationship metrics,
   optionally focused from a player profile section
+- `/relationships/graphs?view=progression` — per-league score timelines with
+  cumulative points, tied standings, round points, player highlighting, and
+  early/late points-per-round averages. Only rounds with exported votes appear;
+  results may be partial. Missed rounds add zero and multiple submissions are
+  summed. Selected-round subsets restart totals at zero. Early/late averages
+  split the displayed rounds in half (the middle round belongs to the early
+  half) and include missed rounds; they use raw, not normalized, points.
 - `/facts` — submission patterns and voting quirks (appeal shape, round
   races/landslides, submission-order bias), with top-5 previews and full tables
 - `/faq` — plain-language metric explanations

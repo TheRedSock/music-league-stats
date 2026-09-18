@@ -27,6 +27,11 @@ import { cn } from "@/lib/utils";
 
 export const GRAPH_VIEWS = [
   {
+    id: "progression",
+    label: "Progression",
+    description: "Follow the race across rounds: cumulative points, standings, and early versus late scoring.",
+  },
+  {
     id: "bubbles",
     label: "Bubbles",
     description:
@@ -66,7 +71,7 @@ export function parseGraphView(
   value: string | string[] | undefined,
 ): GraphViewId {
   const raw = Array.isArray(value) ? value[0] : value;
-  if (raw === "flow" || raw === "matrix" || raw === "ego" || raw === "bubbles") {
+  if (raw === "progression" || raw === "flow" || raw === "matrix" || raw === "ego" || raw === "bubbles") {
     return raw;
   }
   return "bubbles";
@@ -152,9 +157,7 @@ export function GraphsShell({
             Graphs
           </h1>
           <p className="mt-2 text-sm leading-6 text-zinc-400">
-            Interactive relationship maps for vote-pattern alignment and mutual
-            support. These describe ballot behavior, not friendship or listening
-            taste.
+            Explore the league race and voting relationships across players and rounds.
           </p>
         </div>
         <div className="w-full lg:max-w-3xl">
@@ -163,7 +166,7 @@ export function GraphsShell({
       </div>
 
       <nav
-        aria-label="Relationship graph views"
+        aria-label="Graph views"
         className="mt-8 flex flex-wrap gap-2"
       >
         {GRAPH_VIEWS.map((view) => (
@@ -178,7 +181,7 @@ export function GraphsShell({
             href={buildAnalyticsHref(
               "/relationships/graphs",
               scopeQueryParams(filter),
-              { view: view.id },
+              { view: view.id, round: filter.roundIds },
             )}
           >
             {view.label}
