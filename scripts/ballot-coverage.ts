@@ -279,7 +279,6 @@ async function main() {
   const observations = rows.map((row) => {
     const eligible = row.eligibleSongs;
     const budget = row.ballotPoints;
-    const maxPer = row.maxSongPoints > 0 ? row.maxSongPoints : 5;
     const minIfForced = Math.ceil(budget / 5);
     const maxPossible = Math.min(eligible, budget);
     return {

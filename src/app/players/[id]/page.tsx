@@ -528,7 +528,7 @@ export default async function PlayerProfilePage({
               {!groups.most.length ? (
                 <p className="text-sm leading-6 text-zinc-500 sm:col-span-2">
                   No comparison has eligible opportunities in at least one third of
-                  this player's entered rounds.
+                  this player&apos;s entered rounds.
                 </p>
               ) : (
                 <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
@@ -624,7 +624,7 @@ export default async function PlayerProfilePage({
           {!mutual.mostPoints.length ? (
             <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
               No mutual comparison has eligible opportunities in at least one third
-              of this player's entered rounds.
+              of this player&apos;s entered rounds.
             </p>
           ) : null}
         </CardContent>
@@ -711,7 +711,7 @@ export default async function PlayerProfilePage({
             ) : (
               <p className="text-sm leading-6 text-zinc-500">
                 No comparison has enough features and shared voted rounds
-                across at least one third of this player's entered rounds.
+                across at least one third of this player&apos;s entered rounds.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">
