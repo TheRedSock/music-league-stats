@@ -37,6 +37,16 @@ import {
 } from "@/components/ui/table";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
 
+const ADMIN_SECTIONS = [
+  ["create-league", "Create league"],
+  ["existing-leagues", "Existing leagues"],
+  ["analytics-refresh", "Refresh analytics"],
+  ["spotify-enrichment", "Spotify enrichment"],
+  ["csv-sync", "CSV sync"],
+  ["player-names", "Player names & slugs"],
+  ["import-history", "Import history"],
+] as const;
+
 export function AdminDashboard({
   leagues,
   history,
@@ -82,188 +92,200 @@ export function AdminDashboard({
         </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Plus aria-hidden="true" className="size-4 text-lime-300" />
-            Create league
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <LeagueForm />
-        </CardContent>
-      </Card>
-
-      <section aria-labelledby="existing-leagues-heading">
-        <div className="mb-4">
-          <h2
-            className="text-xl font-semibold text-white"
-            id="existing-leagues-heading"
-          >
-            Existing leagues
-          </h2>
-        </div>
-        {leagues.length ? (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {leagues.map((league) => (
-              <Card key={league.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <CardTitle>
-                        <MusicLeagueLink href={musicLeagueUrl(league.musicLeagueId)}>
-                          {league.name}
-                        </MusicLeagueLink>
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        Music League ID: {league.musicLeagueId ?? "Not set"}
-                      </CardDescription>
-                    </div>
-                    <Badge
-                      variant={
-                        league.status === "active" ? "success" : "muted"
-                      }
-                    >
-                      {league.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <LeagueForm league={league} />
-                </CardContent>
-              </Card>
+      <div className="grid items-start gap-8 lg:grid-cols-[12rem_minmax(0,1fr)]">
+        <nav aria-label="Admin sections" className="rounded-xl border border-white/10 bg-zinc-950/90 p-4 lg:sticky lg:top-24">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-zinc-400">On this page</p>
+          <ul className="flex flex-wrap gap-2 lg:flex-col">
+            {ADMIN_SECTIONS.map(([id, label]) => (
+              <li key={id}><a className="block rounded-md px-2 py-1.5 text-sm text-zinc-300 hover:bg-white/5 hover:text-lime-200 focus-visible:outline-lime-300" href={`#${id}`}>{label}</a></li>
             ))}
-          </div>
-        ) : (
-          <p className="rounded-xl border border-dashed border-white/10 p-6 text-sm text-zinc-400">
-            Create a league before importing CSV data.
-          </p>
-        )}
-      </section>
+          </ul>
+        </nav>
+        <div className="min-w-0 space-y-8">
+          <Card id="create-league" className="scroll-mt-24">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Plus aria-hidden="true" className="size-4 text-lime-300" />
+                Create league
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <LeagueForm />
+            </CardContent>
+          </Card>
 
-      <AnalyticsRefreshPanel initialStatus={materializationStatus} />
-
-      <SpotifyEnrichPanel initialStatus={spotifyEnrichStatus} />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <RefreshCw aria-hidden="true" className="size-4 text-lime-300" />
-            CSV sync
-          </CardTitle>
-          <CardDescription>
-            Upload all four exports. Existing rows are updated; missing rows
-            are left unchanged. Import marks the cache stale, then rebuilds it
-            in short steps.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ImportPanel leagues={leagues} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserRoundCog aria-hidden="true" className="size-4 text-lime-300" />
-            Player names &amp; slugs
-          </CardTitle>
-          <CardDescription>
-            Override the display name and edit the unique profile slug used in
-            /players/… URLs. Imports seed the slug from the Music League name
-            and never overwrite admin edits.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PlayerNameEditor players={players} />
-        </CardContent>
-      </Card>
-
-      <section aria-labelledby="import-history-heading">
-        <div className="mb-4">
-          <h2
-            className="text-xl font-semibold text-white"
-            id="import-history-heading"
-          >
-            Import history
-          </h2>
-          <p className="mt-1 text-sm text-zinc-400">
-            Most recent 25 imports.
-          </p>
-        </div>
-        <Card className="overflow-hidden">
-          {history.length ? (
-            <Table className="table-fixed">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[24%]">Created</TableHead>
-                  <TableHead className="w-[24%]">League</TableHead>
-                  <TableHead className="w-[16%]">Music League ID</TableHead>
-                  <TableHead className="w-[14%]">Status</TableHead>
-                  <TableHead>Progress / result</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((batch) => (
-                  <TableRow key={batch.id}>
-                    <TableCell className="whitespace-nowrap">
-                      {new Date(batch.createdAt).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <TruncatedCell title={batch.leagueName}>
-                        <MusicLeagueLink
-                          href={musicLeagueUrl(batch.leagueMusicLeagueId)}
+          <section id="existing-leagues" className="scroll-mt-24" aria-labelledby="existing-leagues-heading">
+            <div className="mb-4">
+              <h2
+                className="text-xl font-semibold text-white"
+                id="existing-leagues-heading"
+              >
+                Existing leagues
+              </h2>
+            </div>
+            {leagues.length ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {leagues.map((league) => (
+                  <Card key={league.id}>
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <CardTitle>
+                            <MusicLeagueLink href={musicLeagueUrl(league.musicLeagueId)}>
+                              {league.name}
+                            </MusicLeagueLink>
+                          </CardTitle>
+                          <CardDescription className="mt-1">
+                            Music League ID: {league.musicLeagueId ?? "Not set"}
+                          </CardDescription>
+                        </div>
+                        <Badge
+                          variant={
+                            league.status === "active" ? "success" : "muted"
+                          }
                         >
-                          {batch.leagueName}
-                        </MusicLeagueLink>
-                      </TruncatedCell>
-                    </TableCell>
-                    <TableCell>
-                      <TruncatedCell title={batch.leagueMusicLeagueId ?? "Not set"}>
-                        {batch.leagueMusicLeagueId ?? "Not set"}
-                      </TruncatedCell>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          batch.status === "completed" ? "success" : "muted"
-                        }
-                      >
-                        {batch.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {batch.summary ? (
-                        <TruncatedCell
-                          title={`${batch.summary.submissions.toLocaleString()} songs, ${batch.summary.votes.toLocaleString()} votes`}
-                        >
-                          {batch.summary.submissions.toLocaleString()} songs,{" "}
-                          {batch.summary.votes.toLocaleString()} votes
-                        </TruncatedCell>
-                      ) : batch.errorMessage ? (
-                        <TruncatedCell className="text-red-300" title={batch.errorMessage}>
-                          {batch.errorMessage}
-                        </TruncatedCell>
-                      ) : (
-                        <TruncatedCell
-                          title={`${batch.receivedRows.toLocaleString()} rows in ${batch.receivedChunks.toLocaleString()} chunks`}
-                        >
-                          {batch.receivedRows.toLocaleString()} rows in{" "}
-                          {batch.receivedChunks.toLocaleString()} chunks
-                        </TruncatedCell>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                          {league.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <LeagueForm league={league} />
+                    </CardContent>
+                  </Card>
                 ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <p className="p-6 text-sm text-zinc-400">
-              No imports have been started.
-            </p>
-          )}
-        </Card>
-      </section>
+              </div>
+            ) : (
+              <p className="rounded-xl border border-dashed border-white/10 p-6 text-sm text-zinc-400">
+                Create a league before importing CSV data.
+              </p>
+            )}
+          </section>
+
+          <section id="analytics-refresh" className="scroll-mt-24" aria-label="Refresh analytics"><AnalyticsRefreshPanel initialStatus={materializationStatus} /></section>
+
+          <section id="spotify-enrichment" className="scroll-mt-24" aria-label="Spotify enrichment"><SpotifyEnrichPanel initialStatus={spotifyEnrichStatus} /></section>
+
+          <Card id="csv-sync" className="scroll-mt-24">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw aria-hidden="true" className="size-4 text-lime-300" />
+                CSV sync
+              </CardTitle>
+              <CardDescription>
+                Upload all four exports. Existing rows are updated; missing rows
+                are left unchanged. Import marks the cache stale, then rebuilds it
+                in short steps.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImportPanel leagues={leagues} />
+            </CardContent>
+          </Card>
+
+          <Card id="player-names" className="scroll-mt-24">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserRoundCog aria-hidden="true" className="size-4 text-lime-300" />
+                Player names &amp; slugs
+              </CardTitle>
+              <CardDescription>
+                Override the display name and edit the unique profile slug used in
+                /players/… URLs. Imports seed the slug from the Music League name
+                and never overwrite admin edits.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PlayerNameEditor players={players} />
+            </CardContent>
+          </Card>
+
+          <section id="import-history" className="scroll-mt-24" aria-labelledby="import-history-heading">
+            <div className="mb-4">
+              <h2
+                className="text-xl font-semibold text-white"
+                id="import-history-heading"
+              >
+                Import history
+              </h2>
+              <p className="mt-1 text-sm text-zinc-400">
+                Most recent 25 imports.
+              </p>
+            </div>
+            <Card className="overflow-hidden">
+              {history.length ? (
+                <Table className="table-fixed">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[24%]">Created</TableHead>
+                      <TableHead className="w-[24%]">League</TableHead>
+                      <TableHead className="w-[16%]">Music League ID</TableHead>
+                      <TableHead className="w-[14%]">Status</TableHead>
+                      <TableHead>Progress / result</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {history.map((batch) => (
+                      <TableRow key={batch.id}>
+                        <TableCell className="whitespace-nowrap">
+                          {new Date(batch.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell title={batch.leagueName}>
+                            <MusicLeagueLink
+                              href={musicLeagueUrl(batch.leagueMusicLeagueId)}
+                            >
+                              {batch.leagueName}
+                            </MusicLeagueLink>
+                          </TruncatedCell>
+                        </TableCell>
+                        <TableCell>
+                          <TruncatedCell title={batch.leagueMusicLeagueId ?? "Not set"}>
+                            {batch.leagueMusicLeagueId ?? "Not set"}
+                          </TruncatedCell>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              batch.status === "completed" ? "success" : "muted"
+                            }
+                          >
+                            {batch.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {batch.summary ? (
+                            <TruncatedCell
+                              title={`${batch.summary.submissions.toLocaleString()} songs, ${batch.summary.votes.toLocaleString()} votes`}
+                            >
+                              {batch.summary.submissions.toLocaleString()} songs,{" "}
+                              {batch.summary.votes.toLocaleString()} votes
+                            </TruncatedCell>
+                          ) : batch.errorMessage ? (
+                            <TruncatedCell className="text-red-300" title={batch.errorMessage}>
+                              {batch.errorMessage}
+                            </TruncatedCell>
+                          ) : (
+                            <TruncatedCell
+                              title={`${batch.receivedRows.toLocaleString()} rows in ${batch.receivedChunks.toLocaleString()} chunks`}
+                            >
+                              {batch.receivedRows.toLocaleString()} rows in{" "}
+                              {batch.receivedChunks.toLocaleString()} chunks
+                            </TruncatedCell>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="p-6 text-sm text-zinc-400">
+                  No imports have been started.
+                </p>
+              )}
+            </Card>
+          </section>
+        </div>
+      </div>
     </div>
   );
 }

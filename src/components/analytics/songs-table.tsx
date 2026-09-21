@@ -113,7 +113,7 @@ export function SongsTable({
                   params={currentParams}
                   path="/songs"
                   sortKey="positive-reach"
-                  title="Positive eligible opportunities divided by all eligible opportunities."
+                  title="Share of eligible song-voter opportunities awarded at least one point; includes zeroes in the denominator."
                 >
                   Positive reach
                 </SortableTableHead>

@@ -37,27 +37,18 @@ export type RelationshipGraphData = {
 
 export type UndirectedMetric = "alignment" | "mutual";
 
-/**
- * Per-view default slider positions within the robust typical band.
- * These are dataset-relative (% of P10–P95-ish range), not absolute metric
- * cutoffs — so a similar filtering intensity applies across leagues/scopes.
- */
-export const LAB_DEFAULT_NORMALIZED = {
-  bubbles: 0.9,
-  ego: 0.3,
-  flow: 0.85,
-  matrix: 0,
-} as const;
+/** Matrix starts unfiltered; other views choose a density-based default. */
+export const LAB_DEFAULT_NORMALIZED = { matrix: 0 } as const;
 
-/** Maps a 0–1 slider onto a robust (outlier-resistant) band of raw weights. */
+/** Matrix/Ego use quantiles; network views use a bounded per-player edge budget. */
 export type WeightScale = {
-  /** Robust lower bound (≈P10, with fallbacks). */
   low: number;
-  /** Robust upper bound (≈P90, with fallbacks). */
   high: number;
-  /** Suggested slider position in [0, 1]. */
+  sorted: number[];
   defaultNormalized: number;
   sampleSize: number;
+  edgeBudget?: number;
+  levels?: Array<{ cutoff: number; count: number }>;
 };
 
 export function edgeWeight(
@@ -76,89 +67,113 @@ export function percentile(sortedAscending: number[], p: number): number {
   const upper = Math.ceil(index);
   if (lower === upper) return sortedAscending[lower];
   const t = index - lower;
-  return sortedAscending[lower] * (1 - t) + sortedAscending[upper] * t;
+  return sortedAscending[lower] + (sortedAscending[upper] - sortedAscending[lower]) * t;
 }
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-/**
- * Build a slider scale from observed weights using percentile bounds so a few
- * tiny/huge outliers do not collapse the useful range. Prefer P10–P90; widen to
- * P5–P95 or IQR fences only when needed.
+/** Choose the closest attainable edge count to a visual density target.
+ * Ties are never split arbitrarily. Prefer the sparser result on equal error.
  */
-export function buildWeightScale(weights: readonly number[]): WeightScale {
-  const finite = weights.filter((value) => Number.isFinite(value));
-  if (finite.length === 0) {
-    return { defaultNormalized: 0.7, high: 1, low: 0, sampleSize: 0 };
-  }
-
-  const sorted = [...finite].sort((a, b) => a - b);
-  const p10 = percentile(sorted, 0.1);
-  const p90 = percentile(sorted, 0.9);
-  const p5 = percentile(sorted, 0.05);
-  const p95 = percentile(sorted, 0.95);
-  const p98 = percentile(sorted, 0.98);
-  const q1 = percentile(sorted, 0.25);
-  const q3 = percentile(sorted, 0.75);
-  const iqr = q3 - q1;
-
-  let low = p10;
-  // Prefer a high bound that still leaves headroom for strong pairs (not only P90).
-  let high = Math.max(p90, p95);
-
-  // Too tight (common when most mutual shares cluster near 0): widen.
-  if (high - low < Math.max(1e-4, Math.abs(high) * 0.05)) {
-    low = p5;
-    high = Math.max(p95, p98);
-  }
-  if (high - low < Math.max(1e-4, Math.abs(high) * 0.05) && iqr > 0) {
-    low = Math.max(sorted[0], q1 - 1.5 * iqr);
-    high = Math.min(sorted[sorted.length - 1], q3 + 1.5 * iqr);
-  }
-  if (high - low < 1e-6) {
-    const mid = percentile(sorted, 0.5);
-    const pad = Math.max(0.02, Math.abs(mid) * 0.15 || 0.02);
-    low = mid - pad;
-    high = mid + pad;
-  }
-
-  // Default toward the filtered end (~P72 of samples) to avoid hairballs.
-  const filteredTarget = percentile(sorted, 0.72);
-  const defaultNormalized = clamp01((filteredTarget - low) / (high - low));
-
-  return {
-    defaultNormalized: clamp01(Math.max(0.58, Math.min(0.82, defaultNormalized))),
-    high,
-    low,
+export function buildWeightScale(weights: readonly number[], targetEdges = weights.length / 2): WeightScale {
+  const sorted = weights.filter(Number.isFinite).sort((a, b) => a - b);
+  const scale: WeightScale = {
+    low: sorted[0] ?? 0,
+    high: sorted.at(-1) ?? 1,
+    sorted,
+    defaultNormalized: 0,
     sampleSize: sorted.length,
   };
+  if (!sorted.length) return scale;
+  const target = Math.max(1, Math.min(sorted.length, targetEdges));
+  let bestError = Infinity;
+  let bestCount = Infinity;
+  for (let step = 0; step < 100; step += 1) {
+    const cutoff = normalizedToRaw(step / 100, scale);
+    const count = sorted.filter(weight => weight >= cutoff).length;
+    const error = Math.abs(count - target);
+    if (count > 0 && (error < bestError || (error === bestError && count < bestCount))) {
+      bestError = error;
+      bestCount = count;
+      scale.defaultNormalized = step / 100;
+    }
+  }
+  return scale;
 }
 
 export function undirectedWeightScale(
   edges: readonly UndirectedRelationshipEdge[],
   metric: UndirectedMetric,
+  targetEdges?: number,
 ): WeightScale {
   const weights: number[] = [];
   for (const edge of edges) {
     const weight = edgeWeight(edge, metric);
     if (weight != null) weights.push(weight);
   }
-  return buildWeightScale(weights);
+  const nodes = new Set(edges.filter(edge => edgeWeight(edge, metric) != null).flatMap(edge => [edge.source, edge.target]));
+  return buildWeightScale(weights, targetEdges ?? nodes.size);
 }
 
 export function directedWeightScale(
   edges: readonly DirectedRelationshipEdge[],
 ): WeightScale {
-  return buildWeightScale(edges.map((edge) => edge.pointsPerOpportunity));
+  const nodes = new Set(edges.flatMap(edge => [edge.source, edge.target]));
+  return buildDensityWeightScale(edges.map((edge) => edge.pointsPerOpportunity), nodes.size, 1.5);
+}
+
+/** A network has O(n²) possible links but only O(n) readable links.
+ * Spread that useful density range over the entire control. At 50%, Flow
+ * targets 1.5 arrows/player and Bubbles 1.25 undirected links/player. At 0%
+ * the budget doubles; at 100% no primary links remain. Full data is a separate
+ * unfiltered mode. Selecting an attainable count keeps equal weights together.
+ */
+export function buildDensityWeightScale(
+  weights: readonly number[],
+  nodeCount: number,
+  linksPerPlayer: number,
+): WeightScale {
+  const sorted = weights.filter(Number.isFinite).sort((a, b) => a - b);
+  const levels = sorted.flatMap((cutoff, index) =>
+    index === 0 || cutoff !== sorted[index - 1]
+      ? [{ cutoff, count: sorted.length - index }]
+      : [],
+  );
+  return {
+    low: sorted[0] ?? 0,
+    high: sorted.at(-1) ?? 1,
+    sorted,
+    sampleSize: sorted.length,
+    defaultNormalized: 0.5,
+    edgeBudget: Math.min(sorted.length, Math.max(0, nodeCount * linksPerPlayer * 2)),
+    levels,
+  };
+}
+
+export function bubbleWeightScale(edges: readonly UndirectedRelationshipEdge[]): WeightScale {
+  const eligible = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment));
+  const nodes = new Set(eligible.flatMap(edge => [edge.source, edge.target]));
+  return buildDensityWeightScale(eligible.map(edge => edge.alignment!), nodes.size, 1.25);
 }
 
 export function normalizedToRaw(
   normalized: number,
   scale: WeightScale,
 ): number {
-  return scale.low + clamp01(normalized) * (scale.high - scale.low);
+  if (normalized >= 1) return scale.high + Math.max(1e-9, Math.abs(scale.high) * 1e-9);
+  if (scale.edgeBudget != null && scale.levels?.length) {
+    const target = scale.edgeBudget * (1 - clamp01(normalized));
+    let best = scale.levels[0];
+    for (const level of scale.levels) {
+      const error = Math.abs(level.count - target);
+      const bestError = Math.abs(best.count - target);
+      if (error < bestError || (error === bestError && level.count < best.count)) best = level;
+    }
+    return best.cutoff;
+  }
+  return percentile(scale.sorted, clamp01(normalized));
 }
 
 export type WeightFormat = "ratio" | "absolute";
@@ -179,7 +194,7 @@ export function formatScaleCaption(
 ): string {
   if (scale.sampleSize === 0) return "no samples";
   const suffix = unit ? ` ${unit}` : "";
-  return `typical ${formatWeightValue(scale.low, format)}–${formatWeightValue(scale.high, format)}${suffix}`;
+  return `observed ${formatWeightValue(scale.low, format)}–${formatWeightValue(scale.high, format)}${suffix} · ties stay together`;
 }
 
 export function filterUndirectedEdges(

@@ -16,7 +16,6 @@ import {
   directedWeightScale,
   filterDirectedEdges,
   formatScaleCaption,
-  LAB_DEFAULT_NORMALIZED,
   type DirectedRelationshipEdge,
   type RelationshipGraphData,
 } from "@/lib/relationship-graph-shared";
@@ -51,11 +50,10 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
     () => directedWeightScale(graph.directedEdges),
     [graph.directedEdges],
   );
-  const scaleKey = `flow:${scale.low.toFixed(4)}:${scale.high.toFixed(4)}:${scale.sampleSize}`;
-  const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(
+  const scaleKey = `flow:${graph.scopeKey}:${scale.sorted.join(",")}`;
+  const { normalized, rawThreshold, setNormalized, unfiltered, setUnfiltered } = useNormalizedThreshold(
     scale,
     scaleKey,
-    LAB_DEFAULT_NORMALIZED.flow,
   );
 
   const { primary, soft, activeIds } = useMemo(() => {
@@ -136,15 +134,14 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
       };
     });
 
-    // Soft edges: thinner than a line at the cutoff (≈65% of cutoff visual weight).
-    const softDisplayWeight = Math.max(rawThreshold * 0.65, 0.0001);
     const softLinks = soft.map((edge) => ({
+      fallback: true,
       color: "rgba(161, 161, 170, 0.55)",
       curvature: 0.1,
-      label: `${edge.sourceName} → ${edge.targetName}: ${edge.pointsPerOpportunity.toFixed(2)} pts/opp (near cutoff)`,
+      label: `${edge.sourceName} → ${edge.targetName}: ${edge.pointsPerOpportunity.toFixed(2)} pts/opp (below cutoff)`,
       source: edge.source,
       target: edge.target,
-      weight: softDisplayWeight,
+      weight: edge.pointsPerOpportunity,
     }));
 
     return [...primaryLinks, ...softLinks];
@@ -153,6 +150,9 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
   return (
     <div className="space-y-4">
       <LabsControls
+        densityScale
+        unfiltered={unfiltered}
+        onUnfilteredChange={setUnfiltered}
         belowThreshold={
           <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
             <input
@@ -161,7 +161,7 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
               onChange={(event) => setKeepEveryone(event.target.checked)}
               type="checkbox"
             />
-            <span>Keep everyone (near-cutoff edge)</span>
+            <span>Include fallback links below cutoff</span>
           </label>
         }
         onThresholdChange={setNormalized}
@@ -171,10 +171,10 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
         scaleCaption={formatScaleCaption(scale, "absolute", "pts/opp")}
         showMetric={false}
         threshold={normalized}
-        thresholdLabel="Min points/opportunity strength"
+        thresholdLabel="Flow sensitivity"
       />
       <p className="text-xs text-zinc-500">
-        Arrows point giver → receiver (points given per opportunity).{" "}
+        Arrows point giver → receiver (points given per opportunity). At 50%, the connection budget targets 1.5 qualifying arrows per player on average; equal scores stay together.{" "}
         <span className="text-orange-300">Orange</span>
         {" is one-way above cutoff; "}
         <span className="text-sky-300">blue</span>
@@ -184,7 +184,7 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
             {" "}
             <span className="text-zinc-400">Gray</span>
             {
-              " soft arrows are each missing player's strongest edge just below the cutoff (thinner)."
+              " soft arrows are each missing player's strongest edge below the cutoff (thinner)."
             }
           </>
         ) : null}

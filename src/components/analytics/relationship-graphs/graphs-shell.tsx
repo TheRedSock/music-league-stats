@@ -35,7 +35,7 @@ export const GRAPH_VIEWS = [
     id: "bubbles",
     label: "Bubbles",
     description:
-      "Voting-pattern communities from thresholded alignment. Weaker players stay attached to their best-fit bubble.",
+      "Voting-pattern communities from thresholded alignment. Only links meeting the chosen cutoff define groups.",
   },
   {
     id: "flow",

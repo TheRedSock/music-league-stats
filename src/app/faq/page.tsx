@@ -73,15 +73,15 @@ const sections = [
   },
   {
     title: "What is the Compare page?",
-    body: "Compare is the full-table version of the player profile relationship panels. Profile section titles link there with the current scope, focused player, and matching sort already selected.",
+    body: "Compare shows directional Support (giver → receiver), Mutual support, Alignment, and Timing. “Awarded ≥1 pt” counts eligible opportunities receiving points; the remaining opportunities received zero. Profile section titles link there with the current scope, focused player, and matching sort already selected.",
   },
   {
     title: "What is the Graphs page?",
-    body: "Graphs visualizes player relationships from the same metrics as Compare: Bubbles (alignment communities), Flow (directed points-given), Matrix (affinity heatmap), and Ego (one player’s neighbors). Sliders use a robust “typical range” for the current scope so defaults stay readable across leagues. These describe ballot patterns only — not friendship or listening habits.",
+    body: "Graphs visualizes player relationships from the same metrics as Compare: Bubbles (alignment communities), Flow (directed points-given), Matrix (affinity heatmap), and Ego (one player’s neighbors). Flow and Bubbles use a connection budget per player so the slider stays useful as scope changes: 0% is dense, 50% balances detail (about 1.5 arrows per player in Flow, 1.25 links in Bubbles), and 100% removes qualifying links. Show all links bypasses that budget. Equal strengths stay together, so short scopes can still change in steps. Both views show thin gray fallback links by default; smaller fallback nodes in Bubbles inherit their connected core’s color without affecting community detection. Nodes with no path to a core stay gray. Matrix and Ego filter by rank from all links at 0% to none at 100%. These describe ballot patterns only — not friendship or listening habits.",
   },
   {
     title: "What is the Facts page?",
-    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion via standardized reach vs share), round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Player appeal panels use the same ~1/3-of-scope participation floor as other rankings. It uses the same league scope filter as the analytics pages.",
+    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion via standardized reach vs share), round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Player appeal panels use the same adaptive participation floor (closer to half for small scopes, easing logarithmically to one third at full scope) as other rankings. It uses the same league scope filter as the analytics pages.",
   },
   {
     title: "How are playlist-position quartiles assigned?",

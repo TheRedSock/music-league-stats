@@ -1,3 +1,5 @@
+import { Children, isValidElement } from "react";
+import { tableColumnHelp } from "@/lib/table-help";
 import type {
   HTMLAttributes,
   ReactNode,
@@ -61,18 +63,33 @@ export function TableRow({
   );
 }
 
+function headerText(children: ReactNode): string {
+  return Children.toArray(children).map(child => {
+    if (typeof child === "string" || typeof child === "number") return String(child);
+    if (isValidElement<{ children?: ReactNode; "aria-hidden"?: boolean | "true" | "false" }>(child)) {
+      if (child.props["aria-hidden"]) return "";
+      return headerText(child.props.children);
+    }
+    return "";
+  }).join(" ").trim();
+}
+
 export function TableHead({
   className,
+  children,
+  title,
   ...props
 }: ThHTMLAttributes<HTMLTableCellElement>) {
   return (
     <th
+      scope="col"
+      title={title ?? tableColumnHelp(headerText(children))}
       className={cn(
         "h-11 px-4 text-left text-xs font-medium uppercase tracking-[0.14em] text-zinc-500",
         className,
       )}
       {...props}
-    />
+    >{children}</th>
   );
 }
 

@@ -23,14 +23,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  bubbleWeightScale,
   edgeWeight,
   filterUndirectedEdges,
   formatScaleCaption,
-  LAB_DEFAULT_NORMALIZED,
-  undirectedWeightScale,
   type RelationshipGraphData,
-  type UndirectedRelationshipEdge,
 } from "@/lib/relationship-graph-shared";
+import { bubbleFallbacks } from "@/lib/bubble-fallbacks";
 
 const PALETTE = [
   "#bef264",
@@ -43,43 +42,20 @@ const PALETTE = [
   "#86efac",
 ];
 
-type MemberKind = "core" | "attached";
-
-function bestAlignmentToSet(
-  playerId: string,
-  memberIds: readonly string[],
-  edges: readonly UndirectedRelationshipEdge[],
-): { otherId: string; weight: number } | null {
-  let best: { otherId: string; weight: number } | null = null;
-  for (const edge of edges) {
-    const weight = edge.alignment;
-    if (weight == null) continue;
-    let otherId: string | null = null;
-    if (edge.source === playerId && memberIds.includes(edge.target)) {
-      otherId = edge.target;
-    } else if (edge.target === playerId && memberIds.includes(edge.source)) {
-      otherId = edge.source;
-    }
-    if (otherId == null) continue;
-    if (!best || weight > best.weight) best = { otherId, weight };
-  }
-  return best;
-}
-
 export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
   const [mode, setMode] = useState<"louvain" | "components">("louvain");
+  const [keepEveryone, setKeepEveryone] = useState(true);
   const scale = useMemo(
-    () => undirectedWeightScale(graph.undirectedEdges, "alignment"),
+    () => bubbleWeightScale(graph.undirectedEdges),
     [graph.undirectedEdges],
   );
-  const scaleKey = `bubbles:${scale.low.toFixed(4)}:${scale.high.toFixed(4)}:${scale.sampleSize}`;
-  const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(
+  const scaleKey = `bubbles:${graph.scopeKey}:${scale.sorted.join(",")}`;
+  const { normalized, rawThreshold, setNormalized, unfiltered, setUnfiltered } = useNormalizedThreshold(
     scale,
     scaleKey,
-    LAB_DEFAULT_NORMALIZED.bubbles,
   );
 
-  const { communities, links, nodes, summary } = useMemo(() => {
+  const { links, nodes, summary, primaryCount, fallbackCount, ungroupedCount } = useMemo(() => {
     const filtered = filterUndirectedEdges(
       graph.undirectedEdges,
       "alignment",
@@ -106,8 +82,8 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
     }
 
     let assignment: Record<string, number> = {};
-    if (mode === "louvain" && g.size > 0) {
-      assignment = louvain(g, { getEdgeWeight: "weight" }) as Record<
+    if (mode === "louvain" && filtered.some(edge => (edge.alignment ?? 0) > 0)) {
+      assignment = louvain(g, { getEdgeWeight: "weight", randomWalk: false }) as Record<
         string,
         number
       >;
@@ -125,30 +101,6 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       const list = coreByCommunity.get(community) ?? [];
       list.push(nodeId);
       coreByCommunity.set(community, list);
-    }
-
-    // Attach everyone else to the bubble they align with most (any core member).
-    const attachedTo = new Map<
-      string,
-      { community: number; otherId: string; weight: number }
-    >();
-    const coreMemberList = [...coreIds];
-    for (const node of graph.nodes) {
-      if (coreIds.has(node.id)) continue;
-      const best = bestAlignmentToSet(
-        node.id,
-        coreMemberList,
-        graph.undirectedEdges,
-      );
-      if (!best) continue;
-      const community = assignment[best.otherId];
-      if (community == null) continue;
-      attachedTo.set(node.id, {
-        community,
-        otherId: best.otherId,
-        weight: best.weight,
-      });
-      assignment[node.id] = community;
     }
 
     const strengthById = new Map<string, number>();
@@ -169,27 +121,28 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       }
       strengthById.set(nodeId, maxWithin);
     }
-    for (const [nodeId, info] of attachedTo) {
-      strengthById.set(nodeId, info.weight);
-    }
-
     const allStrengths = [...strengthById.values()];
     const maxStrength = Math.max(...allStrengths, 0.0001);
 
+    const fallback = keepEveryone
+      ? bubbleFallbacks(graph.undirectedEdges, rawThreshold, assignment)
+      : { assignment, links: [] };
+    const displayAssignment = fallback.assignment;
+    const visibleIds = new Set([...coreIds, ...fallback.links.flatMap(edge => [edge.source, edge.target])]);
+
     const communityMembers = new Map<
       number,
-      Array<{ id: string; name: string; kind: MemberKind; strength: number }>
+      Array<{ id: string; name: string; strength: number; core: boolean }>
     >();
     for (const node of graph.nodes) {
-      const community = assignment[node.id];
+      const community = displayAssignment[node.id];
       if (community == null) continue;
-      const kind: MemberKind = coreIds.has(node.id) ? "core" : "attached";
       const list = communityMembers.get(community) ?? [];
       list.push({
         id: node.id,
-        kind,
         name: node.name,
         strength: strengthById.get(node.id) ?? 0,
+        core: coreIds.has(node.id),
       });
       communityMembers.set(community, list);
     }
@@ -197,10 +150,9 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
     const summaryRows = [...communityMembers.entries()]
       .map(([id, members]) => {
         const sorted = [...members].sort((a, b) => {
-          if (a.kind !== b.kind) return a.kind === "core" ? -1 : 1;
-          return b.strength - a.strength || a.name.localeCompare(b.name);
+          return Number(b.core) - Number(a.core) || b.strength - a.strength || a.name.localeCompare(b.name);
         });
-        const coreOnly = sorted.filter((member) => member.kind === "core");
+        const coreOnly = sorted.filter(member => member.core);
         const pairWeights: number[] = [];
         for (let i = 0; i < coreOnly.length; i += 1) {
           for (let j = i + 1; j < coreOnly.length; j += 1) {
@@ -220,7 +172,6 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
               pairWeights.length
             : null;
         return {
-          attached: sorted.filter((member) => member.kind === "attached").length,
           avgAlignment,
           color: PALETTE[id % PALETTE.length],
           core: coreOnly.length,
@@ -233,18 +184,16 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       .sort((a, b) => b.core - a.core || b.size - a.size || a.id - b.id);
 
     const forceNodes: ForceNode[] = graph.nodes
-      .filter((node) => assignment[node.id] != null)
+      .filter((node) => visibleIds.has(node.id))
       .map((node) => {
-        const community = assignment[node.id]!;
+        const community = displayAssignment[node.id];
         const strength = strengthById.get(node.id) ?? 0;
         const t = strength / maxStrength;
-        const attached = attachedTo.has(node.id);
         return {
-          color: PALETTE[community % PALETTE.length],
+          color: community == null ? "#a1a1aa" : PALETTE[community % PALETTE.length],
           id: node.id,
           name: node.name,
-          // Core strong links large; attached / weak associations stay small.
-          val: attached ? 0.45 + t * 0.85 : 0.9 + t * t * 2.1,
+          val: coreIds.has(node.id) ? 0.9 + t * t * 2.1 : 0.65,
         };
       });
 
@@ -253,28 +202,40 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
         source: edge.source,
         target: edge.target,
         weight: edgeWeight(edge, "alignment") ?? 0,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)}% alignment`,
       })),
-      // Soft spokes from attached players to their best bubble contact.
-      ...[...attachedTo.entries()].map(([nodeId, info]) => ({
-        color: "rgba(161, 161, 170, 0.35)",
-        curvature: 0.08,
-        source: nodeId,
-        target: info.otherId,
-        weight: Math.max(0.05, info.weight * 0.45),
+      ...fallback.links.map(edge => ({
+        source: edge.source,
+        target: edge.target,
+        weight: edge.alignment ?? 0,
+        fallback: true,
+        color: "rgba(161, 161, 170, 0.55)",
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)}% alignment (below cutoff)`,
       })),
     ];
 
     return {
-      communities: assignment,
+      primaryCount: filtered.length,
+      fallbackCount: fallback.links.length,
+      ungroupedCount: forceNodes.filter(node => displayAssignment[node.id] == null).length,
       links: forceLinks,
       nodes: forceNodes,
       summary: summaryRows,
     };
-  }, [graph.nodes, graph.undirectedEdges, mode, rawThreshold]);
+  }, [graph.nodes, graph.undirectedEdges, keepEveryone, mode, rawThreshold]);
 
   return (
     <div className="space-y-4">
       <LabsControls
+        densityScale
+        unfiltered={unfiltered}
+        onUnfilteredChange={setUnfiltered}
+        belowThreshold={
+          <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
+            <input checked={keepEveryone} className="size-3.5 accent-lime-300" onChange={event => setKeepEveryone(event.target.checked)} type="checkbox" />
+            <span>Include fallback links below cutoff</span>
+          </label>
+        }
         onThresholdChange={setNormalized}
         rawThreshold={rawThreshold}
         scaleCaption={formatScaleCaption(scale)}
@@ -297,12 +258,12 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
         </label>
       </LabsControls>
       <p className="text-xs text-zinc-500">
-        Slider sets which edges define bubbles. Players below that cutoff stay
-        on the canvas attached to their best-aligned bubble (smaller nodes /
-        faint spokes). Node size scales with within-bubble strength.{" "}
-        {Object.keys(communities).length
-          ? `${summary.length} groups.`
-          : "No groups yet."}
+        Only links meeting the cutoff define bubbles. At 50%, the connection budget targets 1.25 qualifying links per player on average; equal scores stay together.
+        {keepEveryone
+          ? " Smaller nodes follow their strongest available path to a bubble and share its color; gray fallback links do not affect the core groups."
+          : " Players without qualifying links are hidden."}
+        {` ${summary.length} groups · ${primaryCount} above cutoff · ${fallbackCount} fallback · ${nodes.length} players.`}
+        {ungroupedCount > 0 ? ` ${ungroupedCount} players have no path to a core bubble and stay gray.` : ""}
       </p>
       {nodes.length === 0 ? (
         <GraphEmptyState message="No alignment structure at this sensitivity." />
@@ -334,7 +295,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
               </div>
               <CardDescription>
                 {group.core} core
-                {group.attached > 0 ? ` · ${group.attached} attached` : ""}
+                {group.size > group.core ? ` · ${group.size - group.core} fallback` : ""}
                 {group.avgAlignment != null
                   ? ` · core avg ${(group.avgAlignment * 100).toFixed(0)}%`
                   : ""}
@@ -344,13 +305,10 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
               <ul className="space-y-1 text-sm text-zinc-300">
                 {group.members.map((member) => (
                   <li
-                    className={
-                      member.kind === "attached" ? "text-zinc-500" : undefined
-                    }
                     key={member.id}
                   >
                     {member.name}
-                    {member.kind === "attached" ? " · attached" : ""}
+                    {!member.core ? <span className="ml-2 text-xs text-zinc-500"> fallback</span> : null}
                   </li>
                 ))}
               </ul>

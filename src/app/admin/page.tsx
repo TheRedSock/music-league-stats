@@ -68,7 +68,7 @@ export default async function AdminPage() {
 
   const [leagueRows, historyRows, playerRows, materialization, spotifyEnrich] =
     await Promise.all([
-      db.select().from(leagues).orderBy(asc(leagues.name)),
+      db.select().from(leagues).orderBy(sql`${leagues.startDate} desc nulls last`, desc(leagues.createdAt), asc(leagues.name)),
       db
         .select({
           id: importBatches.id,

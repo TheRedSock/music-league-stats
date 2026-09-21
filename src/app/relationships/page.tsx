@@ -1,3 +1,4 @@
+import { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
 import { Network, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -20,7 +21,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  TruncatedCell,
 } from "@/components/ui/table";
 import {
   buildAnalyticsHref,
@@ -50,14 +50,9 @@ export const metadata: Metadata = {
 
 const tabs: Array<{ tab: RelationshipTab; label: string; description: string }> = [
   {
-    tab: "received",
-    label: "Received",
-    description: "Points a player received from each voter per eligible opportunity.",
-  },
-  {
     tab: "given",
-    label: "Given",
-    description: "Points a player gave to each submitter per eligible opportunity.",
+    label: "Support",
+    description: "Directional support: giver → receiver. Each direction is a separate row.",
   },
   {
     tab: "mutual",
@@ -84,18 +79,6 @@ function metric(value: number | null | undefined, digits = 2): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
 }
 
-function playerName(row: RelationshipTableRow, focusId: string | null): string {
-  if (!focusId) {
-    return row.rightName ? `${row.leftName} / ${row.rightName}` : row.leftName;
-  }
-  return row.leftId === focusId ? (row.rightName ?? row.leftName) : row.leftName;
-}
-
-function playerHref(row: RelationshipTableRow, focusId: string | null): string {
-  if (!focusId) return `/players/${row.leftId}`;
-  return `/players/${row.leftId === focusId ? row.rightId : row.leftId}`;
-}
-
 function valueFor(tab: RelationshipTab, row: RelationshipTableRow): string {
   if (tab === "alignment") return percent(row.alignment);
   if (tab === "timing") return percent(row.averageTiming);
@@ -109,7 +92,8 @@ export default async function RelationshipsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const tab = parseRelationshipTab(params.tab);
+  const requestedTab = parseRelationshipTab(params.tab);
+  const tab = requestedTab === "received" ? "given" : requestedTab;
   const sort = parseRelationshipSort(params.sort, tab);
   const direction = parseRelationshipSortDirection(params.dir, sort);
   const focus = parseFocusPlayerId(params.focus);
@@ -212,6 +196,15 @@ export default async function RelationshipsPage({
     tab,
   };
   const activeTab = tabs.find((item) => item.tab === tab)!;
+  const scopeRounds = options.rounds.filter(round =>
+    (!filter.leagueIds.length || filter.leagueIds.includes(round.leagueId)) &&
+    (!filter.roundIds.length || filter.roundIds.includes(round.id)),
+  ).length;
+  const minimumRounds = qualificationRoundFloor(scopeRounds, options.rounds.length);
+  const valueLabel = tab === "alignment" ? "Alignment" : tab === "timing" ? "Ballot position" : tab === "mutual" ? "Ballot share" : "Pts / opportunity";
+  const sampleLabel = tab === "alignment" ? "Vote features" : tab === "timing" ? "Ballots cast" : "Opportunities";
+  const contextLabel = tab === "timing" ? "Missed ballots" : tab === "alignment" ? "Scope covered" : "Awarded ≥1 pt";
+  const contextHelp = tab === "timing" ? "Entered rounds where the player did not cast a ballot." : tab === "alignment" ? "Shared voted rounds divided by all rounds in the selected scope." : "Percentage and count of eligible song-voter opportunities awarded at least one point; the rest received zero points. Mutual support combines both directions.";
 
   return (
     <Container className="py-10 sm:py-14">
@@ -236,6 +229,12 @@ export default async function RelationshipsPage({
           <Network aria-hidden="true" className="mb-2 size-5 text-lime-300" />
           <CardTitle>{activeTab.label} comparisons</CardTitle>
           <CardDescription>{activeTab.description}</CardDescription>
+          <p className="text-xs leading-5 text-zinc-500">
+            {tab === "timing"
+              ? "Lower ballot position means earlier voting. Missed ballots are excluded from the average."
+              : `Requires ${minimumRounds} of ${scopeRounds} scope rounds${tab === "alignment" ? ` and ${qualificationFeatureFloor(scopeRounds, options.rounds.length)} comparable vote features` : ""}. The participation floor rises toward half for small scopes and eases to one third at full scope.`}
+            {tab === "alignment" ? " Features compare budget-normalized votes for other players’ songs, plus support exchanged between the pair." : ""}
+          </p>
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-2">
@@ -263,7 +262,7 @@ export default async function RelationshipsPage({
 
           {data.rows.length ? (
             <div className="mt-5">
-              <Table className="table-fixed">
+              <Table className="min-w-[850px] table-fixed">
                 <TableHeader>
                   <TableRow>
                     <SortableTableHead
@@ -273,15 +272,17 @@ export default async function RelationshipsPage({
                       defaultDirection="asc"
                       params={currentParams}
                       path="/relationships"
+                      title={tab === "given" ? "The player on the left gives points to the player on the right." : "The player or pair being compared; click either name to open their profile."}
                       sortKey="player"
                     >
-                      Player / pair
+                      {tab === "given" ? "Giver → receiver" : tab === "timing" ? "Player" : "Player pair"}
                     </SortableTableHead>
                     <SortableTableHead
                       activeDirection={direction}
                       activeSort={sort}
                       align="right"
                       className="w-[14%]"
+                      title={tab === "alignment" ? "Cosine similarity of budget-normalized vote patterns; higher means more similar voting." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "Combined points exchanged divided by the eligible ballot budgets of both players." : "Points awarded divided by eligible opportunities, including zero-point votes."}
                       defaultDirection={defaultRelationshipSortDirection(
                         tab === "alignment"
                           ? "alignment"
@@ -303,7 +304,7 @@ export default async function RelationshipsPage({
                               : "rate"
                       }
                     >
-                      Value
+                      {valueLabel}
                     </SortableTableHead>
                     <SortableTableHead
                       activeDirection={direction}
@@ -313,9 +314,10 @@ export default async function RelationshipsPage({
                       defaultDirection="desc"
                       params={currentParams}
                       path="/relationships"
+                      title={tab === "alignment" ? "Comparable budget-normalized vote features used for cosine similarity." : tab === "timing" ? "Submitted ballots contributing to the timing average." : "Eligible song-voter combinations, including inferred zeroes; excludes self-votes and missing ballots."}
                       sortKey={tab === "alignment" ? "features" : "opportunities"}
                     >
-                      Sample
+                      {sampleLabel}
                     </SortableTableHead>
                     <SortableTableHead
                       activeDirection={direction}
@@ -325,31 +327,29 @@ export default async function RelationshipsPage({
                       defaultDirection="desc"
                       params={currentParams}
                       path="/relationships"
+                      title={tab === "timing" ? "Rounds entered by submitting or voting in the selected scope." : "Distinct rounds with eligible opportunities for this pair; alignment requires both players to have voted."}
                       sortKey="rounds"
                     >
                       Rounds
                     </SortableTableHead>
-                    <TableHead className="text-right">Context</TableHead>
+                    {tab === "given" || tab === "mutual" ? (
+                      <SortableTableHead activeDirection={direction} activeSort={sort} align="right" defaultDirection="desc" params={currentParams} path="/relationships" sortKey="points" title="Total points awarded across the eligible opportunities shown.">Points</SortableTableHead>
+                    ) : null}
+                    <TableHead className="text-right" title={contextHelp}>{contextLabel}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.rows.map((row) => {
-                    const href = buildAnalyticsHref(
-                      playerHref(row, data.focusPlayer?.id ?? null),
-                      scopeQueryParams(filter),
-                      {},
-                    );
                     return (
                       <TableRow key={`${row.leftId}-${row.rightId ?? "timing"}`}>
                         <TableCell className="max-w-0">
-                          <Link
-                            className="block truncate font-medium text-zinc-100 hover:text-lime-200"
-                            href={href}
-                          >
-                            <TruncatedCell title={playerName(row, data.focusPlayer?.id ?? null)}>
-                              {playerName(row, data.focusPlayer?.id ?? null)}
-                            </TruncatedCell>
-                          </Link>
+                          <div className="flex items-center gap-1.5 font-medium text-zinc-100">
+                            <Link className="min-w-0 truncate hover:text-lime-200" title={row.leftName} href={buildAnalyticsHref(`/players/${row.leftId}`, scopeQueryParams(filter), {})}>{row.leftName}</Link>
+                            {row.rightId ? <>
+                              <span aria-label={tab === "given" ? "gives points to" : "compared with"} className="shrink-0 text-lime-300">{tab === "given" ? "→" : "↔"}</span>
+                              <Link className="min-w-0 truncate hover:text-lime-200" title={row.rightName ?? "Player"} href={buildAnalyticsHref(`/players/${row.rightId}`, scopeQueryParams(filter), {})}>{row.rightName}</Link>
+                            </> : null}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right font-mono text-lime-200">
                           {valueFor(tab, row)}
@@ -363,16 +363,12 @@ export default async function RelationshipsPage({
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {row.sharedRounds ?? row.votedRounds ?? "—"}
-                          {row.scopeRounds ? `/${row.scopeRounds}` : ""}
                         </TableCell>
-                        <TableCell className="text-right text-xs text-zinc-500">
-                          {tab === "timing"
-                            ? `${row.missedBallots ?? 0} missed ballots`
-                            : tab === "mutual"
-                              ? `${row.points ?? 0} pts · ${percent(row.positiveRate)} positive`
-                              : tab === "alignment"
-                                ? "features after scope threshold"
-                                : `${row.points ?? 0} pts · ${percent(row.positiveRate)} positive`}
+                        {tab === "given" || tab === "mutual" ? <TableCell className="text-right font-mono">{row.points ?? 0}</TableCell> : null}
+                        <TableCell className="text-right text-xs text-zinc-400" title={contextHelp}>
+                          {tab === "timing" ? row.missedBallots ?? 0 : tab === "alignment"
+                            ? percent(row.scopeRounds ? (row.sharedRounds ?? 0) / row.scopeRounds : null)
+                            : `${percent(row.positiveRate)} (${Math.round((row.positiveRate ?? 0) * (row.opportunities ?? 0))}/${row.opportunities ?? 0})`}
                         </TableCell>
                       </TableRow>
                     );

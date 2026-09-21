@@ -514,7 +514,7 @@ export default async function PlayerProfilePage({
                           <p className="mt-0.5 text-[11px] text-zinc-600">
                             {row.encounters} opportunities ·{" "}
                             {row.sharedRounds}/{row.scopeRounds} rounds ·{" "}
-                            {(row.positiveRate * 100).toFixed(0)}% positive
+                            {(row.positiveRate * 100).toFixed(0)}% awarded ≥1 pt
                           </p>
                         </div>
                         <p className="shrink-0 font-mono text-sm text-lime-200">
@@ -527,15 +527,12 @@ export default async function PlayerProfilePage({
               ))}
               {!groups.most.length ? (
                 <p className="text-sm leading-6 text-zinc-500 sm:col-span-2">
-                  No comparison has eligible opportunities in at least one third of
-                  this player&apos;s entered rounds.
+                  No comparison meets the adaptive participation minimum for the selected scope.
                 </p>
               ) : (
                 <p className="text-xs leading-5 text-zinc-600 sm:col-span-2">
                   The displayed rate is points per eligible opportunity,
-                  including inferred zeroes. Comparisons must cover at least
-                  one third of the rounds this player entered in the selected
-                  scope.
+                  including inferred zeroes. Comparisons use the same adaptive scope participation minimum as Compare.
                 </p>
               )}
             </CardContent>
@@ -555,7 +552,7 @@ export default async function PlayerProfilePage({
             </Link>
           </CardTitle>
           <CardDescription>
-            {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons must cover at least one third of the rounds this player entered.`}
+            {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons use the same adaptive scope participation minimum as Compare.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-7 sm:grid-cols-2 xl:grid-cols-4">
@@ -609,7 +606,7 @@ export default async function PlayerProfilePage({
                       </Link>
                       <p className="mt-0.5 text-[11px] text-zinc-600">
                         {row.pointsPerOpportunity.toFixed(2)} pts/opportunity ·{" "}
-                        {(row.positiveRate * 100).toFixed(0)}% positive ·{" "}
+                        {(row.positiveRate * 100).toFixed(0)}% awarded ≥1 pt ·{" "}
                         {row.sharedRounds}/{row.scopeRounds} rounds
                       </p>
                     </div>
@@ -623,8 +620,7 @@ export default async function PlayerProfilePage({
           ))}
           {!mutual.mostPoints.length ? (
             <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
-              No mutual comparison has eligible opportunities in at least one third
-              of this player&apos;s entered rounds.
+              No mutual comparison meets the adaptive participation minimum for the selected scope.
             </p>
           ) : null}
         </CardContent>
@@ -711,7 +707,7 @@ export default async function PlayerProfilePage({
             ) : (
               <p className="text-sm leading-6 text-zinc-500">
                 No comparison has enough features and shared voted rounds
-                across at least one third of this player&apos;s entered rounds.
+                across enough rounds to meet the adaptive scope participation minimum.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">

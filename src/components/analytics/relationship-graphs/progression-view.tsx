@@ -1,5 +1,7 @@
 "use client";
 
+import { tableColumnHelp } from "@/lib/table-help";
+
 import { useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, usePlotArea } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -108,7 +110,7 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
     <div className="mt-4 overflow-x-auto">
       <table className="w-full text-left text-sm tabular-nums">
         <caption className="sr-only">Standings after round {current.ordinal}. Early and late averages cover the entire displayed timeline.</caption>
-        <thead className="text-xs text-zinc-500"><tr>{["Rank", "Player", "Total", "This round", "Early avg", "Late avg"].map((label) => <th key={label} scope="col" className="whitespace-nowrap px-3 py-2">{label}</th>)}</tr></thead>
+        <thead className="text-xs text-zinc-500"><tr>{["Rank", "Player", "Total", "This round", "Early avg", "Late avg"].map((label) => <th key={label} title={tableColumnHelp(label)} scope="col" className="whitespace-nowrap px-3 py-2">{label}</th>)}</tr></thead>
         <tbody>{current.standings.filter((player) => visibleIds.has(player.id)).map((player) => <tr key={player.id} className={`border-t border-white/5 ${focus === player.id ? "bg-lime-300/10 text-lime-100" : "text-zinc-300"}`}>
           <td className="px-3 py-2">{player.rank}</td><th scope="row" className="px-3 py-2 font-medium">{player.name}</th><td className="px-3 py-2">{player.total}</td><td className="px-3 py-2">{player.entered ? player.points : "—"}</td><td className="px-3 py-2">{average(player.id, 0, split)}</td><td className="px-3 py-2">{average(player.id, split, timeline.length)}</td>
         </tr>)}</tbody>

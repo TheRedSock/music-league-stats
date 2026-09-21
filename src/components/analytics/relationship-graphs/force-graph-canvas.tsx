@@ -23,6 +23,7 @@ export type ForceLink = {
   color?: string;
   curvature?: number;
   label?: string;
+  fallback?: boolean;
 };
 
 export type ForceGraphLayout = {
@@ -193,7 +194,7 @@ export function RelationshipForceGraph({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chargeStrength, collideRadius, linkDistance, links, nodes, width]);
 
-  const maxWeight = Math.max(...links.map((link) => link.weight), 0.0001);
+  const maxWeight = Math.max(...links.filter(link => !link.fallback).map((link) => link.weight), 0.0001);
 
   function nodeRadius(node: ForceNode): number {
     const isFocus = highlightId != null && node.id === highlightId;
@@ -226,12 +227,14 @@ export function RelationshipForceGraph({
             : `rgba(190, 242, 100, ${opacity})`;
         }}
         linkCurvature="curvature"
+        linkLabel="label"
         // Arrowheads at the target join. Size scales a bit with weight so
         // strong edges stay readable without dominating soft ones.
         linkDirectionalArrowLength={
           directed
             ? (link) => {
                 const typed = link as ForceLink;
+                if (typed.fallback) return 5;
                 return 7 + (typed.weight / maxWeight) * 5;
               }
             : 0
@@ -239,7 +242,7 @@ export function RelationshipForceGraph({
         linkDirectionalArrowRelPos={1}
         // One slow particle per directed edge — a subtle motion cue for
         // giver → receiver without a dashed arrow pattern.
-        linkDirectionalParticles={directed ? 1 : 0}
+        linkDirectionalParticles={directed ? link => (link as ForceLink).fallback ? 0 : 1 : 0}
         linkDirectionalParticleSpeed={0.004}
         linkDirectionalParticleWidth={(link) => {
           const typed = link as ForceLink;
@@ -247,6 +250,7 @@ export function RelationshipForceGraph({
         }}
         linkWidth={(link) => {
           const typed = link as ForceLink;
+          if (typed.fallback) return 1;
           return 1 + (typed.weight / maxWeight) * 4;
         }}
         // Library places link ends / arrows at sqrt(val)*nodeRelSize. Match

@@ -1,5 +1,7 @@
 "use client";
 
+import { qualificationRoundFloor } from "@/lib/participation";
+
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -25,17 +27,16 @@ export function LeaderboardPanel({
   filterParams = {},
   rows,
   scopeRounds,
+  totalRounds,
 }: {
   filterParams?: Record<string, QueryValue>;
   rows: LeaderboardRow[];
   scopeRounds: number;
+  totalRounds: number;
 }) {
   const [mode, setMode] = useState<Mode>("points");
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const normalizedMinimum = Math.max(
-    1,
-    Math.ceil((Number.isFinite(scopeRounds) ? scopeRounds : 0) / 3),
-  );
+  const normalizedMinimum = qualificationRoundFloor(scopeRounds, totalRounds);
   const ordered = useMemo(
     () =>
       rows
@@ -78,7 +79,7 @@ export function LeaderboardPanel({
             Raw points reward volume. The round index compares each
             player&apos;s points with the expected points for their submitted songs
             from that round&apos;s eligible ballot budgets. Round-adjusted rankings
-            require entering at least one third of the selected rounds (
+            use the adaptive participation minimum (
             {normalizedMinimum}+ of {scopeRounds || "—"}).
           </p>
         </div>

@@ -24,14 +24,14 @@ export function VoteDistributions({
       </div>
       <div className="grid gap-8 lg:grid-cols-2">
         <PointDistributionSection
-          buckets={received}
-          range={range}
-          title="Points received"
-        />
-        <PointDistributionSection
           buckets={given}
           range={range}
-          title="Points given"
+          title="Votes given"
+        />
+        <PointDistributionSection
+          buckets={received}
+          range={range}
+          title="Votes received"
         />
       </div>
     </div>

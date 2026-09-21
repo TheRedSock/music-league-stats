@@ -1,5 +1,9 @@
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
+import { cache } from "react";
+
+import { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
+export { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
 
 import { db } from "@/db";
 import { competitors, leagues, rounds } from "@/db/schema";
@@ -680,31 +684,22 @@ export function safeRatio(
     : null;
 }
 
-/** Minimum entered rounds to qualify for round-adjusted rankings (~1/3 of scope, at least 1). */
-export function qualificationRoundFloor(scopeRounds: number): number {
-  if (!Number.isFinite(scopeRounds) || scopeRounds <= 0) return 1;
-  return Math.max(1, Math.ceil(scopeRounds / 3));
-}
-
-/** Minimum comparable alignment features (~5× round floor, clamped 5–20). */
-export function qualificationFeatureFloor(scopeRounds: number): number {
-  return Math.min(20, Math.max(5, qualificationRoundFloor(scopeRounds) * 5));
-}
-
 /** Whether a pair has enough overlapping sample for the given round denominator. */
 export function meetsRelationshipSampleFloor({
   sharedRounds,
   sampleRounds,
+  totalRounds = sampleRounds,
   comparableFeatures = null,
 }: {
   sharedRounds: number | null | undefined;
   sampleRounds: number;
+  totalRounds?: number;
   comparableFeatures?: number | null;
 }): boolean {
-  if ((sharedRounds ?? 0) < qualificationRoundFloor(sampleRounds)) return false;
+  if ((sharedRounds ?? 0) < qualificationRoundFloor(sampleRounds, totalRounds)) return false;
   if (
     comparableFeatures != null &&
-    comparableFeatures < qualificationFeatureFloor(sampleRounds)
+    comparableFeatures < qualificationFeatureFloor(sampleRounds, totalRounds)
   ) {
     return false;
   }
@@ -713,27 +708,28 @@ export function meetsRelationshipSampleFloor({
 
 function applyPlayerRelationshipSample<
   T extends { comparableFeatures?: number; scopeRounds: number; sharedRounds: number },
->(rows: T[], enteredRounds: number, requireFeatures = false): T[] {
-  return rows
-    .filter((row) =>
-      meetsRelationshipSampleFloor({
-        comparableFeatures: requireFeatures ? (row.comparableFeatures ?? 0) : null,
-        sampleRounds: enteredRounds,
-        sharedRounds: row.sharedRounds,
-      }),
-    )
-    .map((row) => ({ ...row, scopeRounds: enteredRounds }));
+>(rows: T[], totalRounds: number, requireFeatures = false): T[] {
+  return rows.filter((row) =>
+    meetsRelationshipSampleFloor({
+      comparableFeatures: requireFeatures ? (row.comparableFeatures ?? 0) : null,
+      sampleRounds: row.scopeRounds,
+      totalRounds,
+      sharedRounds: row.sharedRounds,
+    }),
+  );
 }
 
 function filterScopeRelationshipRows(
   rows: RelationshipTableRow[],
   tab: RelationshipTab,
+  totalRounds: number,
 ): RelationshipTableRow[] {
   if (tab === "timing") return rows;
   return rows.filter((row) =>
     meetsRelationshipSampleFloor({
       comparableFeatures: tab === "alignment" ? (row.comparableFeatures ?? 0) : null,
       sampleRounds: row.scopeRounds ?? 0,
+      totalRounds,
       sharedRounds: row.sharedRounds,
     }),
   );
@@ -742,12 +738,14 @@ function filterScopeRelationshipRows(
 function topScopeAlignments(
   rows: DashboardData["alignment"],
   limit: number,
+  totalRounds: number,
 ): DashboardData["alignment"] {
   return rows
     .filter((row) =>
       meetsRelationshipSampleFloor({
         comparableFeatures: row.comparableFeatures,
         sampleRounds: row.scopeRounds,
+        totalRounds,
         sharedRounds: row.sharedRounds,
       }),
     )
@@ -760,24 +758,24 @@ function topScopeAlignments(
     .slice(0, limit);
 }
 
-function withPlayerScopedRelationships(
+async function withPlayerScopedRelationships(
   profile: PlayerProfileData,
-): PlayerProfileData {
-  const enteredRounds = profile.overview?.enteredRounds ?? 0;
+): Promise<PlayerProfileData> {
+  const totalRounds = await countAvailableRounds();
   return {
     ...profile,
     alignments: applyPlayerRelationshipSample(
       profile.alignments,
-      enteredRounds,
+      totalRounds,
       true,
     ),
     mutualRelationships: applyPlayerRelationshipSample(
       profile.mutualRelationships,
-      enteredRounds,
+      totalRounds,
     ),
     relationships: applyPlayerRelationshipSample(
       profile.relationships,
-      enteredRounds,
+      totalRounds,
     ),
   };
 }
@@ -1043,14 +1041,12 @@ export async function getFilterOptions(): Promise<FilterOptions> {
       })
       .from(rounds)
       .innerJoin(leagues, eq(rounds.leagueId, leagues.id))
-      .orderBy(asc(leagues.name), asc(rounds.ordinal)),
+      .orderBy(sql`${leagues.startDate} desc nulls last`, sql`${leagues.createdAt} desc`, asc(leagues.name), asc(rounds.ordinal)),
   ]);
 
   return {
     defaultLeagueId: leagueRows[0]?.id ?? null,
-    leagues: leagueRows.map((league, chronologicalOrder) => ({ ...league, chronologicalOrder })).sort((left, right) =>
-      left.name.localeCompare(right.name),
-    ),
+    leagues: leagueRows.map((league, chronologicalOrder) => ({ ...league, chronologicalOrder })),
     rounds: roundRows,
   };
 }
@@ -1672,21 +1668,22 @@ async function hasCompletedScopeMaterialization(scopeKey: string): Promise<boole
 }
 
 async function countScopeRounds(filter: AnalyticsFilter): Promise<number> {
-  if (filter.leagueIds.length === 0) {
-    const [row] = await db.execute<{ count: number }>(sql`
-      select count(*)::int as count from rounds
-    `);
-    return row?.count ?? 0;
-  }
   const [row] = await db.execute<{ count: number }>(sql`
-    select count(*)::int as count
-    from rounds
-    where league_id in (${sql.join(
-      filter.leagueIds.map((id) => sql`${id}`),
-      sql`, `,
-    )})
+    select count(*)::int as count from rounds r where ${scopePredicate(filter)}
   `);
   return row?.count ?? 0;
+}
+
+// Shared by graph metrics and profile panels during one server render.
+const countAvailableRounds = cache(() => countScopeRounds({ leagueIds: [], roundIds: [] }));
+
+async function scopeRoundFloor(filter: AnalyticsFilter): Promise<number> {
+  const [row] = await db.execute<{ scope: number; total: number }>(sql`
+    select count(*) filter (where ${scopePredicate(filter)})::int as scope,
+      count(*)::int as total
+    from rounds r
+  `);
+  return qualificationRoundFloor(row?.scope ?? 0, row?.total ?? 0);
 }
 
 function matSongSelect(leagueIds: readonly string[] = []): SQL {
@@ -1895,7 +1892,7 @@ async function getMaterializedDashboardAlignmentData(
     where scope_key = ${scopeKey}
     order by alignment desc, comparable_features desc
   `);
-  return topScopeAlignments(rows, 3);
+  return topScopeAlignments(rows, 3, await countAvailableRounds());
 }
 
 export async function getDashboardData(
@@ -2035,7 +2032,7 @@ export async function getDashboardAlignmentData(
     where pc.magnitude > 0
     order by alignment desc
   `);
-  return topScopeAlignments(alignments, 3);
+  return topScopeAlignments(alignments, 3, await countAvailableRounds());
 }
 
 function songSearchPredicate(search: string): SQL {
@@ -2579,8 +2576,7 @@ export async function getPlayersData(
     direction: SortDirection;
   },
 ): Promise<PlayersData> {
-  const scopeRounds = await countScopeRounds(filter);
-  const minimumRounds = qualificationRoundFloor(scopeRounds);
+  const minimumRounds = await scopeRoundFloor(filter);
 
   if (
     canUseSongDerivedMats(filter) &&
@@ -2832,7 +2828,7 @@ export async function getPlayerProfileData(
   const player = playerRows[0];
   if (!player) return null;
 
-  const minimumRounds = qualificationRoundFloor(await countScopeRounds(filter));
+  const minimumRounds = await scopeRoundFloor(filter);
 
   if (
     canUseSongDerivedMats(filter) &&
@@ -3228,10 +3224,10 @@ function sortRelationshipRows(
   direction: SortDirection,
 ): RelationshipTableRow[] {
   function value(row: RelationshipTableRow): number | string | null {
-    if (sort === "player") return row.rightName ?? row.leftName;
+    if (sort === "player") return `${row.leftName} ${row.rightName ?? ""}`;
     if (sort === "points") return row.points;
     if (sort === "rate") return row.pointsPerOpportunity;
-    if (sort === "opportunities") return row.opportunities;
+    if (sort === "opportunities") return row.opportunities ?? row.votedRounds;
     if (sort === "positive") return row.positiveRate;
     if (sort === "rounds") return row.sharedRounds ?? row.votedRounds;
     if (sort === "share") return row.ballotPointShare;
@@ -3394,7 +3390,7 @@ async function getMaterializedRelationshipRows(
     from analytics_relationship_pairs
     where scope_key = ${scopeKey}
       and direction = ${tab}
-      and (${focus}::uuid is null or left_id = ${focus})
+      and (${focus}::uuid is null or left_id = ${focus} or right_id = ${focus})
   `);
 }
 
@@ -3428,7 +3424,7 @@ export async function getRelationshipsTableData(
       direction,
       focusPlayer: focusPlayerRow,
       rows: sortRelationshipRows(
-        filterScopeRelationshipRows(rows, tab),
+        filterScopeRelationshipRows(rows, tab, await countAvailableRounds()),
         sort,
         direction,
       ),
@@ -3623,7 +3619,7 @@ export async function getRelationshipsTableData(
                   count(*) filter (where ev.points > 0)::int as positives
                 from effective_votes ev
                 where ${focus}::uuid is null
-                   or ${tab === "received" ? sql`ev.submitter_id` : sql`ev.voter_id`} = ${focus}
+                   or ev.submitter_id = ${focus} or ev.voter_id = ${focus}
                 group by left_id, right_id
               )
               select
@@ -3660,7 +3656,7 @@ export async function getRelationshipsTableData(
     direction,
     focusPlayer: focusPlayerValue,
     rows: sortRelationshipRows(
-      filterScopeRelationshipRows(filteredRows, tab),
+      filterScopeRelationshipRows(filteredRows, tab, await countAvailableRounds()),
       sort,
       direction,
     ),
@@ -3826,7 +3822,7 @@ export async function getSubmissionFactsData(
       scope_meta as (
         select
           count(*)::int as scope_rounds,
-          greatest(1, ceil(count(*)::numeric / 3)::int) as minimum_rounds
+          ${await scopeRoundFloor(filter)}::int as minimum_rounds
         from selected_rounds
       ),
       scoped_songs as (

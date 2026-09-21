@@ -49,12 +49,12 @@ function formatVotes(value: number): string {
 
 function buildPieSlices(
   buckets: PointBucket[],
-  totalPoints: number,
+  totalVotes: number,
 ): PieSlice[] {
   return buckets
-    .filter((bucket) => bucket.pointTotal > 0)
+    .filter((bucket) => bucket.count > 0)
     .reduce<PieSlice[]>((acc, bucket) => {
-      const share = totalPoints ? bucket.pointTotal / totalPoints : 0;
+      const share = totalVotes ? bucket.count / totalVotes : 0;
       const startAngle = acc.at(-1)?.endAngle ?? 0;
       return [
         ...acc,
@@ -89,7 +89,7 @@ function ModeToggle({
         onClick={() => onChange("total")}
         variant={mode === "total" ? "primary" : "ghost"}
       >
-        Total
+        Vote count
       </Button>
       <Button
         aria-pressed={mode === "ratio"}
@@ -97,7 +97,7 @@ function ModeToggle({
         onClick={() => onChange("ratio")}
         variant={mode === "ratio" ? "primary" : "ghost"}
       >
-        Ratio
+        Vote share
       </Button>
     </div>
   );
@@ -175,10 +175,10 @@ function pieSlicePath(
 
 function RatioPie({
   buckets,
-  totalPoints,
+  totalVotes,
 }: {
   buckets: PointBucket[];
-  totalPoints: number;
+  totalVotes: number;
 }) {
   const titleId = useId();
   const [hover, setHover] = useState<PieHover | null>(null);
@@ -186,7 +186,7 @@ function RatioPie({
   const cx = size / 2;
   const cy = size / 2;
   const radius = 100;
-  const slices = buildPieSlices(buckets, totalPoints);
+  const slices = buildPieSlices(buckets, totalVotes);
   const activeLabel = hover?.slice.bucket.label ?? null;
 
   const updateHover = (
@@ -314,13 +314,13 @@ function RatioPie({
         <p className="mb-2 text-[11px] text-zinc-500">
           Total{" "}
           <span className="font-mono tabular-nums text-zinc-200">
-            {totalPoints.toLocaleString()}
+            {totalVotes.toLocaleString()}
           </span>{" "}
-          pts
+          votes
         </p>
         <ul className="grid grid-cols-1 gap-1.5">
           {buckets.map((bucket) => {
-            const share = totalPoints ? bucket.pointTotal / totalPoints : 0;
+            const share = totalVotes ? bucket.count / totalVotes : 0;
             const isActive = activeLabel === bucket.label;
             return (
               <li
@@ -352,7 +352,7 @@ function RatioPie({
 }
 
 function TotalBars({ buckets }: { buckets: PointBucket[] }) {
-  const maximum = Math.max(1, ...buckets.map(({ pointTotal }) => pointTotal));
+  const maximum = Math.max(1, ...buckets.map(({ count }) => count));
 
   return (
     <div
@@ -377,8 +377,8 @@ function TotalBars({ buckets }: { buckets: PointBucket[] }) {
               className="w-full rounded-t-md bg-gradient-to-t from-violet-500/70 to-lime-300/80"
               style={{
                 height: `${Math.max(
-                  bucket.pointTotal ? 3 : 0,
-                  (bucket.pointTotal / maximum) * 100,
+                  bucket.count ? 3 : 0,
+                  (bucket.count / maximum) * 100,
                 )}%`,
               }}
             />
@@ -409,8 +409,8 @@ export function PointBucketDisplay({
   modeLabel?: string;
   showModeToggle?: boolean;
 }) {
-  const totalPoints = buckets.reduce(
-    (sum, bucket) => sum + bucket.pointTotal,
+  const totalVotes = buckets.reduce(
+    (sum, bucket) => sum + bucket.count,
     0,
   );
 
@@ -421,8 +421,9 @@ export function PointBucketDisplay({
           <ModeToggle label={modeLabel} mode={mode} onChange={onModeChange} />
         </div>
       ) : null}
+      <p className="text-xs text-zinc-500">Frequency of eligible votes by points awarded; zero includes inferred zero-point votes.</p>
       {mode === "ratio" ? (
-        <RatioPie buckets={buckets} totalPoints={totalPoints} />
+        <RatioPie buckets={buckets} totalVotes={totalVotes} />
       ) : (
         <TotalBars buckets={buckets} />
       )}

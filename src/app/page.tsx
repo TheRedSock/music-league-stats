@@ -149,8 +149,8 @@ function AlignmentPanel({
               </h2>
               <p className="mt-2 text-sm leading-6 text-zinc-400">
                 Alignment appears after two voters have enough comparable ballot
-                features and shared voted rounds in at least one third of the
-                selected scope.
+                features and enough shared voted rounds to meet the adaptive
+                participation minimum for the selected scope.
               </p>
             </>
           )}
@@ -319,6 +319,7 @@ export default async function HomePage({
                   filterParams={filterParams}
                   rows={data.leaderboard}
                   scopeRounds={data.summary.rounds}
+              totalRounds={options.rounds.length}
                 />
               </CardContent>
             </Card>

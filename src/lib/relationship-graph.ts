@@ -155,7 +155,7 @@ export async function getRelationshipGraphData(
     };
   }
 
-  return shapeGraphData(alignment.rows, mutual.rows, given.rows);
+  return { ...shapeGraphData(alignment.rows, mutual.rows, given.rows), scopeKey: `${scopeKey}:${encodeScopeIds(filter.roundIds)}` };
 }
 
 export async function getCachedRelationshipGraphData(

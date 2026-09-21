@@ -32,6 +32,7 @@ import {
   type SortDirection,
 } from "@/lib/analytics-view";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
+import { tableColumnHelp } from "@/lib/table-help";
 import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 5;
@@ -152,9 +153,10 @@ function SortHeader({
         active ? (direction === "desc" ? "descending" : "ascending") : "none"
       }
       className={cn(align === "right" && "text-right", className)}
-      title={title}
+      title={title ?? tableColumnHelp(children)}
     >
       <button
+        title={title ?? tableColumnHelp(children)}
         className={cn(
           "inline-flex items-center gap-1 rounded-sm outline-none transition-colors hover:text-lime-200 focus-visible:ring-2 focus-visible:ring-lime-300/40",
           align === "right" && "justify-end",
@@ -414,6 +416,7 @@ export function HighestVotedSongsPanel({
                           className="w-[8%]"
                           direction={direction}
                           onClick={() => toggleSort("points")}
+                          title="Points this player awarded to the song on their ballot."
                         >
                           Points
                         </SortHeader>

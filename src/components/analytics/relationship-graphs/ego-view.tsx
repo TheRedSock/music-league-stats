@@ -16,7 +16,6 @@ import { useNormalizedThreshold } from "@/components/analytics/relationship-grap
 import {
   edgeWeight,
   formatScaleCaption,
-  LAB_DEFAULT_NORMALIZED,
   undirectedWeightScale,
   type RelationshipGraphData,
   type UndirectedMetric,
@@ -39,14 +38,13 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
   }, [resolvedFocusId, graph.undirectedEdges]);
 
   const scale = useMemo(
-    () => undirectedWeightScale(focusEdges, metric),
+    () => undirectedWeightScale(focusEdges, metric, Math.min(8, Math.max(3, Math.sqrt(focusEdges.length)))),
     [focusEdges, metric],
   );
-  const scaleKey = `ego:${resolvedFocusId}:${metric}:${scale.low.toFixed(4)}:${scale.high.toFixed(4)}:${scale.sampleSize}`;
+  const scaleKey = `ego:${graph.scopeKey}:${resolvedFocusId}:${metric}:${scale.sorted.join(",")}`;
   const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(
     scale,
     scaleKey,
-    LAB_DEFAULT_NORMALIZED.ego,
   );
 
   const neighborEdges = useMemo(() => {
@@ -141,7 +139,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         />
       </LabsControls>
       <p className="text-xs text-zinc-500">
-        Ego fixed at center (large). All neighbors above the strength cutoff are
+        The automatic default targets 3–8 neighbors based on the number available. Ego stays at the center (large). All neighbors above the strength cutoff are
         shown; node size scales strongly with {metric} (
         {links.length} connection{links.length === 1 ? "" : "s"}).
       </p>

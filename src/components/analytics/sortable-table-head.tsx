@@ -9,6 +9,7 @@ import {
   type QueryValue,
 } from "@/lib/analytics-url";
 import type { SortDirection } from "@/lib/analytics-view";
+import { tableColumnHelp } from "@/lib/table-help";
 import { cn } from "@/lib/utils";
 
 export function SortableTableHead({
@@ -34,6 +35,7 @@ export function SortableTableHead({
   sortKey: string;
   title?: string;
 }) {
+  const help = title ?? tableColumnHelp(typeof children === "string" ? children : sortKey);
   const active = activeSort === sortKey;
   const nextDirection: SortDirection = active
     ? activeDirection === "desc"
@@ -53,9 +55,10 @@ export function SortableTableHead({
         active ? (activeDirection === "desc" ? "descending" : "ascending") : "none"
       }
       className={cn(align === "right" && "text-right", className)}
-      title={title}
+      title={help}
     >
       <PendingLink
+        title={help}
         className={cn(
           "rounded-sm outline-none transition-colors hover:text-lime-200 focus-visible:ring-2 focus-visible:ring-lime-300/40",
           align === "right" && "justify-end",

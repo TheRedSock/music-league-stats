@@ -6,9 +6,9 @@ import type { WeightScale } from "@/lib/relationship-graph-shared";
 import { normalizedToRaw } from "@/lib/relationship-graph-shared";
 
 /**
- * Slider state in normalized [0,1] space mapped through a robust WeightScale.
+ * Slider state mapped through the view's quantile or per-player density scale.
  * Resets when the distribution identity changes. Optional override replaces the
- * scale's built-in default (e.g. matrix hide-at-0%, bubbles more aggressive).
+ * scale's density-based default (e.g. matrix starts unfiltered).
  */
 export function useNormalizedThreshold(
   scale: WeightScale,
@@ -18,22 +18,26 @@ export function useNormalizedThreshold(
   const resolvedDefault = defaultNormalized ?? scale.defaultNormalized;
   const [normalized, setNormalized] = useState(resolvedDefault);
   const [trackedKey, setTrackedKey] = useState(scaleKey);
+  const [unfiltered, setUnfiltered] = useState(false);
 
   // Adjust state during render when the scale identity changes (React-recommended
   // replacement for syncing via useEffect).
   if (trackedKey !== scaleKey) {
     setTrackedKey(scaleKey);
     setNormalized(resolvedDefault);
+    setUnfiltered(false);
   }
 
   const rawThreshold = useMemo(
-    () => normalizedToRaw(normalized, scale),
-    [normalized, scale],
+    () => unfiltered ? scale.low : normalizedToRaw(normalized, scale),
+    [normalized, scale, unfiltered],
   );
 
   return {
     normalized,
     rawThreshold,
     setNormalized,
+    unfiltered,
+    setUnfiltered,
   };
 }

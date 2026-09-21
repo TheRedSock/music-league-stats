@@ -112,7 +112,7 @@ export function MatrixView({ graph }: { graph: RelationshipGraphData }) {
     () => undirectedWeightScale(graph.undirectedEdges, metric),
     [graph.undirectedEdges, metric],
   );
-  const scaleKey = `matrix:${metric}:${scale.low.toFixed(4)}:${scale.high.toFixed(4)}:${scale.sampleSize}`;
+  const scaleKey = `matrix:${graph.scopeKey}:${metric}:${scale.sorted.join(",")}`;
   const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(
     scale,
     scaleKey,
