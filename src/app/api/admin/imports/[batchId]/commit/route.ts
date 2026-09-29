@@ -22,11 +22,14 @@ import {
 import { db } from "@/db";
 import { importBatches } from "@/db/schema";
 
+export const maxDuration = 60;
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ batchId: string }> },
 ) {
   let batchId: string | undefined;
+  let committed: Awaited<ReturnType<typeof commitImportBatch>> | undefined;
   try {
     requireAdminMutation(request);
     batchId = (await context.params).batchId;
@@ -34,6 +37,7 @@ export async function POST(
       throw new AdminRequestError("Invalid import batch ID.", 400);
     }
     const summary = await commitImportBatch(batchId);
+    committed = summary;
     const [batch] = await db
       .select({ leagueId: importBatches.leagueId })
       .from(importBatches)
@@ -58,6 +62,10 @@ export async function POST(
     revalidatePath("/admin");
     return NextResponse.json({ status: "completed", summary });
   } catch (error) {
+    if (committed) {
+      console.error("Post-import analytics invalidation failed", { batchId });
+      return NextResponse.json({ status: "completed", summary: committed, analyticsWarning: "Your import is saved, but analytics cache invalidation failed. Retry this same import to finish invalidation safely." });
+    }
     if (batchId && z.uuid().safeParse(batchId).success) {
       const message =
         error instanceof ImportCommitError

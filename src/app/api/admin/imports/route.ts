@@ -17,6 +17,8 @@ import {
 } from "@/lib/import-data";
 import { sha256Json } from "@/lib/server-hash";
 
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     requireAdminMutation(request);

@@ -122,6 +122,7 @@ export default async function AdminPage() {
             ? {
                 id: materialization.job.id,
                 status: materialization.job.status,
+                updatedAt: materialization.job.updatedAt.toISOString(),
                 errorMessage: materialization.job.errorMessage,
                 summary: materialization.job.summary as
                   | Record<string, unknown>

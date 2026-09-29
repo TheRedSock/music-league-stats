@@ -29,6 +29,8 @@ function databaseCode(error: unknown): string | undefined {
     : undefined;
 }
 
+export const maxDuration = 60;
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ batchId: string }> },

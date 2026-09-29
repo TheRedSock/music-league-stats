@@ -14,9 +14,12 @@ import {
   startMaterializationJob,
 } from "@/lib/analytics-materialize";
 
+export const maxDuration = 60;
+
 const postBodySchema = z.object({
   action: z.enum(["start", "advance"]),
   jobId: z.uuid().optional(),
+  cursor: z.string().max(100).optional(),
 });
 
 export async function GET() {
@@ -49,13 +52,7 @@ export async function POST(request: NextRequest) {
       throw new AdminRequestError("A jobId is required to advance refresh.", 400);
     }
 
-    const status = await advanceMaterializationJob(parsed.data.jobId);
-    if (status.status === "failed") {
-      throw new AdminRequestError(
-        status.job?.errorMessage ?? "All-leagues analytics refresh failed.",
-        500,
-      );
-    }
+    const status = await advanceMaterializationJob(parsed.data.jobId, undefined, parsed.data.cursor);
     return NextResponse.json(status);
   } catch (error) {
     return adminErrorResponse(error);

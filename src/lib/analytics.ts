@@ -1490,6 +1490,10 @@ export function alignmentComparisonTailCtes(playerId?: string): SQL {
   const pairScopeFilter = playerId
     ? sql`where lm1.competitor_id = ${playerId} or lm2.competitor_id = ${playerId}`
     : sql``;
+  // Normalize ballots once and aggregate features before joining membership
+  // scope. The materialization boundaries prevent expensive join reordering
+  // when small/new leagues have stale cardinality estimates. Effective votes
+  // already exclude self-votes; reciprocal edges retain mutual zeroes.
   return sql`
     pair_scope as (
       select
@@ -1504,116 +1508,60 @@ export function alignmentComparisonTailCtes(playerId?: string): SQL {
       ${pairScopeFilter}
       group by lm1.competitor_id, lm2.competitor_id
     ),
-    shared_ballot_pairs as (
-      select
-        left_ballot.round_id,
-        left_ballot.voter_id as left_id,
-        right_ballot.voter_id as right_id,
-        ps.scope_rounds
-      from active_ballots left_ballot
-      join active_ballots right_ballot
-        on right_ballot.round_id = left_ballot.round_id
-       and right_ballot.voter_id > left_ballot.voter_id
-      join pair_scope ps
-        on ps.left_id = left_ballot.voter_id
-       and ps.right_id = right_ballot.voter_id
+    normalized_votes as materialized (
+      select ev.*, ev.points::double precision / bt.ballot_points as value
+      from effective_votes ev
+      join ballot_totals bt
+        on bt.round_id = ev.round_id and bt.voter_id = ev.voter_id
+      where bt.ballot_points > 0
     ),
     third_party_features as (
-      select
-        sp.left_id,
-        sp.right_id,
-        sp.round_id,
-        sp.scope_rounds,
-        ev_left.submission_id::text as feature_key,
-        ev_left.points::double precision / nullif(left_total.ballot_points, 0) as left_value,
-        ev_right.points::double precision / nullif(right_total.ballot_points, 0) as right_value
-      from shared_ballot_pairs sp
-      join effective_votes ev_left
-        on ev_left.round_id = sp.round_id
-       and ev_left.voter_id = sp.left_id
-      join effective_votes ev_right
-        on ev_right.round_id = sp.round_id
-       and ev_right.voter_id = sp.right_id
+      select ev_left.voter_id as left_id, ev_right.voter_id as right_id,
+        ev_left.round_id, ev_left.submission_id::text as feature_key,
+        ev_left.value as left_value, ev_right.value as right_value
+      from normalized_votes ev_left
+      join normalized_votes ev_right
+        on ev_right.round_id = ev_left.round_id
        and ev_right.submission_id = ev_left.submission_id
-      join ballot_totals left_total
-        on left_total.round_id = sp.round_id
-       and left_total.voter_id = sp.left_id
-      join ballot_totals right_total
-        on right_total.round_id = sp.round_id
-       and right_total.voter_id = sp.right_id
-      where ev_left.submitter_id <> sp.left_id
-        and ev_left.submitter_id <> sp.right_id
-        and left_total.ballot_points > 0
-        and right_total.ballot_points > 0
+       and ev_right.voter_id > ev_left.voter_id
     ),
-    mutual_support_points as (
-      select
-        sp.left_id,
-        sp.right_id,
-        sp.round_id,
-        sp.scope_rounds,
-        coalesce(sum(ev.points) filter (
-          where ev.voter_id = sp.left_id and ev.submitter_id = sp.right_id
-        ), 0)::double precision as left_points,
-        coalesce(sum(ev.points) filter (
-          where ev.voter_id = sp.right_id and ev.submitter_id = sp.left_id
-        ), 0)::double precision as right_points,
-        count(ev.submission_id) filter (
-          where ev.voter_id = sp.left_id and ev.submitter_id = sp.right_id
-        )::int as left_opportunities,
-        count(ev.submission_id) filter (
-          where ev.voter_id = sp.right_id and ev.submitter_id = sp.left_id
-        )::int as right_opportunities
-      from shared_ballot_pairs sp
-      left join effective_votes ev
-        on ev.round_id = sp.round_id
-       and (
-        (ev.voter_id = sp.left_id and ev.submitter_id = sp.right_id)
-        or (ev.voter_id = sp.right_id and ev.submitter_id = sp.left_id)
-       )
-      group by sp.left_id, sp.right_id, sp.round_id, sp.scope_rounds
-      having count(ev.submission_id) filter (
-          where ev.voter_id = sp.left_id and ev.submitter_id = sp.right_id
-        ) > 0
-         and count(ev.submission_id) filter (
-          where ev.voter_id = sp.right_id and ev.submitter_id = sp.left_id
-        ) > 0
+    directed_support as materialized (
+      select ev.round_id, ev.voter_id, ev.submitter_id,
+        sum(ev.points)::double precision / bt.ballot_points as value
+      from effective_votes ev
+      join ballot_totals bt
+        on bt.round_id = ev.round_id and bt.voter_id = ev.voter_id
+      where bt.ballot_points > 0
+      group by ev.round_id, ev.voter_id, ev.submitter_id, bt.ballot_points
     ),
     mutual_features as (
-      select
-        msp.left_id,
-        msp.right_id,
-        msp.round_id,
-        msp.scope_rounds,
-        ('mutual:' || msp.round_id::text) as feature_key,
-        msp.left_points / nullif(left_total.ballot_points, 0) as left_value,
-        msp.right_points / nullif(right_total.ballot_points, 0) as right_value
-      from mutual_support_points msp
-      join ballot_totals left_total
-        on left_total.round_id = msp.round_id
-       and left_total.voter_id = msp.left_id
-      join ballot_totals right_total
-        on right_total.round_id = msp.round_id
-       and right_total.voter_id = msp.right_id
-      where left_total.ballot_points > 0
-        and right_total.ballot_points > 0
+      select l.voter_id as left_id, l.submitter_id as right_id, l.round_id,
+        ('mutual:' || l.round_id::text) as feature_key,
+        l.value as left_value, r.value as right_value
+      from directed_support l
+      join directed_support r
+        on r.round_id = l.round_id
+       and r.voter_id = l.submitter_id and r.submitter_id = l.voter_id
+      where l.voter_id < l.submitter_id
     ),
     comparison_features as (
       select * from third_party_features
       union all
       select * from mutual_features
     ),
-    pair_comparisons as (
-      select
-        cf.left_id,
-        cf.right_id,
+    pair_feature_totals as materialized (
+      select cf.left_id, cf.right_id,
         count(*)::int as comparable_features,
         count(distinct cf.round_id)::int as shared_rounds,
-        max(cf.scope_rounds)::int as scope_rounds,
         sum(cf.left_value * cf.right_value) as dot,
         sqrt(sum(cf.left_value * cf.left_value) * sum(cf.right_value * cf.right_value)) as magnitude
       from comparison_features cf
       group by cf.left_id, cf.right_id
+    ),
+    pair_comparisons as (
+      select pf.*, ps.scope_rounds
+      from pair_feature_totals pf
+      join pair_scope ps on ps.left_id = pf.left_id and ps.right_id = pf.right_id
     )
   `;
 }

@@ -406,6 +406,8 @@ export type AnalyticsMaterializationProgress = {
   stepCount: number;
   leagueIndex?: number;
   leagueCount?: number;
+  leagueStepIndex?: number;
+  leagueIds?: string[];
 };
 
 export type AnalyticsMaterializationJobSummary =

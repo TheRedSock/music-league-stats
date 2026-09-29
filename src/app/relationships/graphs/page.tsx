@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/card";
 import type { SearchParams } from "@/lib/analytics";
 
+export const maxDuration = 60;
+
 export const metadata: Metadata = {
   title: "Graphs",
   description:

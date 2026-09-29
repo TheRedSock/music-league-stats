@@ -1,5 +1,6 @@
 import "server-only";
 
+import { databaseErrorCode } from "@/lib/analytics-job-runtime";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
 
@@ -87,8 +88,12 @@ export function adminErrorResponse(error: unknown): Response {
   if (error instanceof AdminRequestError) {
     return Response.json({ error: error.message }, { status: error.status });
   }
+  const reference = crypto.randomUUID();
+  const code = databaseErrorCode(error);
+  console.error("Admin request failed", { reference, code, name: error instanceof Error ? error.name : "UnknownError" });
+  const timeout = code === "57014" || code === "55P03";
   return Response.json(
-    { error: "The request could not be completed." },
-    { status: 500 },
+    { error: timeout ? "The database request timed out. Check saved progress before retrying." : "The request could not be completed.", reference },
+    { status: timeout ? 504 : 500 },
   );
 }

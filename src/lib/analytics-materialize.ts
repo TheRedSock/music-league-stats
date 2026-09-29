@@ -23,12 +23,14 @@ import {
   voteOpportunityCtes,
   type AnalyticsFilter,
 } from "@/lib/analytics";
+import { analyticsProgressKey, LEAGUE_CALCULATIONS } from "@/lib/analytics-job-progress";
+import { analyticsFailureMessage, budgetedAnalyticsExecutor, configureAnalyticsTransaction, databaseErrorCode, type AnalyticsExecutor } from "@/lib/analytics-job-runtime";
 import { ANALYTICS_REVISION } from "@/lib/analytics-revision";
 
 const ALL_LEAGUES_FILTER: AnalyticsFilter = { leagueIds: [], roundIds: [] };
 const MATERIALIZATION_LOCK_KEY = 73_730_001;
 const SCOPE_ALL = "all";
-type SqlExecutor = Pick<Database, "execute">;
+type SqlExecutor = AnalyticsExecutor;
 
 export const MATERIALIZATION_STEPS = [
   { id: "clear", label: "Clearing cached tables" },
@@ -139,47 +141,21 @@ function progressSummary(
   stepIndex: number,
   leagueIndex?: number,
   leagueCount?: number,
+  leagueStepIndex = 0,
+  leagueIds?: string[],
 ): AnalyticsMaterializationProgress {
   const step = MATERIALIZATION_STEPS[stepIndex];
   return {
-    kind: "progress",
-    stepId: step.id,
-    stepIndex,
-    stepCount: MATERIALIZATION_STEPS.length,
-    stepLabel:
-      step.id === "league-scopes" && leagueCount
-        ? `${step.label} (${(leagueIndex ?? 0) + 1}/${leagueCount})`
-        : step.label,
-    leagueIndex,
-    leagueCount,
+    kind: "progress", stepId: step.id, stepIndex, stepCount: MATERIALIZATION_STEPS.length,
+    stepLabel: step.id === "league-scopes" && leagueCount
+      ? `League ${(leagueIndex ?? 0) + 1}/${leagueCount}: ${LEAGUE_CALCULATIONS[leagueStepIndex].label}`
+      : step.label,
+    leagueIndex, leagueCount, leagueStepIndex, leagueIds,
   };
 }
 
-/**
- * Advance the step cursor only if the job is still on `fromStepIndex`.
- * Prevents a late/stale advance from rewinding progress after another worker
- * (or a retried request) already moved forward.
- */
-async function casAdvanceJobProgress(
-  database: Database,
-  jobId: string,
-  fromStepIndex: number,
-): Promise<AnalyticsMaterializationJob | null> {
-  const [job] = await database
-    .update(analyticsMaterializationJobs)
-    .set({
-      summary: progressSummary(fromStepIndex + 1),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(analyticsMaterializationJobs.id, jobId),
-        eq(analyticsMaterializationJobs.status, "processing"),
-        sql`${analyticsMaterializationJobs.summary}->>'stepIndex' = ${String(fromStepIndex)}`,
-      ),
-    )
-    .returning();
-  return job ?? null;
+function materializationStatus(job: AnalyticsMaterializationJob): AnalyticsMaterializationStatus {
+  return { analyticsRevision: ANALYTICS_REVISION, job, progress: progressFromSummary(job.summary), status: job.status };
 }
 
 async function markMaterializationJob(
@@ -214,7 +190,12 @@ export async function invalidateAllLeaguesMaterialization(
   reason = "Invalidated pending analytics refresh.",
 ): Promise<AnalyticsMaterializationJob> {
   return database.transaction(async (tx) => {
+    await configureAnalyticsTransaction(tx);
     await tx.execute(sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`);
+    await tx.update(analyticsMaterializationJobs).set({
+      status: "failed", summary: null, errorMessage: reason,
+      completedAt: new Date(), updatedAt: new Date(),
+    }).where(and(eq(analyticsMaterializationJobs.analyticsRevision, ANALYTICS_REVISION), eq(analyticsMaterializationJobs.status, "processing")));
     // Drop multi-league combo relationship caches; eager rows clear on next rebuild.
     await tx.execute(sql`
       delete from analytics_relationship_alignment where position(',' in scope_key) > 0
@@ -233,11 +214,12 @@ export async function invalidateAllLeaguesMaterialization(
       set
         status = 'failed',
         error_message = ${reason},
+        summary = null,
         completed_at = now(),
         updated_at = now()
       where analytics_revision = ${ANALYTICS_REVISION}
         and position(',' in scope_key) > 0
-        and status in ('processing', 'completed')
+        and status in ('processing', 'completed', 'failed')
     `);
     const [job] = await tx
       .insert(analyticsMaterializationJobs)
@@ -258,282 +240,153 @@ export async function invalidateScopesContainingLeague(
   database: Database = db,
   reason = "Invalidated after league data change.",
 ): Promise<AnalyticsMaterializationJob> {
-  await database.execute(sql`
+  return database.transaction(async (tx) => {
+    await configureAnalyticsTransaction(tx);
+    await tx.execute(sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`);
+  await tx.execute(sql`
     delete from analytics_relationship_alignment
     where scope_key = ${leagueId}
        or scope_key like ${leagueId + ",%"}
        or scope_key like ${"%," + leagueId + ",%"}
        or scope_key like ${"%," + leagueId}
   `);
-  await database.execute(sql`
+  await tx.execute(sql`
     delete from analytics_relationship_mutual
     where scope_key = ${leagueId}
        or scope_key like ${leagueId + ",%"}
        or scope_key like ${"%," + leagueId + ",%"}
        or scope_key like ${"%," + leagueId}
   `);
-  await database.execute(sql`
+  await tx.execute(sql`
     delete from analytics_relationship_pairs
     where scope_key = ${leagueId}
        or scope_key like ${leagueId + ",%"}
        or scope_key like ${"%," + leagueId + ",%"}
        or scope_key like ${"%," + leagueId}
   `);
-  await database.execute(sql`
+  await tx.execute(sql`
     delete from analytics_player_stats where scope_key = ${leagueId}
   `);
-  await database.execute(sql`
+  await tx.execute(sql`
     delete from analytics_point_distribution where scope_key = ${leagueId}
   `);
-  await database.execute(sql`
+  await tx.execute(sql`
     delete from analytics_player_point_distribution where scope_key = ${leagueId}
   `);
-  return invalidateAllLeaguesMaterialization(database, reason);
-}
-
-/**
- * Start a stepped refresh job. Marks any older in-flight jobs for this revision
- * as failed, then creates a processing job at step 0 (not yet executed).
- * Call advanceMaterializationJob repeatedly until status is completed/failed.
- */
-export async function startMaterializationJob(
-  database: Database = db,
-): Promise<AnalyticsMaterializationStatus> {
-  const job = await database.transaction(async (tx) => {
-    await tx.execute(sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`);
-
-    await tx
-      .update(analyticsMaterializationJobs)
-      .set({
-        completedAt: new Date(),
-        errorMessage: "Superseded by a newer analytics refresh.",
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(analyticsMaterializationJobs.analyticsRevision, ANALYTICS_REVISION),
-          eq(analyticsMaterializationJobs.status, "processing"),
-        ),
-      );
-
-    const [created] = await tx
-      .insert(analyticsMaterializationJobs)
-      .values({
-        analyticsRevision: ANALYTICS_REVISION,
-        startedAt: new Date(),
-        status: "processing",
-        summary: progressSummary(0),
-      })
-      .returning();
-    return created;
+  return invalidateAllLeaguesMaterialization(tx as unknown as Database, reason);
   });
-
-  return {
-    analyticsRevision: ANALYTICS_REVISION,
-    job,
-    progress: progressFromSummary(job.summary),
-    status: job.status,
-  };
 }
 
-/**
- * Execute the next materialization step for a processing job.
- * Each step commits independently. Start always clears tables first, so a
- * restarted job never inserts duplicates on top of a partial run.
- */
+/** Resume the latest interrupted checkpoint; only a fresh/invalidated cache starts over. */
+export async function startMaterializationJob(database: Database = db): Promise<AnalyticsMaterializationStatus> {
+  return database.transaction(async (tx) => {
+    await configureAnalyticsTransaction(tx);
+    await tx.execute(sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`);
+    const latest = await getAllLeaguesMaterializationStatus(tx as unknown as Database);
+    if (latest.job && latest.progress && (latest.status === "processing" || latest.status === "failed")) {
+      let progress = latest.progress;
+      if (progress.stepId === "league-scopes" && !progress.leagueIds) {
+        const ids = (await tx.select({ id: leagues.id }).from(leagues).orderBy(leagues.id)).map((row) => row.id);
+        progress = progressSummary(progress.stepIndex, progress.leagueIndex ?? 0, ids.length, progress.leagueStepIndex ?? 0, ids);
+      }
+      const [resumed] = await tx.update(analyticsMaterializationJobs).set({
+        status: "processing", summary: progress, errorMessage: null, completedAt: null, updatedAt: new Date(),
+      }).where(eq(analyticsMaterializationJobs.id, latest.job.id)).returning();
+      return materializationStatus(resumed);
+    }
+    const [created] = await tx.insert(analyticsMaterializationJobs).values({
+      analyticsRevision: ANALYTICS_REVISION, startedAt: new Date(), status: "processing", summary: progressSummary(0),
+    }).returning();
+    return materializationStatus(created);
+  });
+}
+
+/** Rows and their cursor commit together. Replays never redo a committed checkpoint. */
 export async function advanceMaterializationJob(
   jobId: string,
   database: Database = db,
+  expectedCursor?: string,
 ): Promise<AnalyticsMaterializationStatus> {
-  const [job] = await database
-    .select()
-    .from(analyticsMaterializationJobs)
-    .where(eq(analyticsMaterializationJobs.id, jobId))
-    .limit(1);
-
-  if (!job) {
-    return getAllLeaguesMaterializationStatus(database);
-  }
-  if (job.status !== "processing") {
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job,
-      progress: progressFromSummary(job.summary),
-      status: job.status,
-    };
-  }
-
-  const current = progressFromSummary(job.summary);
-  const stepIndex = current?.stepIndex ?? 0;
-  if (stepIndex < 0 || stepIndex >= MATERIALIZATION_STEPS.length) {
-    const failed = await markMaterializationJob(database, job.id, {
-      errorMessage: "Analytics refresh lost its step cursor.",
-      status: "failed",
-    });
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: failed,
-      progress: null,
-      status: failed.status,
-    };
-  }
-
-  const step = MATERIALIZATION_STEPS[stepIndex];
-
+  let checkpoint: AnalyticsMaterializationProgress | null = null;
+  const startedAt = Date.now();
   try {
-    if (step.id === "league-scopes") {
-      const leagueRows = await database
-        .select({ id: leagues.id })
-        .from(leagues)
-        .orderBy(leagues.id);
-      const leagueCount = leagueRows.length;
-      const leagueIndex = current?.leagueIndex ?? 0;
-
-      if (leagueIndex < leagueCount) {
-        await database.transaction(async (tx) => {
-          await tx.execute(
-            sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`,
-          );
-          const [locked] = await tx
-            .select()
-            .from(analyticsMaterializationJobs)
-            .where(eq(analyticsMaterializationJobs.id, jobId))
-            .limit(1);
-          const lockedProgress = progressFromSummary(locked?.summary);
-          if (
-            !locked ||
-            locked.status !== "processing" ||
-            lockedProgress?.stepIndex !== stepIndex ||
-            (lockedProgress.leagueIndex ?? 0) !== leagueIndex
-          ) {
-            return;
-          }
-          await materializeEagerLeagueScope(tx, leagueRows[leagueIndex].id);
+    const result = await database.transaction(async (tx) => {
+      await configureAnalyticsTransaction(tx);
+      const [lock] = await tx.execute<{ acquired: boolean }>(sql`select pg_try_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY}) as acquired`);
+      const latest = await getAllLeaguesMaterializationStatus(tx as unknown as Database);
+      if (!lock?.acquired || !latest.job || latest.job.id !== jobId || latest.status !== "processing") return latest;
+      checkpoint = latest.progress;
+      if (expectedCursor !== undefined && analyticsProgressKey(checkpoint) !== expectedCursor) return latest;
+      const stepIndex = checkpoint?.stepIndex ?? -1;
+      if (!checkpoint || stepIndex < 0 || stepIndex >= MATERIALIZATION_STEPS.length || MATERIALIZATION_STEPS[stepIndex].id !== checkpoint.stepId) {
+        const failed = await markMaterializationJob(tx as unknown as Database, jobId, {
+          status: "failed", errorMessage: "Analytics refresh lost its checkpoint. Start a new refresh.",
         });
-
-        const nextLeague = leagueIndex + 1;
-        if (nextLeague < leagueCount) {
-          const [updated] = await database
-            .update(analyticsMaterializationJobs)
-            .set({
-              summary: progressSummary(stepIndex, nextLeague, leagueCount),
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(analyticsMaterializationJobs.id, job.id),
-                eq(analyticsMaterializationJobs.status, "processing"),
-              ),
-            )
-            .returning();
-          return {
-            analyticsRevision: ANALYTICS_REVISION,
-            job: updated ?? job,
-            progress: progressFromSummary(updated?.summary ?? job.summary),
-            status: "processing",
-          };
-        }
-        // Finished all leagues — fall through to CAS advance to next step.
+        return materializationStatus(failed);
       }
-    } else {
-      await database.transaction(async (tx) => {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`,
-        );
-        const [locked] = await tx
-          .select()
-          .from(analyticsMaterializationJobs)
-          .where(eq(analyticsMaterializationJobs.id, jobId))
-          .limit(1);
-        const lockedProgress = progressFromSummary(locked?.summary);
-        if (
-          !locked ||
-          locked.status !== "processing" ||
-          lockedProgress?.stepIndex !== stepIndex
-        ) {
-          return;
+      const executor = budgetedAnalyticsExecutor(tx, startedAt);
+      const step = MATERIALIZATION_STEPS[stepIndex];
+      let next = progressSummary(Math.min(stepIndex + 1, MATERIALIZATION_STEPS.length - 1));
+      if (step.id === "league-scopes") {
+        const leagueIds = checkpoint.leagueIds ?? (await tx.select({ id: leagues.id }).from(leagues).orderBy(leagues.id)).map((row) => row.id);
+        const leagueIndex = checkpoint.leagueIndex ?? 0;
+        const calculation = checkpoint.leagueStepIndex ?? 0;
+        if (leagueIndex < 0 || calculation < 0 || calculation >= LEAGUE_CALCULATIONS.length) throw new Error("Invalid league checkpoint.");
+        if (leagueIndex < leagueIds.length) {
+          await materializeLeagueCalculation(executor, leagueIds[leagueIndex], calculation);
+          const nextCalculation = (calculation + 1) % LEAGUE_CALCULATIONS.length;
+          const nextLeague = leagueIndex + (nextCalculation === 0 ? 1 : 0);
+          if (nextLeague < leagueIds.length) next = progressSummary(stepIndex, nextLeague, leagueIds.length, nextCalculation, leagueIds);
         }
-        await runMaterializationStep(tx, step.id);
+      } else if (step.id === "finalize") {
+        const summary: AnalyticsMaterializationSummary = {
+          effectiveVotes: await countRows(executor, "analytics_effective_votes"),
+          playerPointDistribution: await countRows(executor, "analytics_player_point_distribution"),
+          playerStats: await countRows(executor, "analytics_player_stats"),
+          playerTiming: await countRows(executor, "analytics_player_timing"),
+          pointDistribution: await countRows(executor, "analytics_point_distribution"),
+          relationshipPairs: await countRows(executor, "analytics_relationship_pairs"),
+          relationshipMutual: await countRows(executor, "analytics_relationship_mutual"),
+          relationshipAlignment: await countRows(executor, "analytics_relationship_alignment"),
+          songStats: await countRows(executor, "analytics_song_stats"),
+          leagueScopes: await countRows(executor, "leagues"),
+        };
+        return materializationStatus(await markMaterializationJob(tx as unknown as Database, jobId, {
+          status: "completed", summary: { ...summary, kind: "completed" },
+        }));
+      } else {
+        await runMaterializationStep(executor, step.id);
+      }
+      if (next.stepId === "league-scopes" && !next.leagueIds) {
+        const ids = (await tx.select({ id: leagues.id }).from(leagues).orderBy(leagues.id)).map((row) => row.id);
+        next = progressSummary(next.stepIndex, 0, ids.length, 0, ids);
+      }
+      const [updated] = await tx.update(analyticsMaterializationJobs).set({
+        summary: next, errorMessage: null, updatedAt: new Date(),
+      }).where(eq(analyticsMaterializationJobs.id, jobId)).returning();
+      return materializationStatus(updated);
+    });
+    if (result.status === "completed") revalidateAfterMaterialization();
+    return result;
+  } catch (error) {
+    // The computation transaction rolled back. Only fail the same checkpoint;
+    // another worker or an invalidation may already have moved it forward.
+    const saved = checkpoint as AnalyticsMaterializationProgress | null;
+    console.error("Analytics checkpoint failed", { jobId, cursor: analyticsProgressKey(saved), code: databaseErrorCode(error), elapsedMs: Date.now() - startedAt });
+    if (saved) {
+      await database.transaction(async (tx) => {
+        await configureAnalyticsTransaction(tx);
+        await tx.update(analyticsMaterializationJobs).set({
+          status: "failed", completedAt: new Date(), updatedAt: new Date(),
+          errorMessage: analyticsFailureMessage(error, saved.stepLabel),
+        }).where(and(
+          eq(analyticsMaterializationJobs.id, jobId), eq(analyticsMaterializationJobs.status, "processing"),
+          sql`${analyticsMaterializationJobs.summary} = ${JSON.stringify(saved)}::jsonb`,
+        ));
       });
-    }
-
-    const latest = await getAllLeaguesMaterializationStatus(database);
-    if (
-      latest.status !== "processing" ||
-      latest.job?.id !== job.id ||
-      progressFromSummary(latest.job.summary)?.stepIndex !== stepIndex
-    ) {
-      return latest;
-    }
-
-    if (step.id === "finalize") {
-      const summary: AnalyticsMaterializationSummary = {
-        effectiveVotes: await countRows(database, "analytics_effective_votes"),
-        playerPointDistribution: await countRows(
-          database,
-          "analytics_player_point_distribution",
-        ),
-        playerStats: await countRows(database, "analytics_player_stats"),
-        playerTiming: await countRows(database, "analytics_player_timing"),
-        pointDistribution: await countRows(database, "analytics_point_distribution"),
-        relationshipAlignment: await countRows(
-          database,
-          "analytics_relationship_alignment",
-        ),
-        relationshipMutual: await countRows(
-          database,
-          "analytics_relationship_mutual",
-        ),
-        relationshipPairs: await countRows(
-          database,
-          "analytics_relationship_pairs",
-        ),
-        songStats: await countRows(database, "analytics_song_stats"),
-        leagueScopes: (
-          await database.select({ id: leagues.id }).from(leagues)
-        ).length,
-      };
-      const completed = await markMaterializationJob(database, job.id, {
-        errorMessage: null,
-        status: "completed",
-        summary: { ...summary, kind: "completed" },
-      });
-      revalidateAfterMaterialization();
-      return {
-        analyticsRevision: ANALYTICS_REVISION,
-        job: completed,
-        progress: null,
-        status: completed.status,
-      };
-    }
-
-    const updated = await casAdvanceJobProgress(database, job.id, stepIndex);
-    if (!updated) {
       return getAllLeaguesMaterializationStatus(database);
     }
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: updated,
-      progress: progressFromSummary(updated.summary),
-      status: updated.status,
-    };
-  } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Analytics materialization failed.";
-    const failed = await markMaterializationJob(database, job.id, {
-      errorMessage: message,
-      status: "failed",
-    });
-    revalidateAfterMaterialization();
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: failed,
-      progress: null,
-      status: failed.status,
-    };
+    throw error;
   }
 }
 
@@ -965,18 +818,12 @@ async function insertRelationshipAlignment(
   `);
 }
 
-async function materializeEagerLeagueScope(
-  tx: SqlExecutor,
-  leagueId: string,
-): Promise<void> {
+async function materializeLeagueCalculation(tx: SqlExecutor, leagueId: string, index: number): Promise<void> {
   const filter: AnalyticsFilter = { leagueIds: [leagueId], roundIds: [] };
-  const scopeKey = analyticsScopeKey([leagueId]);
-  await insertPlayerStats(tx, scopeKey, filter);
-  await insertPointDistribution(tx, scopeKey, filter);
-  await insertPlayerPointDistribution(tx, scopeKey, filter);
-  await insertRelationshipPairs(tx, scopeKey, filter);
-  await insertRelationshipMutual(tx, scopeKey, filter);
-  await insertRelationshipAlignment(tx, scopeKey, filter);
+  const key = analyticsScopeKey([leagueId]);
+  const calculations = [insertPlayerStats, insertPointDistribution, insertPlayerPointDistribution,
+    insertRelationshipPairs, insertRelationshipMutual, insertRelationshipAlignment];
+  await calculations[index](tx, key, filter);
 }
 
 const SCOPE_COMBO_STEPS = [
@@ -1070,6 +917,7 @@ export async function startScopeMaterializationJob(
   }
   const scopeKey = analyticsScopeKey(ids);
   const job = await database.transaction(async (tx) => {
+    await configureAnalyticsTransaction(tx);
     await tx.execute(sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`);
 
     const [latest] = await tx
@@ -1087,6 +935,12 @@ export async function startScopeMaterializationJob(
     // Resume in-flight work or reuse a completed cache instead of superseding.
     if (latest && (latest.status === "processing" || latest.status === "completed")) {
       return latest;
+    }
+
+    if (latest?.status === "failed" && progressFromSummary(latest.summary)) {
+      const [resumed] = await tx.update(analyticsScopeJobs).set({ status: "processing", errorMessage: null, completedAt: null, updatedAt: new Date() })
+        .where(eq(analyticsScopeJobs.id, latest.id)).returning();
+      return resumed;
     }
 
     const [created] = await tx
@@ -1145,157 +999,52 @@ export async function advanceScopeMaterializationJob(
   jobId: string,
   database: Database = db,
 ): Promise<ScopeMaterializationStatus> {
-  const [job] = await database
-    .select()
-    .from(analyticsScopeJobs)
-    .where(eq(analyticsScopeJobs.id, jobId))
-    .limit(1);
-  if (!job) {
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: null,
-      progress: null,
-      scopeKey: "",
-      status: "missing",
-    };
-  }
-  if (job.status !== "processing") {
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job,
-      progress: progressFromSummary(job.summary),
-      scopeKey: job.scopeKey,
-      status: job.status,
-    };
-  }
-
+  const [job] = await database.select().from(analyticsScopeJobs).where(eq(analyticsScopeJobs.id, jobId)).limit(1);
+  if (!job) return { analyticsRevision: ANALYTICS_REVISION, job: null, progress: null, scopeKey: "", status: "missing" };
   const current = progressFromSummary(job.summary);
-  const stepIndex = current?.stepIndex ?? 0;
-  if (stepIndex < 0 || stepIndex >= SCOPE_COMBO_STEPS.length) {
-    const [failed] = await database
-      .update(analyticsScopeJobs)
-      .set({
-        completedAt: new Date(),
-        errorMessage: "Scope refresh lost its step cursor.",
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(eq(analyticsScopeJobs.id, job.id))
-      .returning();
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: failed,
-      progress: null,
-      scopeKey: job.scopeKey,
-      status: failed.status,
-    };
-  }
-
-  const step = SCOPE_COMBO_STEPS[stepIndex];
-  const filter: AnalyticsFilter = {
-    leagueIds: job.scopeKey.split(","),
-    roundIds: [],
-  };
-
+  const startedAt = Date.now();
   try {
-    await database.transaction(async (tx) => {
-      await tx.execute(sql`select pg_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY})`);
+    const result = await database.transaction(async (tx) => {
+      await configureAnalyticsTransaction(tx);
+      const [lock] = await tx.execute<{ acquired: boolean }>(sql`select pg_try_advisory_xact_lock(${MATERIALIZATION_LOCK_KEY}) as acquired`);
+      const latest = await getScopeMaterializationStatus(job.scopeKey, tx as unknown as Database);
+      if (!lock?.acquired || latest.job?.id !== jobId || latest.status !== "processing" || analyticsProgressKey(latest.progress) !== analyticsProgressKey(current)) return latest;
+      if (!(await hasFreshAllLeaguesMaterialization(tx as unknown as Database))) return latest;
+      const step = current && SCOPE_COMBO_STEPS[current.stepIndex];
+      if (!step || step.id !== current?.stepId) throw new Error("Invalid scope checkpoint.");
+      const executor = budgetedAnalyticsExecutor(tx, startedAt);
+      const filter: AnalyticsFilter = { leagueIds: job.scopeKey.split(","), roundIds: [] };
       if (step.id === "clear-scope") {
-        await tx.execute(
-          sql`delete from analytics_relationship_pairs where scope_key = ${job.scopeKey}`,
-        );
-        await tx.execute(
-          sql`delete from analytics_relationship_mutual where scope_key = ${job.scopeKey}`,
-        );
-        await tx.execute(
-          sql`delete from analytics_relationship_alignment where scope_key = ${job.scopeKey}`,
-        );
-        return;
+        await executor.execute(sql`delete from analytics_relationship_pairs where scope_key = ${job.scopeKey}`);
+        await executor.execute(sql`delete from analytics_relationship_mutual where scope_key = ${job.scopeKey}`);
+        await executor.execute(sql`delete from analytics_relationship_alignment where scope_key = ${job.scopeKey}`);
+      } else if (step.id === "pairs") {
+        await insertRelationshipPairs(executor, job.scopeKey, filter);
+      } else if (step.id === "mutual") {
+        await insertRelationshipMutual(executor, job.scopeKey, filter);
+      } else if (step.id === "alignment") {
+        await insertRelationshipAlignment(executor, job.scopeKey, filter);
       }
-      if (step.id === "pairs") {
-        await insertRelationshipPairs(tx, job.scopeKey, filter);
-        return;
-      }
-      if (step.id === "mutual") {
-        await insertRelationshipMutual(tx, job.scopeKey, filter);
-        return;
-      }
-      if (step.id === "alignment") {
-        await insertRelationshipAlignment(tx, job.scopeKey, filter);
-      }
+      const completed = step.id === "finalize";
+      const [updated] = await tx.update(analyticsScopeJobs).set({
+        status: completed ? "completed" : "processing", errorMessage: null,
+        completedAt: completed ? new Date() : null, updatedAt: new Date(),
+        summary: completed ? null : scopeProgressSummary(current!.stepIndex + 1),
+      }).where(eq(analyticsScopeJobs.id, jobId)).returning();
+      return { analyticsRevision: ANALYTICS_REVISION, job: updated, progress: progressFromSummary(updated.summary), scopeKey: job.scopeKey, status: updated.status };
     });
-
-    if (step.id === "finalize") {
-      const [completed] = await database
-        .update(analyticsScopeJobs)
-        .set({
-          completedAt: new Date(),
-          errorMessage: null,
-          status: "completed",
-          summary: {
-            kind: "completed",
-            songStats: 0,
-            playerStats: 0,
-            pointDistribution: 0,
-            playerPointDistribution: 0,
-            relationshipPairs: 0,
-            relationshipMutual: 0,
-            relationshipAlignment: 0,
-            playerTiming: 0,
-          },
-          updatedAt: new Date(),
-        })
-        .where(eq(analyticsScopeJobs.id, job.id))
-        .returning();
-      revalidateAfterMaterialization();
-      return {
-        analyticsRevision: ANALYTICS_REVISION,
-        job: completed,
-        progress: null,
-        scopeKey: job.scopeKey,
-        status: completed.status,
-      };
-    }
-
-    const [updated] = await database
-      .update(analyticsScopeJobs)
-      .set({
-        summary: scopeProgressSummary(stepIndex + 1),
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(analyticsScopeJobs.id, job.id),
-          eq(analyticsScopeJobs.status, "processing"),
-        ),
-      )
-      .returning();
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: updated ?? job,
-      progress: progressFromSummary(updated?.summary),
-      scopeKey: job.scopeKey,
-      status: "processing",
-    };
+    if (result.status === "completed") revalidateAfterMaterialization();
+    return result;
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Scope materialization failed.";
-    const [failed] = await database
-      .update(analyticsScopeJobs)
-      .set({
-        completedAt: new Date(),
-        errorMessage: message,
-        status: "failed",
-        updatedAt: new Date(),
-      })
-      .where(eq(analyticsScopeJobs.id, job.id))
-      .returning();
-    return {
-      analyticsRevision: ANALYTICS_REVISION,
-      job: failed,
-      progress: null,
-      scopeKey: job.scopeKey,
-      status: failed.status,
-    };
+    console.error("Scope analytics checkpoint failed", { jobId, cursor: analyticsProgressKey(current), code: databaseErrorCode(error), elapsedMs: Date.now() - startedAt });
+    await database.transaction(async (tx) => {
+      await configureAnalyticsTransaction(tx);
+      await tx.update(analyticsScopeJobs).set({
+        status: "failed", completedAt: new Date(), updatedAt: new Date(),
+        errorMessage: analyticsFailureMessage(error, current?.stepLabel ?? "Scope refresh"),
+      }).where(and(eq(analyticsScopeJobs.id, jobId), eq(analyticsScopeJobs.status, "processing"),
+        sql`${analyticsScopeJobs.summary} = ${JSON.stringify(job.summary)}::jsonb`));
+    });
+    return getScopeMaterializationStatus(job.scopeKey, database);
   }
 }

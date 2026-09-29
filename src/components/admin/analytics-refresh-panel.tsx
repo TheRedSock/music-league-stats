@@ -4,6 +4,7 @@ import { LoaderCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { LEAGUE_CALCULATIONS } from "@/lib/analytics-job-progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import {
   runSteppedAnalyticsRefresh,
+  readAnalyticsRefreshStatus,
   type AnalyticsRefreshProgress,
   type AnalyticsRefreshStatusResponse,
 } from "@/lib/analytics-refresh-client";
@@ -49,8 +51,12 @@ export function AnalyticsRefreshPanel({
   const [progress, setProgress] = useState<AnalyticsRefreshProgress | null>(
     null,
   );
-  const [status, setStatus] = useState(initialStatus);
-  const badge = formatStatus(status);
+  const [observedStatus, setStatus] = useState<AnalyticsRefreshStatusResponse | null>(null);
+  const status = observedStatus && (!initialStatus ||
+    new Date(observedStatus.job?.updatedAt ?? 0).getTime() >= new Date(initialStatus.job?.updatedAt ?? 0).getTime())
+    ? observedStatus : initialStatus;
+  const savedProgress = progress ?? status?.progress;
+  const badge = pending ? { label: "In progress", variant: "muted" as const } : formatStatus(status);
 
   async function handleRefresh() {
     setPending(true);
@@ -72,16 +78,20 @@ export function AnalyticsRefreshPanel({
           : "All-leagues analytics refresh failed.",
       );
       setMessage("");
-      setProgress(null);
+      try { setStatus(await readAnalyticsRefreshStatus()); setProgress(null); } catch { /* Keep the last known checkpoint. */ }
       router.refresh();
     } finally {
       setPending(false);
     }
   }
 
+  const leagueFraction = savedProgress?.stepId === "league-scopes" && savedProgress.leagueCount
+    ? ((savedProgress.leagueIndex ?? 0) * LEAGUE_CALCULATIONS.length + (savedProgress.leagueStepIndex ?? 0)) /
+      (savedProgress.leagueCount * LEAGUE_CALCULATIONS.length)
+    : 0;
   const percent =
-    progress && progress.stepCount > 0
-      ? Math.round(((progress.stepIndex + 1) / progress.stepCount) * 100)
+    savedProgress && savedProgress.stepCount > 0
+      ? Math.round(((savedProgress.stepIndex + leagueFraction) / savedProgress.stepCount) * 100)
       : pending
         ? 5
         : status?.status === "completed"
@@ -98,9 +108,9 @@ export function AnalyticsRefreshPanel({
               All-leagues analytics cache
             </CardTitle>
             <CardDescription className="mt-1">
-              Rebuild the persistent empty-scope stats used by the dashboard,
+              Rebuild the cached stats used by the dashboard,
               songs, players, compare, and profiles. Run this after imports or
-              name/slug edits.
+              name/slug edits. Completed steps are saved; you can resume after a timeout or closing this page.
             </CardDescription>
           </div>
           <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -114,7 +124,7 @@ export function AnalyticsRefreshPanel({
             ) : (
               <RefreshCw aria-hidden="true" className="size-4" />
             )}
-            {pending ? "Refreshing…" : "Refresh all-leagues stats"}
+            {pending ? "Refreshing…" : status?.progress ? "Resume analytics refresh" : "Refresh all-leagues stats"}
           </Button>
           {status?.analyticsRevision ? (
             <p className="font-mono text-xs text-zinc-500">
@@ -139,17 +149,17 @@ export function AnalyticsRefreshPanel({
           </p>
         ) : status?.status === "completed" && status.job?.summary ? (
           <p className="text-sm text-zinc-400">
-            Cached rows are ready for empty-scope pages.
+            Cached analytics are up to date.
           </p>
         ) : (
           <p className="text-sm text-zinc-500">
-            Progress updates after each step so the browser stays responsive.
+            {savedProgress ? `Saved checkpoint: ${savedProgress.stepLabel}. Keep this page open while refreshing.` : "Progress is saved after each calculation."}
           </p>
         )}
 
-        {error ? (
+        {!pending && (error || status?.job?.errorMessage) ? (
           <p aria-live="assertive" className="text-sm text-red-300">
-            {error}
+            {error || status?.job?.errorMessage}
           </p>
         ) : null}
       </CardContent>

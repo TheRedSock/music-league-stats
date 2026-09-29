@@ -45,6 +45,34 @@ for active voters who omitted eligible visible submissions.
 Failed validation is shown in import history. Correct the source file and start
 a new sync; retrying an identical completed export returns its existing result.
 
+## Analytics refresh recovery
+
+Imports and analytics refreshes have separate outcomes. A successful merge stays
+saved even if its following analytics refresh is interrupted. The admin UI shows
+HTTP errors (including non-JSON hosting errors), the failing calculation, and a
+request reference where available.
+
+Refreshes checkpoint each calculation in the same transaction as its output.
+Each league has six separate calculation checkpoints. Reopening Admin and choosing
+**Resume analytics refresh** continues the latest interrupted or failed checkpoint;
+completed steps are retained. Keep the page open to drive the requests. Closing it
+pauses the workflow after any in-flight request finishes; there is no background
+scheduler. A new import invalidates old checkpoints and starts a fresh rebuild.
+
+Analytics requests use a 60-second Vercel duration, a 35-second database statement
+limit, and a 40-second calculation budget, leaving room for rollback and an error
+response. Lock acquisition is bounded, and a busy advance returns saved progress.
+The browser checks saved state after interrupted requests and retries transient
+failures with bounded backoff. Persistent calculation failures retain their cursor
+for manual resume. SQL errors and timings are logged with the job/checkpoint ID.
+
+The optional PostgreSQL integration test uses `ANALYTICS_TEST_DATABASE_URL` pointing
+to an existing migrated database. It copies input data into transaction-local
+temporary tables, uses a separate advisory lock, and rolls everything back. Run
+`npx vitest run src/lib/analytics-materialize.integration.test.ts` to exercise
+rollback, resume, replay protection, and a complete refresh. Regular `npm test`
+runs without database access and skips this opt-in test.
+
 ## Public analytics
 
 Public data pages stream a static shell immediately, then load cached scoped

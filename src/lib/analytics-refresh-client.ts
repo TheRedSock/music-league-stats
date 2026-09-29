@@ -1,9 +1,15 @@
+import { RequestError, requestJson } from "@/lib/request-json";
+import { analyticsProgressKey } from "@/lib/analytics-job-progress";
+
 export type AnalyticsRefreshProgress = {
   kind: "progress";
   stepId: string;
   stepLabel: string;
   stepIndex: number;
   stepCount: number;
+  leagueIndex?: number;
+  leagueCount?: number;
+  leagueStepIndex?: number;
 };
 
 export type AnalyticsRefreshStatusResponse = {
@@ -14,62 +20,70 @@ export type AnalyticsRefreshStatusResponse = {
     id: string;
     status: string;
     errorMessage?: string | null;
+    updatedAt?: string | Date;
     summary?: Record<string, unknown> | null;
   } | null;
 };
 
-async function responseJson<T>(response: Response): Promise<T> {
-  const result = (await response.json()) as T & { error?: string };
-  if (!response.ok) {
-    throw new Error(result.error ?? "The analytics refresh request failed.");
-  }
-  return result;
+const endpoint = "/api/admin/analytics/refresh";
+const pause = (attempt: number) => new Promise((resolve) => setTimeout(resolve, Math.min(1000 * 2 ** attempt, 8000)));
+
+export function readAnalyticsRefreshStatus(): Promise<AnalyticsRefreshStatusResponse> {
+  return requestJson(endpoint, { cache: "no-store" }, "Checking analytics refresh progress");
 }
 
 export async function runSteppedAnalyticsRefresh(
   onProgress: (message: string, progress: AnalyticsRefreshProgress | null) => void,
 ): Promise<AnalyticsRefreshStatusResponse> {
-  onProgress("Starting all-leagues analytics refresh…", null);
-  let status = await responseJson<AnalyticsRefreshStatusResponse>(
-    await fetch("/api/admin/analytics/refresh", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "start" }),
-    }),
-  );
-
+  const post = (body: object, label: string) => requestJson<AnalyticsRefreshStatusResponse>(endpoint, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  }, label);
+  onProgress("Starting or resuming analytics refresh…", null);
+  let status: AnalyticsRefreshStatusResponse | undefined;
+  for (let attempt = 0; !status; attempt++) {
+    try { status = await post({ action: "start" }, "Starting analytics refresh"); }
+    catch (error) {
+      if (!(error instanceof RequestError) || !error.retryable || attempt >= 2) throw error;
+      onProgress("Connection interrupted; reconnecting to the saved refresh…", null);
+      await pause(attempt);
+    }
+  }
+  const jobId = status.job?.id;
+  let stalledAttempts = 0;
   while (status.status === "processing" && status.job) {
     const progress = status.progress;
-    onProgress(
-      progress
-        ? `${progress.stepLabel} (${progress.stepIndex + 1}/${progress.stepCount})…`
-        : "Refreshing all-leagues analytics…",
-      progress,
-    );
-    status = await responseJson<AnalyticsRefreshStatusResponse>(
-      await fetch("/api/admin/analytics/refresh", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "advance", jobId: status.job.id }),
-      }),
-    );
+    const cursor = analyticsProgressKey(progress);
+    const label = progress?.stepLabel ?? "Refreshing analytics";
+    onProgress(`${label}…`, progress);
+    let next: AnalyticsRefreshStatusResponse;
+    try {
+      next = await post({ action: "advance", jobId, cursor }, label);
+    } catch (error) {
+      if (!(error instanceof RequestError) || !error.retryable || stalledAttempts >= 3) {
+        throw new Error(`${error instanceof Error ? error.message : label + " failed."} Progress is saved. Use Resume analytics refresh to continue.`);
+      }
+      onProgress(`${label}: reconnecting and checking saved progress…`, progress);
+      await pause(stalledAttempts++);
+      // An interrupted POST may have committed. Read before sending another.
+      try { next = await readAnalyticsRefreshStatus(); }
+      catch { continue; }
+    }
+    if (next.job?.id !== jobId) {
+      throw new Error("Analytics were invalidated or another refresh replaced this job. Start the refresh again.");
+    }
+    if (next.status === "processing" && analyticsProgressKey(next.progress) === cursor) {
+      if (++stalledAttempts > 4) {
+        throw new Error(`${label} is still busy. Progress is saved. Use Resume analytics refresh to continue.`);
+      }
+      await pause(stalledAttempts - 1);
+    } else {
+      stalledAttempts = 0;
+    }
+    status = next;
   }
-
   if (status.status === "completed") {
     onProgress("All-leagues analytics refresh completed.", null);
     return status;
   }
-
-  if (status.status === "failed") {
-    throw new Error(
-      status.job?.errorMessage ?? "All-leagues analytics refresh failed.",
-    );
-  }
-
-  // pending/missing can happen if another admin action invalidated mats
-  // mid-refresh; do not treat that as success.
-  throw new Error(
-    status.job?.errorMessage ??
-      "All-leagues analytics refresh did not complete.",
-  );
+  throw new Error(status.job?.errorMessage ?? "Analytics refresh did not complete. Use Resume analytics refresh to continue.");
 }

@@ -12,6 +12,7 @@ import {
   type ImportKind,
   type ImportManifest,
 } from "@/lib/import-data";
+import { requestJson } from "@/lib/request-json";
 import { runSteppedAnalyticsRefresh } from "@/lib/analytics-refresh-client";
 import {
   parseImportFile,
@@ -44,14 +45,6 @@ const importKindLabels: Record<ImportKind, string> = {
 
 const selectClass =
   "h-10 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 text-sm text-white outline-none focus:border-lime-300/60";
-
-async function responseJson<T>(response: Response): Promise<T> {
-  const result = (await response.json()) as T & { error?: string };
-  if (!response.ok) {
-    throw new Error(result.error ?? "The import request failed.");
-  }
-  return result;
-}
 
 export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
   const router = useRouter();
@@ -87,6 +80,8 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
     setError("");
     setSummary(null);
     setRowCounts({});
+    let imported = false;
+    let stage = "Parsing CSV files";
     try {
       const parsed = {} as Record<ImportKind, ParsedImportFile>;
       for (const kind of importKinds) {
@@ -124,56 +119,58 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
         },
       };
       const checksum = await sha256Json(manifest);
-      setStatus("Creating resumable import batch…");
-      const batch = await responseJson<{
+      stage = "Creating resumable import batch";
+      setStatus(`${stage}…`);
+      const batch = await requestJson<{
         batchId: string;
         status: "pending" | "processing" | "completed" | "failed";
         summary: ImportSummary | null;
-      }>(
-        await fetch("/api/admin/imports", {
+      }>("/api/admin/imports", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ leagueId, checksum, manifest }),
-        }),
+        }, stage,
       );
       if (batch.status === "completed" && batch.summary) {
+        imported = true;
         setSummary(batch.summary);
-        await runSteppedAnalyticsRefresh((message) => setStatus(message));
-        setStatus("This exact import was already completed; analytics are fresh.");
+      }
+      // Re-run commit finalization for a completed batch too: a previous response
+      // may have been lost after the merge but before cache invalidation.
+      const chunks = imported ? [] : importKinds.flatMap((kind) => parsed[kind].chunks);
+      for (let index = 0; index < chunks.length; index += 1) {
+        const chunk = chunks[index];
+        stage = `Uploading chunk ${index + 1} of ${chunks.length} (${chunk.kind})`;
+        setStatus(`${stage}…`);
+        await requestJson(`/api/admin/imports/${batch.batchId}/chunks`, {
+          method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(chunk),
+        }, stage);
+      }
+
+      stage = "Validating and merging imported rows";
+      setStatus(`${stage}…`);
+      const completed = await requestJson<{
+        status: "completed";
+        summary: ImportSummary;
+        analyticsWarning?: string;
+      }>(`/api/admin/imports/${batch.batchId}/commit`, { method: "POST" }, stage,
+      );
+      imported = true;
+      setSummary(completed.summary);
+      if (completed.analyticsWarning) {
+        setError(completed.analyticsWarning);
+        setStatus("Import saved; analytics refresh needs attention.");
         router.refresh();
         return;
       }
-
-      const chunks = importKinds.flatMap((kind) => parsed[kind].chunks);
-      for (let index = 0; index < chunks.length; index += 1) {
-        const chunk = chunks[index];
-        setStatus(
-          `Uploading chunk ${index + 1} of ${chunks.length} (${chunk.kind})…`,
-        );
-        await responseJson(
-          await fetch(`/api/admin/imports/${batch.batchId}/chunks`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(chunk),
-          }),
-        );
-      }
-
-      setStatus("Validating and atomically merging rows…");
-      const completed = await responseJson<{
-        status: "completed";
-        summary: ImportSummary;
-      }>(
-        await fetch(`/api/admin/imports/${batch.batchId}/commit`, {
-          method: "POST",
-        }),
-      );
-      setSummary(completed.summary);
       await runSteppedAnalyticsRefresh((message) => setStatus(message));
       setStatus("Import completed successfully.");
       router.refresh();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Import failed.");
+      const detail = caught instanceof Error ? caught.message : "The request failed.";
+      setError(imported
+        ? `Your import is saved. Analytics refresh is incomplete: ${detail} Resume it from the analytics panel; no re-upload is needed.`
+        : `${stage}: ${detail} Check import history before retrying; a lost response does not necessarily mean the import failed.`);
       setStatus("");
       router.refresh();
     } finally {
