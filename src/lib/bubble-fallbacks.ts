@@ -26,7 +26,7 @@ export function bubbleFallbacks(
     parent.set(id, seed);
     group.set(seed, community);
   }
-  const candidates = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment) && edge.alignment < cutoff)
+  const candidates = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment) && edge.alignment > 0 && edge.alignment < cutoff)
     .sort((a, b) => b.alignment! - a.alignment! || a.source.localeCompare(b.source) || a.target.localeCompare(b.target));
   const links: UndirectedRelationshipEdge[] = [];
   for (const edge of candidates) {

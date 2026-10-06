@@ -130,11 +130,17 @@ database cannot be queried. URL parameters keep analytics views shareable:
   those round-local values. The default non-provisional threshold is three
   entered rounds. These are league outcomes, not objective measures of musical
   quality.
-- Vote-pattern alignment is displayed as a percentage. It compares
-  budget-normalized full-ballot vectors in the selected scope, includes inferred
-  zeroes for active voters, and represents songs submitted by either player as a
-  mutual-support bucket when both directions exist. It is suppressed below
-  selected-scope sample and coverage thresholds.
+- Vote-pattern alignment compares only songs both voters could vote on, excluding
+  both players' submissions and including inferred zeroes for active voters.
+  Votes are divided by each ballot's point total and centered by each voter's
+  mean on the pair's shared songs within that round. Cosine similarity of the
+  pooled deviations removes the positive baseline from broad allocations while
+  retaining vote intensity. Scores range from −100% to +100%; zero means no
+  linear agreement and negative values mean opposing preferences. Rounds where
+  either shared-song ballot is flat contribute neither features nor coverage.
+  The existing selected-scope sample and coverage thresholds still apply.
+  Mutual support remains a separate metric. Refresh analytics after deploying
+  this revision to rebuild cached scores.
 - Directional and mutual vote figures include points per eligible opportunity
   and positive-opportunity rates. Mutual support also shows total points and the
   share of eligible ballot points allocated to each other. Relative voting order

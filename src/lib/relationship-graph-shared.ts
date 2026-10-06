@@ -153,7 +153,7 @@ export function buildDensityWeightScale(
 }
 
 export function bubbleWeightScale(edges: readonly UndirectedRelationshipEdge[]): WeightScale {
-  const eligible = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment));
+  const eligible = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment) && edge.alignment > 0);
   const nodes = new Set(eligible.flatMap(edge => [edge.source, edge.target]));
   return buildDensityWeightScale(eligible.map(edge => edge.alignment!), nodes.size, 1.25);
 }

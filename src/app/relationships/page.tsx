@@ -64,7 +64,7 @@ const tabs: Array<{ tab: RelationshipTab; label: string; description: string }> 
   {
     tab: "alignment",
     label: "Alignment",
-    description: "Budget-normalized vote-pattern similarity for qualifying pairs.",
+    description: "Agreement on shared songs after removing each voter's round average.",
   },
   {
     tab: "timing",
@@ -206,7 +206,7 @@ export default async function RelationshipsPage({
   const valueLabel = tab === "alignment" ? "Alignment" : tab === "timing" ? "Ballot position" : tab === "mutual" ? "Ballot share" : "Pts / opportunity";
   const sampleLabel = tab === "alignment" ? "Vote features" : tab === "timing" ? "Ballots cast" : "Opportunities";
   const contextLabel = tab === "timing" ? "Missed ballots" : tab === "alignment" ? "Scope covered" : "Awarded ≥1 pt";
-  const contextHelp = tab === "timing" ? "Entered rounds where the player did not cast a ballot." : tab === "alignment" ? "Shared voted rounds divided by all rounds in the selected scope." : "Percentage and count of eligible song-voter opportunities awarded at least one point; the rest received zero points. Mutual support combines both directions.";
+  const contextHelp = tab === "timing" ? "Entered rounds where the player did not cast a ballot." : tab === "alignment" ? "Shared voted rounds with variation in both voters' scores on shared songs, divided by all rounds in the selected scope." : "Percentage and count of eligible song-voter opportunities awarded at least one point; the rest received zero points. Mutual support combines both directions.";
 
   return (
     <Container className="py-10 sm:py-14">
@@ -235,7 +235,7 @@ export default async function RelationshipsPage({
             {tab === "timing"
               ? "Lower ballot position means earlier voting. Missed ballots are excluded from the average."
               : `Requires ${minimumRounds} of ${scopeRounds} scope rounds${tab === "alignment" ? ` and ${qualificationFeatureFloor(scopeRounds, options.rounds.length)} comparable vote features` : ""}. The participation floor rises toward half for small scopes and eases to one third at full scope.`}
-            {tab === "alignment" ? " Features compare budget-normalized votes for other players’ songs, plus support exchanged between the pair." : ""}
+            {tab === "alignment" ? " Shared songs exclude both players’ submissions. Votes are budget-normalized and centered within each round; flat ballots do not contribute. Positive scores mean agreement, zero means no linear agreement, and negative scores mean opposing preferences. Mutual support is shown separately." : ""}
           </p>
         </CardHeader>
         <CardContent>
@@ -284,7 +284,7 @@ export default async function RelationshipsPage({
                       activeSort={sort}
                       align="right"
                       className="w-[14%]"
-                      title={tab === "alignment" ? "Cosine similarity of budget-normalized vote patterns; higher means more similar voting." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "Combined points exchanged divided by the eligible ballot budgets of both players." : "Points awarded divided by eligible opportunities, including zero-point votes."}
+                      title={tab === "alignment" ? "Cosine similarity of budget-normalized votes after subtracting each voter's shared-song mean per round. Range −100% to +100%; zero means no linear agreement, negative means opposing preferences." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "Combined points exchanged divided by the eligible ballot budgets of both players." : "Points awarded divided by eligible opportunities, including zero-point votes."}
                       defaultDirection={defaultRelationshipSortDirection(
                         tab === "alignment"
                           ? "alignment"
@@ -316,7 +316,7 @@ export default async function RelationshipsPage({
                       defaultDirection="desc"
                       params={currentParams}
                       path="/relationships"
-                      title={tab === "alignment" ? "Comparable budget-normalized vote features used for cosine similarity." : tab === "timing" ? "Submitted ballots contributing to the timing average." : "Eligible song-voter combinations, including inferred zeroes; excludes self-votes and missing ballots."}
+                      title={tab === "alignment" ? "Shared-song votes, including inferred zeroes, from rounds where both voters show variation. Excludes both players' submissions." : tab === "timing" ? "Submitted ballots contributing to the timing average." : "Eligible song-voter combinations, including inferred zeroes; excludes self-votes and missing ballots."}
                       sortKey={tab === "alignment" ? "features" : "opportunities"}
                     >
                       {sampleLabel}
@@ -329,7 +329,7 @@ export default async function RelationshipsPage({
                       defaultDirection="desc"
                       params={currentParams}
                       path="/relationships"
-                      title={tab === "timing" ? "Rounds entered by submitting or voting in the selected scope." : "Distinct rounds with eligible opportunities for this pair; alignment requires both players to have voted."}
+                      title={tab === "timing" ? "Rounds entered by submitting or voting in the selected scope." : tab === "alignment" ? "Rounds where both players voted and both showed variation on shared songs." : "Distinct rounds with eligible opportunities for this pair."}
                       sortKey="rounds"
                     >
                       Rounds

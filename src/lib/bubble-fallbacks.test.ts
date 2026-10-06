@@ -34,4 +34,10 @@ describe("bubble fallback attachments", () => {
     const result = bubbleFallbacks([edge("a", "x", null), edge("a", "y", NaN), edge("a", "z", 0.8)], 0.8, { a: 0 });
     expect(result.links).toEqual([]);
   });
+
+  it("does not attach players to communities through zero or negative alignment", () => {
+    const result = bubbleFallbacks([edge("a", "x", -0.8), edge("a", "y", 0), edge("a", "z", 0.1)], 0.8, { a: 0 });
+    expect(result.assignment).toEqual({ a: 0, z: 0 });
+    expect(result.links).toEqual([edge("a", "z", 0.1)]);
+  });
 });

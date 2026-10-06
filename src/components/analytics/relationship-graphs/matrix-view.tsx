@@ -1,8 +1,8 @@
 "use client";
 
 import { hierarchy } from "d3-hierarchy";
-import { scaleSequential } from "d3-scale";
-import { interpolateYlGnBu } from "d3-scale-chromatic";
+import { scaleDiverging, scaleSequential } from "d3-scale";
+import { interpolateRdBu, interpolateYlGnBu } from "d3-scale-chromatic";
 import { useMemo, useState } from "react";
 
 import {
@@ -150,7 +150,11 @@ export function MatrixView({ graph }: { graph: RelationshipGraphData }) {
       rawThreshold,
       allWeights,
     );
-    const color = scaleSequential(interpolateYlGnBu).domain(domain);
+    // Keep zero neutral for signed alignment, regardless of the hide cutoff.
+    const extent = Math.max(Math.abs(domain[0]), Math.abs(domain[1]), ...allWeights.map(Math.abs), 1e-6);
+    const color = metric === "alignment"
+      ? scaleDiverging(interpolateRdBu).domain([-extent, 0, extent])
+      : scaleSequential(interpolateYlGnBu).domain(domain);
     return {
       color,
       domain,
@@ -187,10 +191,10 @@ export function MatrixView({ graph }: { graph: RelationshipGraphData }) {
         thresholdLabel="Hide below strength"
       />
       <p className="text-xs text-zinc-500">
-        Color domain rescales with the hide cutoff: coolest = cutoff (
-        {(domain[0] * 100).toFixed(1)}%), hottest ≈ strong pairs (
-        {(domain[1] * 100).toFixed(1)}%). {visibleCount} visible cells. Hover a
-        cell for pair details.
+        {metric === "alignment"
+          ? "Red means opposing preferences, neutral means zero linear agreement, and blue means agreement."
+          : `Color domain rescales with the hide cutoff: coolest = cutoff (${(domain[0] * 100).toFixed(1)}%), hottest ≈ strong pairs (${(domain[1] * 100).toFixed(1)}%).`}
+        {" "}{visibleCount} visible cells. Hover a cell for pair details.
       </p>
       <div className="relative overflow-auto rounded-2xl border border-white/[0.08] bg-zinc-950/50 p-4">
         {hoverLabel && hover ? (

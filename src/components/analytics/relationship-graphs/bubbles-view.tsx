@@ -57,7 +57,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
 
   const { links, nodes, summary, primaryCount, fallbackCount, ungroupedCount } = useMemo(() => {
     const filtered = filterUndirectedEdges(
-      graph.undirectedEdges,
+      graph.undirectedEdges.filter(edge => (edge.alignment ?? 0) > 0),
       "alignment",
       rawThreshold,
     );
@@ -128,7 +128,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       ? bubbleFallbacks(graph.undirectedEdges, rawThreshold, assignment)
       : { assignment, links: [] };
     const displayAssignment = fallback.assignment;
-    const visibleIds = new Set([...coreIds, ...fallback.links.flatMap(edge => [edge.source, edge.target])]);
+    const visibleIds = new Set(keepEveryone ? graph.nodes.map(node => node.id) : coreIds);
 
     const communityMembers = new Map<
       number,

@@ -119,8 +119,9 @@ function AlignmentPanel({
                 ))}
               </ol>
               <p className="mt-4 max-w-3xl text-sm leading-6 text-zinc-400">
-                Budget-normalized point-vector alignment describes vote
-                patterns, not personal relationships or causality.
+                Centered alignment compares shared-song preferences. Zero
+                means no linear agreement; negative scores mean opposing
+                preferences. Mutual support is shown separately.
               </p>
             </>
           ) : pendingScopeMaterialization ? (

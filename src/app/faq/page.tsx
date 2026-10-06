@@ -61,7 +61,7 @@ const sections = [
   },
   {
     title: "What is vote-pattern alignment?",
-    body: "Alignment compares two voters' ballot shapes after normalizing by each voter's ballot budget. Similar point patterns score higher. It describes voting behavior only, not friendship, taste, causality, or listening habits.",
+    body: "Alignment compares votes on other players' songs, including inferred zeroes. Each vote is divided by that voter's ballot budget, then the voter's mean on the pair's shared songs in that round is subtracted. Cosine similarity compares the deviations across qualifying rounds, removing the positive baseline from broad voting. Scores range from −100% to +100%: positive means agreement, zero means no linear agreement, and negative means opposing preferences. Rounds where either shared-song ballot is flat do not contribute features or coverage. Mutual support is shown separately. Alignment describes voting behavior only, not friendship, causality, or listening habits.",
   },
   {
     title: "What is mutual ballot share?",
@@ -77,7 +77,7 @@ const sections = [
   },
   {
     title: "What is the Graphs page?",
-    body: "Graphs visualizes player relationships from the same metrics as Compare: Bubbles (alignment communities), Flow (directed points-given), Matrix (affinity heatmap), and Ego (one player’s neighbors). Flow and Bubbles use a connection budget per player so the slider stays useful as scope changes: 0% is dense, 50% balances detail (about 1.5 arrows per player in Flow, 1.25 links in Bubbles), and 100% removes qualifying links. Show all links bypasses that budget. Equal strengths stay together, so short scopes can still change in steps. Both views show thin gray fallback links by default; smaller fallback nodes in Bubbles inherit their connected core’s color without affecting community detection. Nodes with no path to a core stay gray. Matrix and Ego filter by rank from all links at 0% to none at 100%. These describe ballot patterns only — not friendship or listening habits.",
+    body: "Graphs visualizes player relationships from the same metrics as Compare: Bubbles (alignment communities), Flow (directed points-given), Matrix (affinity heatmap), and Ego (one player’s neighbors). Bubbles uses only positive centered alignment, including its fallback links; zero and negative scores do not connect communities. Matrix keeps zero neutral, with red for opposing preferences and blue for agreement. Ego shows negative alignment as red links. Flow and Bubbles use a connection budget per player so the slider stays useful as scope changes: 0% is dense, 50% balances detail (about 1.5 arrows per player in Flow, 1.25 links in Bubbles), and 100% removes qualifying links. Show all links bypasses that budget. Equal strengths stay together, so short scopes can still change in steps. Both views show thin gray fallback links by default; smaller fallback nodes in Bubbles inherit their connected core’s color without affecting community detection. Nodes with no path to a core stay gray. Matrix and Ego filter by rank from all links at 0% to none at 100%. These describe ballot patterns only — not friendship or listening habits.",
   },
   {
     title: "What is the Facts page?",

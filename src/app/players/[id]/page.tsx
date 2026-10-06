@@ -645,18 +645,18 @@ export default async function PlayerProfilePage({
                   <span className="sr-only">Show alignment formula details</span>
                 </summary>
                 <p className="absolute left-0 top-6 z-20 w-72 rounded-xl border border-white/10 bg-zinc-950 p-3 text-xs font-normal leading-5 text-zinc-300 shadow-2xl">
-                  Compares inferred-zero full-ballot vectors only in the
-                  selected scope. Each ballot is normalized by its eligible
-                  point total. Songs submitted by either player become one
-                  mutual-support bucket when both directions exist, avoiding
-                  extra weight from submitting multiple songs.
+                  Compares other players’ songs, including inferred zeroes.
+                  Each ballot is divided by its point total, then its average
+                  on shared songs in that round is subtracted. Cosine similarity
+                  compares the pooled deviations. Flat ballots contribute no
+                  information. Mutual support is shown separately.
                 </p>
               </details>
             </div>
             <CardDescription>
-              Budget-normalized cosine alignment on comparable selected-scope
-              ballot features. Shown only after the pair meets sample and
-              coverage thresholds.
+              Agreement on shared songs after removing each voter’s round
+              average. Shown only after the pair meets sample and coverage
+              thresholds.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -706,14 +706,14 @@ export default async function PlayerProfilePage({
               </div>
             ) : (
               <p className="text-sm leading-6 text-zinc-500">
-                No comparison has enough features and shared voted rounds
-                across enough rounds to meet the adaptive scope participation minimum.
+                No comparison has enough shared-song votes and rounds with
+                variation in both ballots to meet the scope participation minimum.
               </p>
             )}
             <p className="mt-4 text-xs leading-5 text-zinc-600">
-              Alignment describes selected-scope vote patterns, including
-              inferred zeroes for active ballots. It does not infer friendship,
-              listening behavior, or causality.
+              Positive alignment means agreement, zero means no linear
+              agreement, and negative alignment means opposing preferences.
+              It does not infer friendship, listening behavior, or causality.
             </p>
           </CardContent>
         </Card>

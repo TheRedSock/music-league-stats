@@ -1490,10 +1490,10 @@ export function alignmentComparisonTailCtes(playerId?: string): SQL {
   const pairScopeFilter = playerId
     ? sql`where lm1.competitor_id = ${playerId} or lm2.competitor_id = ${playerId}`
     : sql``;
-  // Normalize ballots once and aggregate features before joining membership
-  // scope. The materialization boundaries prevent expensive join reordering
-  // when small/new leagues have stale cardinality estimates. Effective votes
-  // already exclude self-votes; reciprocal edges retain mutual zeroes.
+  // Compare only songs both voters could vote on. Center within each pair's
+  // shared songs in each round, so broad allocations have no positive baseline.
+  // Reciprocal support is a separate metric. Flat shared-song ballots provide
+  // no preference information and do not contribute sample or coverage.
   return sql`
     pair_scope as (
       select
@@ -1525,43 +1525,41 @@ export function alignmentComparisonTailCtes(playerId?: string): SQL {
        and ev_right.submission_id = ev_left.submission_id
        and ev_right.voter_id > ev_left.voter_id
     ),
-    directed_support as materialized (
-      select ev.round_id, ev.voter_id, ev.submitter_id,
-        sum(ev.points)::double precision / bt.ballot_points as value
-      from effective_votes ev
-      join ballot_totals bt
-        on bt.round_id = ev.round_id and bt.voter_id = ev.voter_id
-      where bt.ballot_points > 0
-      group by ev.round_id, ev.voter_id, ev.submitter_id, bt.ballot_points
-    ),
-    mutual_features as (
-      select l.voter_id as left_id, l.submitter_id as right_id, l.round_id,
-        ('mutual:' || l.round_id::text) as feature_key,
-        l.value as left_value, r.value as right_value
-      from directed_support l
-      join directed_support r
-        on r.round_id = l.round_id
-       and r.voter_id = l.submitter_id and r.submitter_id = l.voter_id
-      where l.voter_id < l.submitter_id
-    ),
     comparison_features as (
-      select * from third_party_features
-      union all
-      select * from mutual_features
+      select *,
+        left_value - avg(left_value) over pair_round as left_centered,
+        right_value - avg(right_value) over pair_round as right_centered
+      from third_party_features
+      window pair_round as (partition by left_id, right_id, round_id)
+    ),
+    pair_round_totals as (
+      select cf.left_id, cf.right_id, cf.round_id,
+        count(*)::int as comparable_features,
+        sum(cf.left_centered * cf.right_centered) as dot,
+        sum(cf.left_centered * cf.left_centered) as left_squared,
+        sum(cf.right_centered * cf.right_centered) as right_squared
+      from comparison_features cf
+      group by cf.left_id, cf.right_id, cf.round_id
+      -- Test variation directly: repeated floating-point means can leave tiny
+      -- residuals even for a perfectly flat ballot.
+      having max(cf.left_value) > min(cf.left_value)
+         and max(cf.right_value) > min(cf.right_value)
     ),
     pair_feature_totals as materialized (
-      select cf.left_id, cf.right_id,
-        count(*)::int as comparable_features,
-        count(distinct cf.round_id)::int as shared_rounds,
-        sum(cf.left_value * cf.right_value) as dot,
-        sqrt(sum(cf.left_value * cf.left_value) * sum(cf.right_value * cf.right_value)) as magnitude
-      from comparison_features cf
-      group by cf.left_id, cf.right_id
+      select pr.left_id, pr.right_id,
+        sum(pr.comparable_features)::int as comparable_features,
+        count(*)::int as shared_rounds,
+        sum(pr.dot) as dot,
+        sqrt(sum(pr.left_squared) * sum(pr.right_squared)) as magnitude
+      from pair_round_totals pr
+      group by pr.left_id, pr.right_id
     ),
     pair_comparisons as (
-      select pf.*, ps.scope_rounds
+      select pf.*, ps.scope_rounds,
+        greatest(-1::double precision, least(1::double precision, pf.dot / pf.magnitude)) as alignment
       from pair_feature_totals pf
       join pair_scope ps on ps.left_id = pf.left_id and ps.right_id = pf.right_id
+      where pf.magnitude > 0
     )
   `;
 }
@@ -1970,7 +1968,7 @@ export async function getDashboardAlignmentData(
       ${competitorDisplayName("left_player")} as "leftName",
       pc.right_id as "rightId",
       ${competitorDisplayName("right_player")} as "rightName",
-      pc.dot / nullif(pc.magnitude, 0) as alignment,
+      pc.alignment,
       pc.comparable_features as "comparableFeatures",
       pc.shared_rounds as "sharedRounds",
       (select scope_rounds from scope_thresholds) as "scopeRounds"
@@ -2933,7 +2931,7 @@ export async function getPlayerProfileData(
         end as "competitorId",
         c.slug as "competitorSlug",
         ${competitorDisplayName("c")} as "competitorName",
-        pc.dot / nullif(pc.magnitude, 0) as alignment,
+        pc.alignment,
         pc.comparable_features as "comparableFeatures",
         pc.shared_rounds as "sharedRounds",
         (select scope_rounds from scope_thresholds) as "scopeRounds"
@@ -3409,7 +3407,7 @@ export async function getRelationshipsTableData(
             null::double precision as "pointsPerOpportunity",
             null::double precision as "positiveRate",
             null::double precision as "ballotPointShare",
-            pc.dot / nullif(pc.magnitude, 0) as alignment,
+            pc.alignment,
             pc.comparable_features as "comparableFeatures",
             null::double precision as "averageTiming",
             null::int as "votedRounds",

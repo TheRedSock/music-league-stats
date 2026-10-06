@@ -25,6 +25,27 @@ const url = process.env.ANALYTICS_TEST_DATABASE_URL;
 const inputs = ["leagues", "competitors", "league_members", "rounds", "submissions", "votes"];
 const outputs = ["analytics_materialization_jobs", "analytics_scope_jobs", "analytics_effective_votes", "analytics_song_stats", "analytics_player_stats", "analytics_point_distribution", "analytics_player_point_distribution", "analytics_relationship_pairs", "analytics_relationship_mutual", "analytics_relationship_alignment", "analytics_player_timing"];
 
+type AlignmentBallot = { round: string; voter: "a" | "b"; points: number[]; support?: number[] };
+
+function alignmentFixture(ballots: AlignmentBallot[]) {
+  const rounds = [...new Set(ballots.map(ballot => ballot.round))];
+  const votes = ballots.flatMap(ballot => [
+    ...ballot.points.map((points, i) => sql`(${ballot.round}, ${ballot.voter}, 'c', ${`c${i}`}, ${points}::int)`),
+    ...(ballot.support ?? []).map((points, i) => {
+      const other = ballot.voter === "a" ? "b" : "a";
+      return sql`(${ballot.round}, ${ballot.voter}, ${other}, ${`${other}${i}`}, ${points}::int)`;
+    }),
+  ]);
+  return new PgDialect().sqlToQuery(sql`
+    with selected_rounds(id, league_id) as (values ${sql.join(rounds.map(round => sql`(${round}, 'league')`), sql`, `)}),
+    league_members(league_id, competitor_id) as (values ('league', 'a'), ('league', 'b')),
+    effective_votes(round_id, voter_id, submitter_id, submission_id, points) as (values ${sql.join(votes, sql`, `)}),
+    ballot_totals as (select round_id, voter_id, sum(points)::double precision as ballot_points from effective_votes group by round_id, voter_id),
+    ${alignmentComparisonTailCtes()}
+    select * from pair_comparisons
+  `);
+}
+
 describe.skipIf(!url)("analytics checkpoints (isolated PostgreSQL temporary tables)", () => {
   it("rolls back failed steps, resumes, rejects replays, and completes all league and combo checkpoints", async () => {
     const client = postgres(url!, { max: 1, prepare: false, connect_timeout: 10, onnotice: () => undefined });
@@ -84,6 +105,10 @@ describe.skipIf(!url)("analytics checkpoints (isolated PostgreSQL temporary tabl
         const leagueIds = (await connection`select id from leagues order by id`).map((row) => row.id as string);
         expect(leagueCheckpoints).toBe(leagueIds.length * 6);
         expect(Number((await connection`select count(*) as n from analytics_relationship_alignment where scope_key='all'`)[0].n)).toBeGreaterThan(0);
+        const [alignmentRange] = await connection`select min(alignment) as minimum, max(alignment) as maximum from analytics_relationship_alignment`;
+        expect(alignmentRange.minimum).toBeLessThan(0);
+        expect(alignmentRange.minimum).toBeGreaterThanOrEqual(-1);
+        expect(alignmentRange.maximum).toBeLessThanOrEqual(1);
 
         let combo = await startScopeMaterializationJob(leagueIds.slice(0, 2), database);
         for (let i = 0; combo.status === "processing" && i < 6; i++) combo = await advanceScopeMaterializationJob(combo.job!.id, database);
@@ -103,7 +128,7 @@ describe.skipIf(!url)("analytics checkpoints (isolated PostgreSQL temporary tabl
     }
   }, 240_000);
 
-  it("preserves inferred zeroes, multi-song mutual support, zero-budget ballots, and focus filtering", async () => {
+  it("centers alignment with inferred zeroes, excludes reciprocal support and zero-budget ballots, and respects focus filtering", async () => {
     const client = postgres(url!, { max: 1, prepare: false, connect_timeout: 10 });
     try {
       await client.begin("read only", async (connection) => {
@@ -123,9 +148,75 @@ describe.skipIf(!url)("analytics checkpoints (isolated PostgreSQL temporary tabl
           const rows = await connection.unsafe(query.sql, query.params as postgres.ParameterOrJSON<never>[]);
           if (focus === "c") { expect(rows).toHaveLength(0); continue; }
           expect(rows).toHaveLength(1);
-          expect(rows[0]).toMatchObject({ left_id: "a", right_id: "b", shared_rounds: 1, scope_rounds: 3, comparable_features: 3 });
-          expect(rows[0].dot / rows[0].magnitude).toBeCloseTo(0.8, 12);
+          expect(rows[0]).toMatchObject({ left_id: "a", right_id: "b", shared_rounds: 1, scope_rounds: 3, comparable_features: 2 });
+          expect(rows[0].alignment).toBeCloseTo(-1, 12);
         }
+      });
+    } finally { await client.end({ timeout: 3 }); }
+  });
+
+  it.each([
+    { name: "identical preferences despite different budgets and reciprocal support", a: [2, 2, 0, 0], b: [1, 1, 0, 0], expected: 1 },
+    { name: "opposing preferences", a: [2, 2, 0, 0], b: [0, 0, 2, 2], expected: -1 },
+    { name: "no linear agreement despite positive overlap", a: [2, 2, 0, 0], b: [2, 0, 2, 0], expected: 0 },
+    { name: "higher-point favorites carry more information", a: [4, 1, 1, 0], b: [4, 1, 0, 1], expected: 8 / 9 },
+  ])("calculates centered alignment for $name", async ({ a, b, expected }) => {
+    const client = postgres(url!, { max: 1, prepare: false, connect_timeout: 10 });
+    try {
+      await client.begin("read only", async connection => {
+        const query = alignmentFixture([
+          { round: "r1", voter: "a", points: a, support: [5, 5] },
+          { round: "r1", voter: "b", points: b, support: [1, 0] },
+        ]);
+        const rows = await connection.unsafe(query.sql, query.params as postgres.ParameterOrJSON<never>[]);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ comparable_features: 4, shared_rounds: 1, scope_rounds: 1 });
+        expect(rows[0].alignment).toBeCloseTo(expected, 12);
+      });
+    } finally { await client.end({ timeout: 3 }); }
+  });
+
+  it("excludes flat ballots from alignment features and coverage, including floating-point residuals", async () => {
+    const client = postgres(url!, { max: 1, prepare: false, connect_timeout: 10 });
+    try {
+      await client.begin("read only", async connection => {
+        const ballots: AlignmentBallot[] = [
+          { round: "flat", voter: "a", points: [1, 1, 1], support: [7] },
+          { round: "flat", voter: "b", points: [2, 1, 0] },
+          { round: "one-song", voter: "a", points: [2] },
+          { round: "one-song", voter: "b", points: [1] },
+          { round: "zero-budget", voter: "a", points: [0, 0, 0] },
+          { round: "zero-budget", voter: "b", points: [2, 1, 0] },
+        ];
+        let query = alignmentFixture(ballots);
+        expect(await connection.unsafe(query.sql, query.params as postgres.ParameterOrJSON<never>[])).toHaveLength(0);
+        query = alignmentFixture([...ballots,
+          { round: "informative", voter: "a", points: [2, 1, 0] },
+          { round: "informative", voter: "b", points: [2, 1, 0] },
+        ]);
+        const rows = await connection.unsafe(query.sql, query.params as postgres.ParameterOrJSON<never>[]);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ comparable_features: 3, shared_rounds: 1, scope_rounds: 4, alignment: 1 });
+      });
+    } finally { await client.end({ timeout: 3 }); }
+  });
+
+  it("centers alignment separately in each round before pooling budget-normalized deviations", async () => {
+    const client = postgres(url!, { max: 1, prepare: false, connect_timeout: 10 });
+    try {
+      await client.begin("read only", async connection => {
+        const query = alignmentFixture([
+          { round: "large-budget", voter: "a", points: [10, 0], support: [10] },
+          { round: "large-budget", voter: "b", points: [0, 5], support: [5] },
+          { round: "small-budget", voter: "a", points: [1, 0] },
+          { round: "small-budget", voter: "b", points: [1, 0] },
+        ]);
+        const rows = await connection.unsafe(query.sql, query.params as postgres.ParameterOrJSON<never>[]);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ comparable_features: 4, shared_rounds: 2, scope_rounds: 2 });
+        // Round 1: deviations ±0.25, round 2: ±0.5. Raw-point pooling
+        // would incorrectly let the large budget's disagreement dominate.
+        expect(rows[0].alignment).toBeCloseTo(0.6, 12);
       });
     } finally { await client.end({ timeout: 3 }); }
   });

@@ -35,7 +35,7 @@ export const GRAPH_VIEWS = [
     id: "bubbles",
     label: "Bubbles",
     description:
-      "Voting-pattern communities from thresholded alignment. Only links meeting the chosen cutoff define groups.",
+      "Voting-pattern communities from positive centered alignment. Only positive links meeting the chosen cutoff define groups; zero and negative scores do not connect communities.",
   },
   {
     id: "flow",

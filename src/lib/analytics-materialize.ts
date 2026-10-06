@@ -807,7 +807,7 @@ async function insertRelationshipAlignment(
       ${competitorDisplayName("left_player")},
       pc.right_id,
       ${competitorDisplayName("right_player")},
-      pc.dot / nullif(pc.magnitude, 0),
+      pc.alignment,
       pc.comparable_features,
       pc.shared_rounds,
       (select scope_rounds from scope_thresholds)

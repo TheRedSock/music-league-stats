@@ -111,8 +111,9 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         source: edge.source,
         target: edge.target,
         weight,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${(weight * 100).toFixed(1)}% ${metric}`,
       })),
-    [neighborEdges],
+    [neighborEdges, metric],
   );
 
   if (graph.nodes.length === 0) {
@@ -142,6 +143,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         The automatic default targets 3–8 neighbors based on the number available. Ego stays at the center (large). All neighbors above the strength cutoff are
         shown; node size scales strongly with {metric} (
         {links.length} connection{links.length === 1 ? "" : "s"}).
+        {metric === "alignment" ? " Red links indicate opposing preferences; green links indicate agreement." : ""}
       </p>
       {links.length === 0 ? (
         <GraphEmptyState message="No neighbors above this threshold for the focused player." />

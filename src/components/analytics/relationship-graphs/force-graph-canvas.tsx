@@ -194,7 +194,7 @@ export function RelationshipForceGraph({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chargeStrength, collideRadius, linkDistance, links, nodes, width]);
 
-  const maxWeight = Math.max(...links.filter(link => !link.fallback).map((link) => link.weight), 0.0001);
+  const maxWeight = Math.max(...links.filter(link => !link.fallback).map((link) => Math.abs(link.weight)), 0.0001);
 
   function nodeRadius(node: ForceNode): number {
     const isFocus = highlightId != null && node.id === highlightId;
@@ -219,8 +219,9 @@ export function RelationshipForceGraph({
         linkColor={(link) => {
           const typed = link as ForceLink;
           if (typed.color) return typed.color;
-          const t = typed.weight / maxWeight;
+          const t = Math.abs(typed.weight) / maxWeight;
           const opacity = linkOpacityMin + t * (linkOpacityMax - linkOpacityMin);
+          if (typed.weight < 0) return `rgba(248, 113, 113, ${opacity})`;
           // Darker olive/lime so white labels stay readable.
           return useDarkLinks
             ? `rgba(101, 163, 13, ${opacity})`
@@ -235,7 +236,7 @@ export function RelationshipForceGraph({
             ? (link) => {
                 const typed = link as ForceLink;
                 if (typed.fallback) return 5;
-                return 7 + (typed.weight / maxWeight) * 5;
+                return 7 + (Math.abs(typed.weight) / maxWeight) * 5;
               }
             : 0
         }
@@ -246,12 +247,12 @@ export function RelationshipForceGraph({
         linkDirectionalParticleSpeed={0.004}
         linkDirectionalParticleWidth={(link) => {
           const typed = link as ForceLink;
-          return 1.2 + (typed.weight / maxWeight) * 1.6;
+          return 1.2 + (Math.abs(typed.weight) / maxWeight) * 1.6;
         }}
         linkWidth={(link) => {
           const typed = link as ForceLink;
           if (typed.fallback) return 1;
-          return 1 + (typed.weight / maxWeight) * 4;
+          return 1 + (Math.abs(typed.weight) / maxWeight) * 4;
         }}
         // Library places link ends / arrows at sqrt(val)*nodeRelSize. Match
         // our custom-drawn radii so arrowheads sit on the node perimeter

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeightScale, buildDensityWeightScale, bubbleWeightScale, directedWeightScale, normalizedToRaw, type DirectedRelationshipEdge, type UndirectedRelationshipEdge } from "./relationship-graph-shared";
+import { buildWeightScale, buildDensityWeightScale, bubbleWeightScale, directedWeightScale, filterUndirectedEdges, undirectedWeightScale, normalizedToRaw, type DirectedRelationshipEdge, type UndirectedRelationshipEdge } from "./relationship-graph-shared";
 
 function visible(weights: number[], position: number) {
   const scale = buildWeightScale(weights);
@@ -7,6 +7,15 @@ function visible(weights: number[], position: number) {
 }
 
 describe("graph filtering", () => {
+  it("retains signed alignment for Matrix/Ego but budgets only positive bubble links", () => {
+    const edges = [-0.8, 0, 0.4].map((alignment, i) => ({ source: "a", target: `${i}`, sourceName: "a", targetName: `${i}`, alignment, mutualShare: null, sharedRounds: 4, comparableFeatures: 20, mutualPoints: null }));
+    const scale = undirectedWeightScale(edges, "alignment");
+    expect(scale.sorted).toEqual([-0.8, 0, 0.4]);
+    expect(filterUndirectedEdges(edges, "alignment", normalizedToRaw(0, scale))).toEqual(edges);
+    expect(filterUndirectedEdges(edges, "alignment", normalizedToRaw(1, scale))).toEqual([]);
+    expect(bubbleWeightScale(edges).sorted).toEqual([0.4]);
+    expect(bubbleWeightScale(edges.slice(0, 2)).sampleSize).toBe(0);
+  });
   it("covers all through none for small, large, constant, zero and outlier distributions", () => {
     for (const weights of [[0.4], [0, 0, 0], [0.9, 0.9, 0.9], [1, 2, 3, 1000], Array.from({ length: 1000 }, (_, i) => i / 1000)]) {
       expect(visible(weights, 0)).toBe(weights.length);
