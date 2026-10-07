@@ -379,7 +379,11 @@ describe("analytics filter helpers", () => {
     expect(parseSongSort("title")).toBe("title");
     expect(parseSongSort("nope")).toBe("points");
     expect(parsePlayerSort("top-quartile")).toBe("top-quartile");
-    expect(parsePlayerSort("nope")).toBe("performance");
+    expect(parsePlayerSort("nope")).toBe("points");
+    expect(parsePlayerSort(undefined)).toBe("points");
+    expect(parsePlayerSort("appeal-spread")).toBe("appeal-spread");
+    expect(parseSongSort("appeal-spread")).toBe("appeal-spread");
+    expect(parseSongSort("points-per-actual-voter")).toBe("points-per-actual-voter");
     expect(defaultSongSortDirection("title")).toBe("asc");
     expect(defaultSongSortDirection("points")).toBe("desc");
     expect(defaultPlayerSortDirection("name")).toBe("asc");

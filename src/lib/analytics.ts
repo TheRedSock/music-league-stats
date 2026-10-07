@@ -102,6 +102,9 @@ export type DashboardData = {
 };
 
 export type SongAnalyticsRow = {
+  /** Scope-dependent table metric; unavailable outside the Songs directory. */
+  appealSpread?: number | null;
+  pointsPerActualVoter?: number;
   id: string;
   title: string;
   artist: string;
@@ -136,6 +139,9 @@ export type SongAnalyticsRow = {
 export {
   compareVotedSongsByPoints,
   defaultSongSortDirection,
+  defaultPlayerSortDirection,
+  playerSorts,
+  type PlayerSort,
   fairShareBlowout,
   leagueTableLabel,
   playerPath,
@@ -150,6 +156,9 @@ export {
 import {
   compareVotedSongsByPoints,
   defaultSongSortDirection,
+  defaultPlayerSortDirection,
+  playerSorts,
+  type PlayerSort,
   fairShareBlowout,
   songSorts,
   sortDirections,
@@ -168,21 +177,9 @@ export type SongsData = {
   search: string;
 };
 
-export const playerSorts = [
-  "performance",
-  "points",
-  "songs",
-  "rounds",
-  "name",
-  "points-per-song",
-  "points-per-voter",
-  "percentile",
-  "wins",
-  "top-quartile",
-] as const;
-export type PlayerSort = (typeof playerSorts)[number];
-
 export type PlayerDirectoryRow = {
+  /** Scope-dependent table metric; unavailable outside the Players directory. */
+  appealSpread?: number | null;
   id: string;
   slug: string;
   name: string;
@@ -323,7 +320,31 @@ export type RelationshipsTableData = {
   scopeKey?: string;
 };
 
+export type SongSubmissionFact = {
+  spotifyUri: string;
+  title: string;
+  artist: string;
+  submitterId: string;
+  submitterName: string;
+  leagueName: string;
+  leagueSlug: string;
+  leagueMusicLeagueId: string | null;
+  sourceRoundId: string;
+  roundName: string;
+  roundOrdinal: number;
+};
+
+export type ActualVoterSongFact = SongSubmissionFact & {
+  songId: string;
+  points: number;
+  actualVoters: number;
+  averageVotes: number;
+  rank: number;
+};
+
 export type SubmissionFactsData = {
+  highestAverageVoteSongs: ActualVoterSongFact[];
+  lowestAverageVoteSongs: ActualVoterSongFact[];
   mostSubmittedArtists: Array<{
     artist: string;
     submissions: number;
@@ -355,17 +376,11 @@ export type SubmissionFactsData = {
     submissions: number;
     artists: number;
   }>;
-  longestTitles: Array<{
-    title: string;
-    artist: string;
+  longestTitles: Array<SongSubmissionFact & {
     length: number;
-    submitterName: string;
   }>;
-  shortestTitles: Array<{
-    title: string;
-    artist: string;
+  shortestTitles: Array<SongSubmissionFact & {
     length: number;
-    submitterName: string;
   }>;
   densestRounds: Array<{
     leagueName: string;
@@ -384,6 +399,8 @@ export type SubmissionFactsData = {
     enteredRounds: number;
     avgPositiveReach: number;
     avgRoundPointShare: number;
+    reachPercentile: number;
+    sharePercentile: number;
     appealSpread: number;
   }>;
   nicheDevotionPlayers: Array<{
@@ -393,10 +410,13 @@ export type SubmissionFactsData = {
     enteredRounds: number;
     avgPositiveReach: number;
     avgRoundPointShare: number;
+    reachPercentile: number;
+    sharePercentile: number;
     appealSpread: number;
   }>;
   thinSpreadSongs: Array<{
     songId: string;
+    spotifyUri: string;
     title: string;
     artist: string;
     submitterId: string;
@@ -409,11 +429,14 @@ export type SubmissionFactsData = {
     roundOrdinal: number;
     positiveReach: number;
     roundPointShare: number;
+    reachPercentile: number;
+    sharePercentile: number;
     appealSpread: number;
     points: number;
   }>;
   cultClassicSongs: Array<{
     songId: string;
+    spotifyUri: string;
     title: string;
     artist: string;
     submitterId: string;
@@ -426,6 +449,8 @@ export type SubmissionFactsData = {
     roundOrdinal: number;
     positiveReach: number;
     roundPointShare: number;
+    reachPercentile: number;
+    sharePercentile: number;
     appealSpread: number;
     points: number;
   }>;
@@ -482,6 +507,8 @@ export type SubmissionFactsData = {
 };
 
 type SubmissionFactsPackedQueryRow = {
+  highestAverageVoteSongs: unknown;
+  lowestAverageVoteSongs: unknown;
   mostSubmittedArtists: unknown;
   artistLoyalists: unknown;
   repeatedSongs: unknown;
@@ -557,7 +584,7 @@ export function parsePlayerSort(
   const sort = firstParam(value);
   return playerSorts.includes(sort as PlayerSort)
     ? (sort as PlayerSort)
-    : "performance";
+    : "points";
 }
 
 export function parseRelationshipTab(
@@ -581,10 +608,6 @@ export function parseRelationshipSort(
   if (tab === "timing") return "timing";
   if (tab === "mutual") return "share";
   return "rate";
-}
-
-export function defaultPlayerSortDirection(sort: PlayerSort): SortDirection {
-  return sort === "name" ? "asc" : "desc";
 }
 
 export function defaultRelationshipSortDirection(
@@ -1379,6 +1402,8 @@ type LeaderboardQueryRow = {
 };
 
 type SongQueryRow = {
+  appealSpread?: number | null;
+  pointsPerActualVoter?: number;
   id: string;
   title: string;
   artist: string;
@@ -2006,6 +2031,10 @@ function songOrder(sort: SongSort, direction: SortDirection): SQL {
   if (sort === "title") return sql`title ${dir}, artist asc`;
   if (sort === "submitter") return sql`"submitterName" ${dir}, title asc`;
   if (sort === "scope") return sql`"leagueName" ${dir}, "roundOrdinal" ${dir}, title asc`;
+  if (sort === "points-per-actual-voter")
+    return sql`"pointsPerActualVoter" ${dir}, points ${direction === "desc" ? sql`asc` : sql`desc`}, title asc, id asc`;
+  if (sort === "appeal-spread")
+    return sql`"appealSpread" ${dir} ${nulls}, points desc, id asc`;
   if (sort === "points-per-voter")
     return sql`"pointsPerEligibleVoter" ${dir} ${nulls}, points desc`;
   if (sort === "positive-reach")
@@ -2024,6 +2053,13 @@ function songOrder(sort: SongSort, direction: SortDirection): SQL {
   return sql`points ${dir}, "supportIndexEb" desc nulls last, "supportIndex" desc nulls last`;
 }
 
+async function directorySongCtes(filter: AnalyticsFilter): Promise<SQL> {
+  const useMat = canUseSongDerivedMats(filter) && await hasCompletedAllLeaguesMaterialization();
+  return useMat
+    ? sql`ranked_songs as (${matSongSelect(filter.leagueIds)})`
+    : sql`${songStatsCtes(filter)}, ranked_songs as (${songSelect()})`;
+}
+
 export async function getSongsData(
   filter: AnalyticsFilter,
   {
@@ -2040,17 +2076,25 @@ export async function getSongsData(
     direction: SortDirection;
   },
 ): Promise<SongsData> {
-  const useMat =
-    canUseSongDerivedMats(filter) &&
-    (await hasCompletedAllLeaguesMaterialization());
-  const ctes = useMat
-    ? sql`ranked_songs as (${matSongSelect(filter.leagueIds)})`
-    : sql`${songStatsCtes(filter)}, ranked_songs as (${songSelect()})`;
+  const ctes = await directorySongCtes(filter);
   const predicate = songSearchPredicate(search);
   const [packedRow] = await db.execute<SongsPackedQueryRow>(sql`
     with ${ctes},
+    eligible_appeal as (
+      select id,
+        ${midpointPercentileSql(sql`"positiveReach"`)} as reach_percentile,
+        ${midpointPercentileSql(sql`"roundPointShare"`)} as share_percentile
+      from ranked_songs
+      where "positiveReach" is not null and "roundPointShare" is not null and "eligibleRows" >= 5
+    ),
+    directory_songs as (
+      select rs.*,
+        coalesce(rs.points::double precision / nullif(rs."positiveRows", 0), 0) as "pointsPerActualVoter",
+        round((ea.reach_percentile - ea.share_percentile)::numeric, 10)::double precision as "appealSpread"
+      from ranked_songs rs left join eligible_appeal ea using (id)
+    ),
     filtered_songs as (
-      select * from ranked_songs
+      select * from directory_songs ranked_songs
       where ${predicate}
     ),
     paged_songs as (
@@ -2491,7 +2535,7 @@ function matPlayerOrder(
   const provisional = sql`case when "enteredRounds" >= ${minimumRounds} then 0 else 1 end`;
   const dir = sortKeyword(direction);
   const nulls = nullsKeyword();
-  if (sort === "points") return sql`${provisional}, "totalPoints" ${dir}, name asc`;
+  if (sort === "points") return sql`"totalPoints" ${dir}, name asc`;
   if (sort === "songs")
     return sql`${provisional}, submissions ${dir}, "totalPoints" desc`;
   if (sort === "rounds")
@@ -2510,7 +2554,47 @@ function matPlayerOrder(
   return sql`${provisional}, "averageRoundIndex" ${dir} ${nulls}, "enteredRounds" desc`;
 }
 
+/** Compute appeal across the full qualified scope, independently of table search. */
 export async function getPlayersData(
+  filter: AnalyticsFilter,
+  options: { search: string; sort: PlayerSort; direction: SortDirection },
+): Promise<PlayersData> {
+  const data = await getPlayersBaseData(filter, options);
+  const ctes = await directorySongCtes(filter);
+  const spreads = await db.execute<{ id: string; appealSpread: number }>(sql`
+    with ${ctes},
+    player_appeal_base as (
+      select "submitterId" as id,
+        avg("positiveReach")::double precision as reach,
+        avg("roundPointShare")::double precision as share
+      from ranked_songs
+      where "positiveReach" is not null and "roundPointShare" is not null and "eligibleRows" >= 5
+      group by "submitterId"
+      having count(*) >= 3 and count(distinct "roundId") >= ${data.minimumRounds}
+    ),
+    player_appeal_percentiles as (
+      select id,
+        ${midpointPercentileSql(sql`reach`)} as reach_percentile,
+        ${midpointPercentileSql(sql`share`)} as share_percentile
+      from player_appeal_base
+    )
+    select id, round((reach_percentile - share_percentile)::numeric, 10)::double precision as "appealSpread"
+    from player_appeal_percentiles
+  `);
+  const byId = new Map(spreads.map(row => [row.id, row.appealSpread]));
+  const rows = data.rows.map(row => ({ ...row, appealSpread: byId.get(row.id) ?? null }));
+  if (options.sort === "appeal-spread") {
+    rows.sort((a, b) => {
+      if (a.appealSpread === null) return b.appealSpread === null ? a.name.localeCompare(b.name) : 1;
+      if (b.appealSpread === null) return -1;
+      return (options.direction === "asc" ? 1 : -1) * (a.appealSpread - b.appealSpread)
+        || b.totalPoints - a.totalPoints || a.name.localeCompare(b.name);
+    });
+  }
+  return { ...data, rows };
+}
+
+async function getPlayersBaseData(
   filter: AnalyticsFilter,
   {
     search,
@@ -3627,6 +3711,52 @@ const EMPTY_PLAYLIST_POSITION_BIAS: SubmissionFactsData["playlistPositionBias"] 
     buckets: [],
   };
 
+/** Percentile among the current rows, counting half of each tied group (0–100). */
+export function midpointPercentileSql(value: SQL): SQL {
+  return sql`(
+    (rank() over (order by ${value}) - 1
+      + count(*) over (partition by ${value}) / 2.0)
+    * 100 / nullif(count(*) over (), 0)
+  )::double precision`;
+}
+
+/** Uses positive voters only; inferred and explicit zeroes do not dilute averages. */
+export function actualVoterSongFactsCtes(): SQL {
+  return sql`
+    actual_voter_song_averages as (
+      select
+        ss.id as "songId",
+        ss.spotify_uri as "spotifyUri",
+        ss.song_title as title,
+        ss.artist_name as artist,
+        ss.submitter_id as "submitterId",
+        ss.submitter_name as "submitterName",
+        ss.league_name as "leagueName",
+        ss.league_slug as "leagueSlug",
+        ss.league_music_league_id as "leagueMusicLeagueId",
+        ss.source_round_id as "sourceRoundId",
+        ss.round_name as "roundName",
+        ss.round_ordinal as "roundOrdinal",
+        ss.points,
+        ss.positive_rows as "actualVoters",
+        coalesce(ss.points::numeric / nullif(ss.positive_rows, 0), 0) as "averageVotes"
+      from scoped_songs ss
+    ),
+    highest_average_vote_songs as (
+      select *, dense_rank() over (order by "averageVotes" desc)::int as rank
+      from actual_voter_song_averages
+      order by "averageVotes" desc, points asc, title asc, "songId" asc
+      limit 100
+    ),
+    lowest_average_vote_songs as (
+      select *, dense_rank() over (order by "averageVotes" asc)::int as rank
+      from actual_voter_song_averages
+      order by "averageVotes" asc, points desc, title asc, "songId" asc
+      limit 100
+    )
+  `;
+}
+
 export async function getSubmissionFactsData(
   filter: AnalyticsFilter,
 ): Promise<SubmissionFactsData> {
@@ -3726,24 +3856,42 @@ export async function getSubmissionFactsData(
       ),
       longest_titles as (
       select
+        s.spotify_uri as "spotifyUri",
+        s.submitter_id as "submitterId",
+        l.name as "leagueName",
+        l.slug as "leagueSlug",
+        l.music_league_id as "leagueMusicLeagueId",
+        sr.source_round_id as "sourceRoundId",
+        sr.name as "roundName",
+        sr.ordinal as "roundOrdinal",
         s.song_title as title,
         s.artist_name as artist,
         char_length(s.song_title)::int as length,
         ${competitorDisplayName("c")} as "submitterName"
       from submissions s
       join selected_rounds sr on sr.id = s.round_id
+      join leagues l on l.id = sr.league_id
       join competitors c on c.id = s.submitter_id
       order by char_length(s.song_title) desc, s.song_title asc
       limit 100
       ),
       shortest_titles as (
       select
+        s.spotify_uri as "spotifyUri",
+        s.submitter_id as "submitterId",
+        l.name as "leagueName",
+        l.slug as "leagueSlug",
+        l.music_league_id as "leagueMusicLeagueId",
+        sr.source_round_id as "sourceRoundId",
+        sr.name as "roundName",
+        sr.ordinal as "roundOrdinal",
         s.song_title as title,
         s.artist_name as artist,
         char_length(s.song_title)::int as length,
         ${competitorDisplayName("c")} as "submitterName"
       from submissions s
       join selected_rounds sr on sr.id = s.round_id
+      join leagues l on l.id = sr.league_id
       join competitors c on c.id = s.submitter_id
       order by char_length(s.song_title) asc, s.song_title asc
       limit 100
@@ -3774,6 +3922,7 @@ export async function getSubmissionFactsData(
       scoped_songs as (
         select
           ss.id,
+          ss.spotify_uri,
           ss.title as song_title,
           ss.artist as artist_name,
           ss.submitter_id,
@@ -3786,6 +3935,7 @@ export async function getSubmissionFactsData(
           ss.round_name,
           ss.round_ordinal,
           ss.points,
+          ss.positive_rows,
           ss.eligible_rows,
           ss.positive_reach,
           ss.round_point_share,
@@ -3794,6 +3944,7 @@ export async function getSubmissionFactsData(
         join selected_rounds sr on sr.id = ss.round_id
         join submissions sub on sub.id = ss.id
       ),
+      ${actualVoterSongFactsCtes()},
       player_appeal_base as (
         select
           ss.submitter_id as "playerId",
@@ -3810,21 +3961,17 @@ export async function getSubmissionFactsData(
         having count(*) >= 3
           and count(distinct ss.round_id) >= (select minimum_rounds from scope_meta)
       ),
-      player_appeal as (
+      player_appeal_percentiles as (
         select
           base.*,
-          (
-            (
-              base."avgPositiveReach"
-              - avg(base."avgPositiveReach") over ()
-            ) / nullif(stddev_pop(base."avgPositiveReach") over (), 0)
-            -
-            (
-              base."avgRoundPointShare"
-              - avg(base."avgRoundPointShare") over ()
-            ) / nullif(stddev_pop(base."avgRoundPointShare") over (), 0)
-          )::double precision as "appealSpread"
+          ${midpointPercentileSql(sql`base."avgPositiveReach"`)} as "reachPercentile",
+          ${midpointPercentileSql(sql`base."avgRoundPointShare"`)} as "sharePercentile"
         from player_appeal_base base
+      ),
+      player_appeal as (
+        -- Remove floating-point residue so equal rank gaps use the tie-breakers.
+        select *, round(("reachPercentile" - "sharePercentile")::numeric, 10)::double precision as "appealSpread"
+        from player_appeal_percentiles
       ),
       crowd_pleaser_players as (
         select *
@@ -3843,6 +3990,7 @@ export async function getSubmissionFactsData(
       song_appeal_base as (
         select
           ss.id as "songId",
+          ss.spotify_uri as "spotifyUri",
           ss.song_title as title,
           ss.artist_name as artist,
           ss.submitter_id as "submitterId",
@@ -3861,21 +4009,16 @@ export async function getSubmissionFactsData(
           and ss.round_point_share is not null
           and ss.eligible_rows >= 5
       ),
-      song_appeal as (
+      song_appeal_percentiles as (
         select
           base.*,
-          (
-            (
-              base."positiveReach"
-              - avg(base."positiveReach") over ()
-            ) / nullif(stddev_pop(base."positiveReach") over (), 0)
-            -
-            (
-              base."roundPointShare"
-              - avg(base."roundPointShare") over ()
-            ) / nullif(stddev_pop(base."roundPointShare") over (), 0)
-          )::double precision as "appealSpread"
+          ${midpointPercentileSql(sql`base."positiveReach"`)} as "reachPercentile",
+          ${midpointPercentileSql(sql`base."roundPointShare"`)} as "sharePercentile"
         from song_appeal_base base
+      ),
+      song_appeal as (
+        select *, round(("reachPercentile" - "sharePercentile")::numeric, 10)::double precision as "appealSpread"
+        from song_appeal_percentiles
       ),
       thin_spread_songs as (
         select *
@@ -4136,6 +4279,14 @@ export async function getSubmissionFactsData(
           from cult_classic_songs
         ) as "cultClassicSongs",
         (
+          select coalesce(json_agg(to_jsonb(highest_average_vote_songs) order by "averageVotes" desc, points asc, title asc, "songId" asc), '[]'::json)
+          from highest_average_vote_songs
+        ) as "highestAverageVoteSongs",
+        (
+          select coalesce(json_agg(to_jsonb(lowest_average_vote_songs) order by "averageVotes" asc, points desc, title asc, "songId" asc), '[]'::json)
+          from lowest_average_vote_songs
+        ) as "lowestAverageVoteSongs",
+        (
           select coalesce(json_agg(to_jsonb(closest_races) order by "topTwoShareGap" asc, "maxRoundPointShare" asc, "leagueName" asc, "roundOrdinal" asc), '[]'::json)
           from closest_races
         ) as "closestRaces",
@@ -4158,6 +4309,12 @@ export async function getSubmissionFactsData(
   >(playlistBias.buckets);
 
   return {
+    highestAverageVoteSongs: jsonRows<ActualVoterSongFact>(
+      row?.highestAverageVoteSongs,
+    ),
+    lowestAverageVoteSongs: jsonRows<ActualVoterSongFact>(
+      row?.lowestAverageVoteSongs,
+    ),
     artistLoyalists: jsonRows<SubmissionFactsData["artistLoyalists"][number]>(
       row?.artistLoyalists,
     ),
@@ -4285,7 +4442,7 @@ export async function getCachedSongsData(
 ): Promise<SongsData> {
   "use cache";
   cacheLife("hours");
-  cacheTag(ANALYTICS_CACHE_TAG);
+  cacheTag(ANALYTICS_CACHE_TAG, "directory-appeal-percentiles-v2");
   return getSongsData(analyticsFilter(leagueKey, roundKey), {
     direction,
     page,
@@ -4304,7 +4461,7 @@ export async function getCachedPlayersData(
 ): Promise<PlayersData> {
   "use cache";
   cacheLife("hours");
-  cacheTag(ANALYTICS_CACHE_TAG);
+  cacheTag(ANALYTICS_CACHE_TAG, "directory-appeal-percentiles-v2");
   return getPlayersData(analyticsFilter(leagueKey, roundKey), {
     direction,
     search,
@@ -4346,9 +4503,19 @@ export async function getCachedSubmissionFactsData(
   leagueKey: string,
   roundKey: string,
 ): Promise<SubmissionFactsData> {
+  // Version the payload independently of materialized analytics so cached rows
+  // include song links and scope metadata when the facts presentation changes.
+  return getCachedSubmissionFactsPayload(leagueKey, roundKey, "midpoint-appeal-percentiles-v4");
+}
+
+async function getCachedSubmissionFactsPayload(
+  leagueKey: string,
+  roundKey: string,
+  payloadRevision: string,
+): Promise<SubmissionFactsData> {
   "use cache";
   cacheLife("hours");
-  cacheTag(ANALYTICS_CACHE_TAG);
+  cacheTag(ANALYTICS_CACHE_TAG, payloadRevision);
   return getSubmissionFactsData(analyticsFilter(leagueKey, roundKey));
 }
 

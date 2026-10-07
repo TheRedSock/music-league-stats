@@ -6,10 +6,8 @@ import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
-import { PendingLink } from "@/components/analytics/pending-link";
-import { SortableTableHead } from "@/components/analytics/sortable-table-head";
+import { PlayersTable } from "@/components/analytics/players-table";
 import { Container } from "@/components/layout/container";
-import { Badge } from "@/components/ui/badge";
 import { buttonStyles } from "@/components/ui/button";
 import {
   Card,
@@ -19,17 +17,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  TruncatedCell,
-} from "@/components/ui/table";
-import {
-  buildAnalyticsHref,
-  defaultPlayerSortDirection,
   encodeScopeIds,
   getCachedFilterOptions,
   getCachedPlayersData,
@@ -38,7 +25,6 @@ import {
   parsePlayerSort,
   parsePlayerSortDirection,
   parseSearch,
-  playerPath,
   resolveAnalyticsFilter,
   selectedFilterLabel,
   scopeQueryParams,
@@ -61,11 +47,8 @@ const sortLabels = {
   percentile: "Average percentile",
   wins: "Round wins",
   "top-quartile": "Top quartile rate",
+  "appeal-spread": "Reach vs share spread",
 } as const;
-
-function value(value: number | null, digits = 2): string {
-  return value === null ? "—" : value.toFixed(digits);
-}
 
 export default async function PlayersPage({
   searchParams,
@@ -157,6 +140,7 @@ export default async function PlayersPage({
               <span className="sr-only">Sort players</span>
               <select
                 className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40"
+                key={sort}
                 defaultValue={sort}
                 name="sort"
               >
@@ -186,117 +170,7 @@ export default async function PlayersPage({
 
       {data.rows.length ? (
         <Card className="mt-3 overflow-hidden">
-          <Table className="table-fixed">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-14">Rank</TableHead>
-                <SortableTableHead
-                  activeDirection={direction}
-                  activeSort={sort}
-                  className="w-[18%]"
-                  defaultDirection={defaultPlayerSortDirection("name")}
-                  params={currentParams}
-                  path="/players"
-                  sortKey="name"
-                >
-                  Player
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[9%]" defaultDirection={defaultPlayerSortDirection("points")} params={currentParams} path="/players" sortKey="points">
-                  Points
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[8%]" defaultDirection={defaultPlayerSortDirection("songs")} params={currentParams} path="/players" sortKey="songs">
-                  Songs
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[8%]" defaultDirection={defaultPlayerSortDirection("rounds")} params={currentParams} path="/players" sortKey="rounds">
-                  Rounds
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultPlayerSortDirection("points-per-song")} params={currentParams} path="/players" sortKey="points-per-song" title="Eligible points received divided by submitted songs.">
-                  Pts / song
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[9%] xl:table-cell" defaultDirection={defaultPlayerSortDirection("points-per-voter")} params={currentParams} path="/players" sortKey="points-per-voter" title="Eligible points received divided by eligible vote opportunities.">
-                  Pts / voter
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[12%]" defaultDirection={defaultPlayerSortDirection("performance")} params={currentParams} path="/players" sortKey="performance" title="Average of round-local actual points divided by expected points from eligible ballot budgets.">
-                  Avg round index
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[10%] 2xl:table-cell" defaultDirection={defaultPlayerSortDirection("percentile")} params={currentParams} path="/players" sortKey="percentile">
-                  Avg percentile
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[7%]" defaultDirection={defaultPlayerSortDirection("wins")} params={currentParams} path="/players" sortKey="wins">
-                  Wins
-                </SortableTableHead>
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="hidden w-[10%] lg:table-cell" defaultDirection={defaultPlayerSortDirection("top-quartile")} params={currentParams} path="/players" sortKey="top-quartile">
-                  Top quartile
-                </SortableTableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.rows.map((player) => (
-                  <TableRow key={player.id}>
-                    <TableCell className="font-mono text-zinc-600">
-                      {player.performanceRank === null
-                        ? "—"
-                        : String(player.performanceRank).padStart(2, "0")}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <PendingLink
-                          className="truncate font-medium text-zinc-100 hover:text-lime-200"
-                          href={buildAnalyticsHref(
-                            playerPath(player),
-                            currentParams,
-                            { dir: null, q: null, sort: null },
-                          )}
-                          pendingLabel={`Loading ${player.name}`}
-                        >
-                          <TruncatedCell title={player.name}>
-                            {player.name}
-                          </TruncatedCell>
-                        </PendingLink>
-                      {player.provisional ? (
-                        <Badge className="shrink-0" variant="muted">
-                          Provisional
-                        </Badge>
-                      ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-white">
-                      {player.totalPoints.toLocaleString()}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {player.submissions}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {player.enteredRounds}
-                    </TableCell>
-                    <TableCell className="hidden text-right font-mono xl:table-cell">
-                      {value(player.pointsPerSubmission)}
-                    </TableCell>
-                    <TableCell className="hidden text-right font-mono xl:table-cell">
-                      {value(player.pointsPerEligibleVoter)}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-lime-200">
-                      {player.provisional
-                        ? "—"
-                        : `${value(player.averageRoundIndex)}×`}
-                    </TableCell>
-                    <TableCell className="hidden text-right font-mono 2xl:table-cell">
-                      {player.averageRoundPercentile === null
-                        ? "—"
-                        : `${player.averageRoundPercentile.toFixed(0)}th`}
-                    </TableCell>
-                    <TableCell className="text-right font-mono">
-                      {player.roundWins}
-                    </TableCell>
-                    <TableCell className="hidden text-right font-mono lg:table-cell">
-                      {player.topQuartileRate === null
-                        ? "—"
-                        : `${(player.topQuartileRate * 100).toFixed(0)}%`}
-                    </TableCell>
-                  </TableRow>
-                ))}
-            </TableBody>
-          </Table>
+          <PlayersTable currentParams={currentParams} direction={direction} rows={data.rows} sort={sort} />
         </Card>
       ) : (
         <div className="mt-3">
@@ -316,9 +190,11 @@ export default async function PlayersPage({
           <CardTitle className="text-sm">Participation and comparison</CardTitle>
           <CardDescription>
             A player is ranked only after the selected minimum number of
-            entered rounds (default three). Provisional is a sample-size label,
+            entered rounds (adaptive to the scope). Provisional is a sample-size label,
             not a quality judgment. Round wins include ties; top-quartile rate
-            uses each round&apos;s local point percentile.
+            uses each round&apos;s local point percentile. Reach vs share spread
+            uses the same qualified player population as Facts. Columns lets
+            you add average percentile and top quartile, which start hidden.
           </CardDescription>
         </CardHeader>
       </Card>

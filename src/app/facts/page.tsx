@@ -36,6 +36,7 @@ import {
   truncateRoundName,
   type QueryValue,
   type SearchParams,
+  type SongSubmissionFact,
   type SubmissionFactsData,
 } from "@/lib/analytics";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
@@ -48,16 +49,18 @@ export const metadata: Metadata = {
 function rankedFactList<T>({
   rows,
   render,
+  rank,
 }: {
   rows: T[];
   render: (row: T, index: number) => ReactNode;
+  rank?: (row: T) => number;
 }) {
   return (
     <ol className="divide-y divide-white/[0.06]">
       {rows.map((row, index) => (
         <li className="grid grid-cols-[2rem_1fr] gap-3 py-3" key={index}>
           <span className="font-mono text-xs text-zinc-600">
-            {String(index + 1).padStart(2, "0")}
+            {String(rank ? rank(row) : index + 1).padStart(2, "0")}
           </span>
           <div className="min-w-0">{render(row, index)}</div>
         </li>
@@ -76,9 +79,9 @@ function ratio(value: number | null | undefined, digits = 2): string {
   return value.toFixed(digits);
 }
 
-function signedSpread(value: number | null | undefined, digits = 2): string {
+function signedSpread(value: number | null | undefined, digits = 1): string {
   if (value == null || Number.isNaN(value)) return "—";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}σ`;
+  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}pp`;
 }
 
 function correlationLabel(value: number | null): string {
@@ -139,7 +142,7 @@ function FactTable({
   rows: ReactNode[][];
 }) {
   return (
-    <Table className="table-fixed">
+    <Table className={headers.length >= 7 ? "min-w-[44rem] table-fixed" : "table-fixed"}>
       <TableHeader>
         <TableRow>
           {headers.map((header) => (
@@ -251,6 +254,53 @@ function RoundScopeLinks({
   );
 }
 
+function SongFactHeading({ artist, spotifyUri, title }: {
+  artist: string;
+  spotifyUri: string;
+  title: string;
+}) {
+  const href = spotifyTrackUrl(spotifyUri);
+  const content = (
+    <>
+      <span className="max-w-[40%] shrink truncate" title={artist}>{artist}</span>
+      <span className="shrink-0 text-zinc-500">-</span>
+      <span className="min-w-0 flex-1 truncate" title={title}>{title}</span>
+      {href ? <ExternalLink aria-hidden="true" className="size-3 shrink-0" /> : null}
+    </>
+  );
+  const className = "flex min-w-0 items-center gap-1 text-sm font-medium text-zinc-100";
+  return href ? (
+    <a className={`${className} hover:text-lime-200`} href={href} rel="noreferrer" target="_blank">
+      {content}
+    </a>
+  ) : <p className={className}>{content}</p>;
+}
+
+function SongFactPreview({ row, metrics, metricsTitle, filterParams }: {
+  row: SongSubmissionFact;
+  metrics: string;
+  metricsTitle?: string;
+  filterParams: Record<string, QueryValue>;
+}) {
+  return (
+    <div className="@container min-w-0">
+      <SongFactHeading artist={row.artist} spotifyUri={row.spotifyUri} title={row.title} />
+      <p className="mt-0.5 truncate text-xs text-zinc-500">
+        <RoundScopeLinks {...row} />
+      </p>
+      <div className="mt-0.5 flex min-w-0 items-center gap-1 whitespace-nowrap text-xs text-zinc-500">
+        <span className="min-w-0 flex-1 truncate" title={row.submitterName}>
+          <PlayerLink filterParams={filterParams} id={row.submitterId} name={row.submitterName} />
+        </span>
+        <span className="shrink-0 text-zinc-600">·</span>
+        <span className="shrink-0 font-mono text-[clamp(0.5rem,4.8cqw,0.6875rem)]" title={metricsTitle ?? metrics}>
+          {metrics}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default async function FactsPage({
   searchParams,
 }: {
@@ -311,7 +361,7 @@ export default async function FactsPage({
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
-          description={`Above-average reach for below-average round share (spread = z_reach − z_share). Broad mild appeal. ${participationNote}`}
+          description={`Average reach ranks higher than average round share among qualified players in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint. ${participationNote}`}
           dialog={
             <FactTable
               headers={[
@@ -319,6 +369,8 @@ export default async function FactsPage({
                 { align: "right", label: "Songs" },
                 { align: "right", label: "Reach" },
                 { align: "right", label: "Share" },
+                { align: "right", label: "R pctl" },
+                { align: "right", label: "S pctl" },
                 { align: "right", label: "Spread" },
               ]}
               rows={data.crowdPleaserPlayers.map((row) => [
@@ -331,6 +383,8 @@ export default async function FactsPage({
                 row.songs,
                 percent(row.avgPositiveReach),
                 percent(row.avgRoundPointShare),
+                ratio(row.reachPercentile, 1),
+                ratio(row.sharePercentile, 1),
                 signedSpread(row.appealSpread),
               ])}
             />
@@ -361,7 +415,7 @@ export default async function FactsPage({
         </FactPanel>
 
         <FactPanel
-          description={`Below-average reach for above-average round share (negative z-spread). Concentrated devotees. ${participationNote}`}
+          description={`Average round share ranks higher than average reach among qualified players in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint. ${participationNote}`}
           dialog={
             <FactTable
               headers={[
@@ -369,6 +423,8 @@ export default async function FactsPage({
                 { align: "right", label: "Songs" },
                 { align: "right", label: "Reach" },
                 { align: "right", label: "Share" },
+                { align: "right", label: "R pctl" },
+                { align: "right", label: "S pctl" },
                 { align: "right", label: "Spread" },
               ]}
               rows={data.nicheDevotionPlayers.map((row) => [
@@ -381,6 +437,8 @@ export default async function FactsPage({
                 row.songs,
                 percent(row.avgPositiveReach),
                 percent(row.avgRoundPointShare),
+                ratio(row.reachPercentile, 1),
+                ratio(row.sharePercentile, 1),
                 signedSpread(row.appealSpread),
               ])}
             />
@@ -413,13 +471,15 @@ export default async function FactsPage({
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
-          description="Everyone kinda liked it — high reach z-score relative to round-share z-score in this scope."
+          description="Broad mild appeal: reach ranks higher than round share among qualifying songs in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint."
           dialog={
             <FactTable
               headers={[
                 { label: "Song", width: "w-[40%]" },
                 { align: "right", label: "Reach" },
                 { align: "right", label: "Share" },
+                { align: "right", label: "R pctl" },
+                { align: "right", label: "S pctl" },
                 { align: "right", label: "Spread" },
                 { align: "right", label: "Pts" },
               ]}
@@ -434,6 +494,8 @@ export default async function FactsPage({
                 </div>,
                 percent(row.positiveReach),
                 percent(row.roundPointShare),
+                ratio(row.reachPercentile, 1),
+                ratio(row.sharePercentile, 1),
                 signedSpread(row.appealSpread),
                 row.points,
               ])}
@@ -446,35 +508,26 @@ export default async function FactsPage({
           {rankedFactList({
             rows: previewRows(data.thinSpreadSongs),
             render: (row) => (
-              <>
-                <p className="truncate text-sm font-medium text-zinc-100">
-                  {row.title}
-                </p>
-                <RoundScopeLinks
-                  leagueMusicLeagueId={row.leagueMusicLeagueId}
-                  leagueName={row.leagueName}
-                  leagueSlug={row.leagueSlug}
-                  roundName={row.roundName}
-                  roundOrdinal={row.roundOrdinal}
-                  sourceRoundId={row.sourceRoundId}
-                />
-                <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  {row.artist} · reach {percent(row.positiveReach)} · share{" "}
-                  {percent(row.roundPointShare)}
-                </p>
-              </>
+              <SongFactPreview
+                filterParams={filterParams}
+                row={row}
+                metrics={`R${percent(row.positiveReach)} S${percent(row.roundPointShare)} ${signedSpread(row.appealSpread, 1)} ${row.points}p`}
+                metricsTitle={`Reach ${percent(row.positiveReach)} (${ratio(row.reachPercentile, 1)} percentile) · share ${percent(row.roundPointShare)} (${ratio(row.sharePercentile, 1)} percentile) · spread ${signedSpread(row.appealSpread)} · ${row.points} points`}
+              />
             ),
           })}
         </FactPanel>
 
         <FactPanel
-          description="A cult classic — high round-share z-score relative to reach z-score in this scope."
+          description="Concentrated devotees: round share ranks higher than reach among qualifying songs in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint."
           dialog={
             <FactTable
               headers={[
                 { label: "Song", width: "w-[40%]" },
                 { align: "right", label: "Reach" },
                 { align: "right", label: "Share" },
+                { align: "right", label: "R pctl" },
+                { align: "right", label: "S pctl" },
                 { align: "right", label: "Spread" },
                 { align: "right", label: "Pts" },
               ]}
@@ -489,6 +542,8 @@ export default async function FactsPage({
                 </div>,
                 percent(row.positiveReach),
                 percent(row.roundPointShare),
+                ratio(row.reachPercentile, 1),
+                ratio(row.sharePercentile, 1),
                 signedSpread(row.appealSpread),
                 row.points,
               ])}
@@ -501,26 +556,75 @@ export default async function FactsPage({
           {rankedFactList({
             rows: previewRows(data.cultClassicSongs),
             render: (row) => (
-              <>
-                <p className="truncate text-sm font-medium text-zinc-100">
-                  {row.title}
-                </p>
-                <RoundScopeLinks
-                  leagueMusicLeagueId={row.leagueMusicLeagueId}
-                  leagueName={row.leagueName}
-                  leagueSlug={row.leagueSlug}
-                  roundName={row.roundName}
-                  roundOrdinal={row.roundOrdinal}
-                  sourceRoundId={row.sourceRoundId}
-                />
-                <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  {row.artist} · reach {percent(row.positiveReach)} · share{" "}
-                  {percent(row.roundPointShare)}
-                </p>
-              </>
+              <SongFactPreview
+                filterParams={filterParams}
+                row={row}
+                metrics={`R${percent(row.positiveReach)} S${percent(row.roundPointShare)} ${signedSpread(row.appealSpread, 1)} ${row.points}p`}
+                metricsTitle={`Reach ${percent(row.positiveReach)} (${ratio(row.reachPercentile, 1)} percentile) · share ${percent(row.roundPointShare)} (${ratio(row.sharePercentile, 1)} percentile) · spread ${signedSpread(row.appealSpread)} · ${row.points} points`}
+              />
             ),
           })}
         </FactPanel>
+      </section>
+
+      <section className="mt-4 grid gap-4 lg:grid-cols-2">
+        {[
+          { title: "Highest average votes per actual voter", rows: data.highestAverageVoteSongs },
+          { title: "Lowest average votes per actual voter", rows: data.lowestAverageVoteSongs },
+        ].map(({ title, rows }) => (
+          <FactPanel
+            description={`Total points divided by positive voters; no minimum count. Unvoted songs count as 0. Equal averages share a rank, with ${title.startsWith("Highest") ? "fewer" : "more"} total points first.`}
+            dialog={
+              <FactTable
+                headers={[
+                  { align: "right", label: "Rank", width: "w-[10%]" },
+                  { label: "Song", width: "w-[45%]" },
+                  { align: "right", label: "Avg/voter" },
+                  { align: "right", label: "Voters" },
+                  { align: "right", label: "Pts" },
+                ]}
+                rows={rows.map((row) => [
+                  row.rank,
+                  <div key="s">
+                    <p className="truncate font-medium text-zinc-100">
+                      <SpotifyTitle spotifyUri={row.spotifyUri} title={row.title} />
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                      {row.artist} · {row.submitterName}
+                    </p>
+                    <RoundScopeLinks
+                      leagueMusicLeagueId={row.leagueMusicLeagueId}
+                      leagueName={row.leagueName}
+                      leagueSlug={row.leagueSlug}
+                      roundName={row.roundName}
+                      roundOrdinal={row.roundOrdinal}
+                      sourceRoundId={row.sourceRoundId}
+                    />
+                  </div>,
+                  ratio(row.averageVotes),
+                  row.actualVoters,
+                  row.points,
+                ])}
+              />
+            }
+            itemCount={rows.length}
+            key={title}
+            title={title}
+          >
+            {rankedFactList({
+              rows: previewRows(rows),
+              rank: (row) => row.rank,
+              render: (row) => (
+                <SongFactPreview
+                  filterParams={filterParams}
+                  row={row}
+                  metrics={`${ratio(row.averageVotes)}/v ${row.points}p ${row.actualVoters}v`}
+                  metricsTitle={`${ratio(row.averageVotes)} average per actual voter · ${row.points} points · ${row.actualVoters} voters`}
+                />
+              ),
+            })}
+          </FactPanel>
+        ))}
       </section>
 
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -983,11 +1087,12 @@ export default async function FactsPage({
             rows: previewRows(data.repeatedSongs),
             render: (row) => (
               <>
-                <p className="truncate text-sm font-medium text-zinc-100">
-                  <SpotifyTitle spotifyUri={row.spotifyUri} title={row.title} />
+                <SongFactHeading artist={row.artist} spotifyUri={row.spotifyUri} title={row.title} />
+                <p className="mt-0.5 truncate text-xs text-zinc-500">
+                  {row.leagues} leagues · {row.rounds} rounds
                 </p>
                 <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  {row.artist} · {row.submissions}x · {row.submitters} submitters
+                  {row.submitters} submitters · {row.submissions}×
                 </p>
               </>
             ),
@@ -1024,14 +1129,7 @@ export default async function FactsPage({
           {rankedFactList({
             rows: previewRows(data.longestTitles),
             render: (row) => (
-              <>
-                <p className="truncate text-sm font-medium text-zinc-100">
-                  {row.title}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  {row.artist} · {row.length} chars · {row.submitterName}
-                </p>
-              </>
+              <SongFactPreview filterParams={filterParams} row={row} metrics={`${row.length} chars`} />
             ),
           })}
         </FactPanel>
@@ -1066,14 +1164,7 @@ export default async function FactsPage({
           {rankedFactList({
             rows: previewRows(data.shortestTitles),
             render: (row) => (
-              <>
-                <p className="truncate text-sm font-medium text-zinc-100">
-                  {row.title}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-zinc-500">
-                  {row.artist} · {row.length} chars · {row.submitterName}
-                </p>
-              </>
+              <SongFactPreview filterParams={filterParams} row={row} metrics={`${row.length} chars`} />
             ),
           })}
         </FactPanel>

@@ -41,7 +41,7 @@ const sections = [
   },
   {
     title: "What is support z?",
-    body: "Support z is the standardized surplus under the same variance model: (points − expected) / sqrt(φ × expected). It answers how surprising the result is if the song were only at expected support, not what the best estimate of the true multiplier is. A 2.0× result in a large round scores a higher z than the same 2.0× in a tiny round. On the Songs page it is shown by default next to Support (EB); use Columns to hide it.",
+    body: "Support z is the standardized surplus under the same variance model: (points − expected) / sqrt(φ × expected). It answers how surprising the result is if the song were only at expected support, not what the best estimate of the true multiplier is. A 2.0× result in a large round scores a higher z than the same 2.0× in a tiny round. On the Songs page it is optional via Columns; reach vs share spread is shown by default alongside Support (EB).",
   },
   {
     title: "When should I use raw SI vs EB vs z?",
@@ -81,7 +81,7 @@ const sections = [
   },
   {
     title: "What is the Facts page?",
-    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape (crowd-pleasers vs niche devotion via standardized reach vs share), round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Player appeal panels use the same adaptive participation floor (closer to half for small scopes, easing logarithmically to one third at full scope) as other rankings. It uses the same league scope filter as the analytics pages.",
+    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape, round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Thin-spread songs and Crowd pleasers rank by reach percentile minus round-share percentile; Cult classics and Niche devotion rank by the most negative gaps. Spread is expressed in percentile points (pp), with tied values assigned their midpoint percentile. Song percentiles compare qualifying songs in the selected scope; player percentiles compare qualified players using their average reach and share. Player appeal panels use the same adaptive participation floor (closer to half for small scopes, easing logarithmically to one third at full scope) as other rankings. It uses the same league scope filter as the analytics pages.",
   },
   {
     title: "How are playlist-position quartiles assigned?",

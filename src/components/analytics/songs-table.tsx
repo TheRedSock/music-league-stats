@@ -55,7 +55,7 @@ export function SongsTable({
         <SongsColumnPicker columns={columns} onToggle={toggle} />
       </div>
       <div className="overflow-x-auto border-t border-white/[0.06]">
-        <Table className="table-fixed">
+        <Table className="table-fixed" style={{ minWidth: 640 + columns.length * 100 }}>
           <TableHeader>
             <TableRow>
               <SortableTableHead
@@ -133,6 +133,11 @@ export function SongsTable({
                   Pts / voter
                 </SortableTableHead>
               ) : null}
+              {isVisible("points-per-actual-voter") ? (
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("points-per-actual-voter")} params={currentParams} path="/songs" sortKey="points-per-actual-voter" title="Points divided by voters who awarded at least one point. No actual voters gives 0.">
+                  Avg pts / actual voter
+                </SortableTableHead>
+              ) : null}
               {isVisible("round-share") ? (
                 <SortableTableHead
                   activeDirection={direction}
@@ -161,6 +166,11 @@ export function SongsTable({
                   title="Empirical-Bayes shrunk support index. Shrinks noisy small-sample extremes toward 1.0 using Var(SI)=τ²+φ/E estimated from the corpus."
                 >
                   Support (EB)
+                </SortableTableHead>
+              ) : null}
+              {isVisible("appeal-spread") ? (
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("appeal-spread")} params={currentParams} path="/songs" sortKey="appeal-spread" title="Reach percentile minus round-share percentile across qualifying songs in this scope (at least 5 eligible voters), in percentage points. Positive = thin spread; negative = cult classic.">
+                  Reach vs share spread
                 </SortableTableHead>
               ) : null}
               {isVisible("support-z") ? (
@@ -303,6 +313,11 @@ export function SongsTable({
                     {song.pointsPerEligibleVoter?.toFixed(2) ?? "—"}
                   </TableCell>
                 ) : null}
+                {isVisible("points-per-actual-voter") ? (
+                  <TableCell className="text-right font-mono">
+                    {song.pointsPerActualVoter?.toFixed(2) ?? "—"}
+                  </TableCell>
+                ) : null}
                 {isVisible("round-share") ? (
                   <TableCell className="text-right font-mono">
                     {percent(song.roundPointShare)}
@@ -311,6 +326,11 @@ export function SongsTable({
                 {isVisible("support-eb") ? (
                   <TableCell className="text-right font-mono text-lime-200">
                     {song.supportIndexEb?.toFixed(2) ?? "—"}×
+                  </TableCell>
+                ) : null}
+                {isVisible("appeal-spread") ? (
+                  <TableCell className="text-right font-mono">
+                    {song.appealSpread == null ? "—" : `${song.appealSpread > 0 ? "+" : ""}${song.appealSpread.toFixed(1)} pp`}
                   </TableCell>
                 ) : null}
                 {isVisible("support-z") ? (

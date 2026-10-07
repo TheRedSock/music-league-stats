@@ -49,6 +49,8 @@ const sortLabels = {
   "positive-reach": "Positive vote reach",
   "round-share": "Round share",
   "support-eb": "Support index (EB)",
+  "points-per-actual-voter": "Average points per actual voter",
+  "appeal-spread": "Reach vs share spread",
   "support-z": "Support z",
   "normalized-index": "Support index (raw)",
   percentile: "Round percentile",
@@ -152,6 +154,7 @@ export default async function SongsPage({
               <span className="sr-only">Sort songs</span>
               <select
                 className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
+                key={sort}
                 defaultValue={sort}
                 name="sort"
               >
@@ -249,7 +252,10 @@ export default async function SongsPage({
             1.0 using sample-size variance estimated from the corpus, so
             small-room extremes are not overweighted in cross-round rankings.
             Support z is the standardized surplus under the same variance model.
-            Use Columns to show raw support index or round percentile.
+            Reach vs share spread compares their scope percentiles in percentage points.
+            Positive means broader reach relative to point share; negative means
+            more concentrated support. Use Columns to show average points per
+            actual voter, Support z, raw support index or round percentile.
           </CardDescription>
         </CardHeader>
       </Card>

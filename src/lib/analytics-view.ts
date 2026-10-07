@@ -11,6 +11,8 @@ export const songSorts = [
   "scope",
   "points",
   "points-per-voter",
+  "points-per-actual-voter",
+  "appeal-spread",
   "positive-reach",
   "round-share",
   "support-eb",
@@ -20,6 +22,25 @@ export const songSorts = [
   "newest",
 ] as const;
 export type SongSort = (typeof songSorts)[number];
+
+export const playerSorts = [
+  "performance",
+  "points",
+  "songs",
+  "rounds",
+  "name",
+  "points-per-song",
+  "points-per-voter",
+  "percentile",
+  "wins",
+  "top-quartile",
+  "appeal-spread",
+] as const;
+export type PlayerSort = (typeof playerSorts)[number];
+
+export function defaultPlayerSortDirection(sort: PlayerSort): SortDirection {
+  return sort === "name" ? "asc" : "desc";
+}
 
 export const sortDirections = ["asc", "desc"] as const;
 export type SortDirection = (typeof sortDirections)[number];
