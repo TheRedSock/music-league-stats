@@ -50,3 +50,18 @@ a {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Keep the anchor destination recognizable, including near the footer. */
+.faq-topic[data-anchor-target] {
+  border-color: rgb(190 242 100 / 0.5);
+  background: rgb(190 242 100 / 0.04);
+  box-shadow: -12px 0 0 rgb(190 242 100 / 0.12);
+  animation: faq-arrival 1.5s ease-out;
+}
+@keyframes faq-arrival {
+  from { background: rgb(190 242 100 / 0.18); }
+  to { background: rgb(190 242 100 / 0.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .faq-topic[data-anchor-target] { animation: none; }
+}

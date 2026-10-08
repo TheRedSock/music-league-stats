@@ -4,7 +4,7 @@ import { useGraphSetting, graphText } from "./use-graph-setting";
 import Link from "next/link";
 import { tableColumnHelp } from "@/lib/table-help";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { CartesianGrid, Line, LineChart, LabelList, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, usePlotArea } from "recharts";
 import { Button } from "@/components/ui/button";
 import { buildProgression, progressionPointTicks, progressionTopPlayerIds, type ProgressionRow } from "@/lib/score-progression";
@@ -25,19 +25,21 @@ export function ProgressionView({ rows, leagues, subset }: { rows: ProgressionRo
   const leagueId = availableLeagues.some(({ id }) => id === selected) ? selected : availableLeagues[0]?.id;
   const leagueRows = rows.filter((row) => row.leagueId === leagueId);
   if (!rows.length) return <GraphEmptyState message="No scored rounds in this scope yet. Progression appears once votes have been imported." />;
-  return <div className="space-y-4">
-    {availableLeagues.length > 1 && <select aria-label="League" className="block w-full max-w-md truncate rounded-lg border border-white/10 bg-zinc-950 p-2 text-sm text-zinc-100" value={leagueId} onChange={(event) => {
+  const leagueControl = availableLeagues.length > 1 ? <select aria-label="League" title={availableLeagues.find(league => league.id === leagueId)?.name} className="block w-full max-w-xl truncate rounded-lg border border-white/10 bg-zinc-950 p-2 text-sm text-zinc-100" value={leagueId} onChange={(event) => {
       const nextLeague = event.target.value;
       setSelected(nextLeague);
       if (!rows.some((row) => row.leagueId === nextLeague && row.playerId === focus)) setFocus("");
     }}>
-      {availableLeagues.map(({ id, slug, name }) => <option key={id} value={id} title={`${slug} - ${name}`}>{slug} - {name.length > 42 ? `${name.slice(0, 41).trimEnd()}…` : name}</option>)}
-    </select>}
-    <LeagueProgression key={`${leagueId}:${rows.map((row) => row.roundId).join(",")}`} rows={leagueRows} subset={subset} mode={mode} setMode={setMode} selectedFocus={focus} setFocus={setFocus} topLimit={topLimit} setTopLimit={setTopLimit} />
+      {availableLeagues.map(({ id, slug, name }) => <option key={id} value={id} title={`${slug} - ${name}`}>{slug} · {name}</option>)}
+    </select> : null;
+
+  return <div>
+    <LeagueProgression leagueControl={leagueControl} key={`${leagueId}:${rows.map((row) => row.roundId).join(",")}`} rows={leagueRows} subset={subset} mode={mode} setMode={setMode} selectedFocus={focus} setFocus={setFocus} topLimit={topLimit} setTopLimit={setTopLimit} />
   </div>;
 }
 
-function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocus, topLimit, setTopLimit }: {
+function LeagueProgression({ leagueControl, rows, subset, mode, setMode, selectedFocus, setFocus, topLimit, setTopLimit }: {
+  leagueControl: ReactNode;
   rows: ProgressionRow[];
   subset: boolean;
   mode: Mode;
@@ -69,25 +71,27 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
     return rounds.length ? (rounds.reduce((sum, round) => sum + round.values.find((p) => p.id === id)!.points, 0) / rounds.length).toFixed(1) : "—";
   };
   return <section className="rounded-lg border border-white/10 bg-zinc-950/40 p-4 sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div><h2 className="text-lg font-semibold text-white">{rows[0].leagueName}</h2>
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <div className="min-w-0">{leagueControl ?? <h2 className="text-lg font-semibold text-white">{rows[0].leagueName}</h2>}
         <p className="mt-1 text-sm text-zinc-400">{timeline.length} scored rounds · {players.length} players</p></div>
+      <div>
       <div role="group" aria-label="Progression metric" className="flex flex-wrap gap-1">
         {(Object.keys(modes) as Mode[]).map((key) => <Button key={key} size="sm" variant={mode === key ? "primary" : "ghost"} aria-pressed={mode === key} onClick={() => setMode(key)}>{modes[key]}</Button>)}
       </div>
-    </div>
-    <label className="mt-4 flex flex-wrap items-center gap-2 text-sm text-zinc-400">Show
+    <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-zinc-400">Show
       <select aria-label="Top players by final standing" className="rounded-lg border border-white/10 bg-zinc-950 p-2 text-zinc-100" value={topLimit ?? "all"} onChange={(event) => setTopLimit(event.target.value === "all" ? null : Number(event.target.value))}>
         <option value="all">All players</option>
         {Array.from({ length: Math.max(players.length, topLimit ?? 0) }, (_, index) => index + 1).map((limit) => <option key={limit} value={limit}>Top {limit}</option>)}
       </select>
       <span className="text-xs">Includes ties · {visiblePlayers.length} shown</span>
-      <select aria-label="Add a player" className="max-w-full rounded-md border border-white/10 bg-zinc-950 p-2" value="" onChange={event => { if (event.target.value) setExtraPlayers([...new Set([...extraPlayers.split(",").filter(Boolean), event.target.value])].join(",")); }}>
+      <select aria-label="Add a player" className="max-w-48 truncate rounded-md border border-white/10 bg-zinc-950 p-2" value="" onChange={event => { if (event.target.value) setExtraPlayers([...new Set([...extraPlayers.split(",").filter(Boolean), event.target.value])].join(",")); }}>
         <option value="">Add a player…</option>{players.filter(player => !visibleIds.has(player.id)).map(player => <option key={player.id} value={player.id}>{player.name}</option>)}
       </select>
       {extraPlayers ? <Button size="sm" variant="ghost" onClick={() => setExtraPlayers("")}>Reset added players</Button> : null}
-    </label>
-    <p className="mt-3 text-xs text-zinc-400">{subset ? "Totals restart for the selected rounds. " : ""}Scored rounds only. Select a player to highlight their line.</p>
+    </div>
+      </div>
+    </div>
+    <p className="mt-4 text-xs text-zinc-400">{subset ? "Totals restart for the selected rounds. " : ""}Scored rounds only. Select a player to highlight their line.</p>
     <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Highlight player">
       <Button size="sm" variant={focus === "" ? "primary" : "ghost"} aria-pressed={!focus} onClick={() => setFocus("")}>All players</Button>
       {visiblePlayers.map((player) => <button key={player.id} type="button" aria-pressed={focus === player.id} onClick={() => setFocus(focus === player.id ? "" : player.id)} className="rounded-lg border border-white/10 px-2 py-1 text-xs focus-visible:outline-2 focus-visible:outline-lime-300" style={{ color: playerColor(player.id), opacity: focus && focus !== player.id ? 0.5 : 1 }}>{player.name}</button>)}

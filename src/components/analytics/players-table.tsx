@@ -26,23 +26,22 @@ function metric(player: PlayerDirectoryRow, column: PlayerTableColumnId): string
   }
 }
 const titles: Partial<Record<PlayerTableColumnId, string>> = {
-  "appeal-spread": "Percentile of average reach minus percentile of average round share among qualified players in this scope, in percentage points. At least 3 songs, each with 5 eligible voters, and the adaptive minimum rounds. Positive = crowd pleaser; negative = niche devotion.",
-  performance: "Average of round-local actual points divided by expected points from eligible ballot budgets.",
-  "points-per-song": "Eligible points received divided by submitted songs.",
-  "points-per-voter": "Eligible points received divided by eligible vote opportunities.",
+  "appeal-spread": "Positive: broader backing across voters. Negative: stronger backing from fewer voters.",
+  performance: "Average support across rounds. Above 1× means more points than an even share would give.",
+  "points-per-song": "Average points per submitted song.",
+  "points-per-voter": "Average points per chance to vote for this player’s songs, including zeroes.",
 };
 export function PlayersTable({ currentParams, direction, rows, sort }: {
   currentParams: Record<string, QueryValue>; direction: SortDirection; rows: PlayerDirectoryRow[]; sort: PlayerSort;
 }) {
-  const { columns: savedColumns, toggle } = usePlayerTableColumns();
+  const { columns: savedColumns } = usePlayerTableColumns();
   const columns = sort !== "name" && sort !== "points" && !savedColumns.includes(sort) ? [...savedColumns, sort] : savedColumns;
   return (
     <div>
-      <div className="flex justify-end px-4 py-3 sm:px-5"><PlayersColumnPicker columns={columns} onToggle={toggle} /></div>
-      <div className="overflow-x-auto border-t border-white/[0.06]">
+      <div className="overflow-x-auto">
         <Table className="table-fixed" style={{ minWidth: 340 + columns.length * 110 }}>
           <TableHeader><TableRow>
-            <TableHead className="w-24" title="Rank by average round index among qualified players, regardless of the table sort.">Adjusted rank</TableHead>
+            <TableHead className="w-14"><span className="sr-only">Row number</span></TableHead>
             <SortableTableHead activeDirection={direction} activeSort={sort} className="w-52" defaultDirection="asc" params={currentParams} path="/players" sortKey="name">Player</SortableTableHead>
             <SortableTableHead activeDirection={direction} activeSort={sort} align="right" defaultDirection="desc" params={currentParams} path="/players" sortKey="points">Points</SortableTableHead>
             {columns.map(column => (
@@ -51,9 +50,9 @@ export function PlayersTable({ currentParams, direction, rows, sort }: {
               </SortableTableHead>
             ))}
           </TableRow></TableHeader>
-          <TableBody>{rows.map(player => (
+          <TableBody>{rows.map((player, index) => (
             <TableRow key={player.id}>
-              <TableCell className="font-mono text-zinc-600">{player.performanceRank === null ? "—" : String(player.performanceRank).padStart(2, "0")}</TableCell>
+              <TableCell className="font-mono text-zinc-500">{index + 1}</TableCell>
               <TableCell>
                 <div className="flex min-w-0 items-center gap-2">
                   <PendingLink
@@ -83,4 +82,9 @@ export function PlayersTable({ currentParams, direction, rows, sort }: {
       </div>
     </div>
   );
+}
+
+export function PlayersTableControls() {
+  const { columns, toggle } = usePlayerTableColumns();
+  return <PlayersColumnPicker columns={columns} onToggle={toggle} />;
 }

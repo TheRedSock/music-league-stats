@@ -193,7 +193,7 @@ export function GraphsShell({
 
       {activeView !== "progression" ? <p className="mt-4 text-sm text-zinc-400">{active.description}</p> : null}
 
-      <div className="mt-6">{children}</div>
+      <div className="mt-4">{children}</div>
     </Container>
   );
 }

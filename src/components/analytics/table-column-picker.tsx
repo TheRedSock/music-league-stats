@@ -12,9 +12,10 @@ export function createTableColumnPicker<Id extends string>({
   labels: Record<Id, string>;
   defaults: Id[];
   storageKey: string;
-  legacyKey?: string;
+  legacyKey?: string | string[];
   migrate?: (columns: Id[]) => Id[];
 }) {
+  const legacyKeys = typeof legacyKey === "string" ? [legacyKey] : legacyKey ?? [];
   const listeners = new Set<() => void>();
   let cachedRaw: string | null | undefined;
   let cachedColumns = defaults;
@@ -34,14 +35,14 @@ export function createTableColumnPicker<Id extends string>({
     const raw = window.localStorage.getItem(storageKey);
     if (raw === cachedRaw) return cachedColumns;
     cachedRaw = raw;
-    const legacy = raw === null && legacyKey ? parse(window.localStorage.getItem(legacyKey)) : null;
+    const legacy = raw === null ? legacyKeys.map(key => parse(window.localStorage.getItem(key))).find(columns => columns !== null) : null;
     cachedColumns = parse(raw) ?? (legacy ? migrate?.(legacy) ?? legacy : defaults);
     return cachedColumns;
   }
   function subscribe(listener: () => void) {
     listeners.add(listener);
     const onStorage = (event: StorageEvent) => {
-      if (event.key === storageKey || event.key === legacyKey || event.key === null) {
+      if (event.key === storageKey || (event.key !== null && legacyKeys.includes(event.key)) || event.key === null) {
         cachedRaw = undefined;
         listener();
       }

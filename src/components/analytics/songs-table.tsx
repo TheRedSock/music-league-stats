@@ -6,8 +6,8 @@ import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
 import {
-  SongsColumnPicker,
   useSongTableColumns,
+  SONG_TABLE_COLUMN_IDS,
 } from "@/components/analytics/songs-column-picker";
 import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import { SortableTableHead } from "@/components/analytics/sortable-table-head";
@@ -16,6 +16,7 @@ import {
   TableBody,
   TableCell,
   TableHeader,
+  TableHead,
   TableRow,
 } from "@/components/ui/table";
 import type { SongAnalyticsRow } from "@/lib/analytics";
@@ -42,30 +43,31 @@ export function SongsTable({
   direction,
   rows,
   sort,
+  rowOffset = 0,
 }: {
   currentParams: Record<string, QueryValue>;
   direction: SortDirection;
   rows: SongAnalyticsRow[];
   sort: SongSort;
+  rowOffset?: number;
 }) {
-  const { columns, isVisible: savedVisible, toggle } = useSongTableColumns();
+  const { isVisible: savedVisible } = useSongTableColumns();
 
   const isVisible = (column: Parameters<typeof savedVisible>[0]) => savedVisible(column) || sort === column;
 
+  const visibleColumnCount = SONG_TABLE_COLUMN_IDS.filter(isVisible).length;
+
   return (
     <div>
-      <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
-        <span className="text-xs text-zinc-400">Scroll for more columns →</span>
-        <SongsColumnPicker columns={columns} onToggle={toggle} />
-      </div>
-      <div className="overflow-x-auto border-t border-white/[0.06]">
-        <Table className="table-fixed" style={{ minWidth: 720 + columns.length * 100 }}>
+      <div className="overflow-x-auto">
+        <Table className="table-fixed [&_td]:py-2.5" style={{ minWidth: 840 + visibleColumnCount * 120 }}>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-14"><span className="sr-only">Row number</span></TableHead>
               <SortableTableHead
                 activeDirection={direction}
                 activeSort={sort}
-                className="w-72"
+                className="w-[38%]"
                 defaultDirection={defaultSongSortDirection("title")}
                 params={currentParams}
                 path="/songs"
@@ -76,7 +78,7 @@ export function SongsTable({
               <SortableTableHead
                 activeDirection={direction}
                 activeSort={sort}
-                className="w-32"
+                className="w-[12%]"
                 defaultDirection={defaultSongSortDirection("submitter")}
                 params={currentParams}
                 path="/songs"
@@ -87,7 +89,7 @@ export function SongsTable({
               <SortableTableHead
                 activeDirection={direction}
                 activeSort={sort}
-                className="w-44"
+                className="w-[26%]"
                 defaultDirection={defaultSongSortDirection("scope")}
                 params={currentParams}
                 path="/songs"
@@ -112,12 +114,12 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[9%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("positive-reach")}
                   params={currentParams}
                   path="/songs"
                   sortKey="positive-reach"
-                  title="Share of eligible song-voter opportunities awarded at least one point; includes zeroes in the denominator."
+                  title="How many voters gave this song points."
                 >
                   Voters reached
                 </SortableTableHead>
@@ -127,18 +129,18 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[8%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("points-per-voter")}
                   params={currentParams}
                   path="/songs"
                   sortKey="points-per-voter"
-                  title="Eligible points divided by eligible voter opportunities."
+                  title="Average points from everyone who could vote for the song, including zeroes."
                 >
                   Pts / voter
                 </SortableTableHead>
               ) : null}
               {isVisible("points-per-actual-voter") ? (
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("points-per-actual-voter")} params={currentParams} path="/songs" sortKey="points-per-actual-voter" title="Points divided by voters who awarded at least one point. No actual voters gives 0.">
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-32" defaultDirection={defaultSongSortDirection("points-per-actual-voter")} params={currentParams} path="/songs" sortKey="points-per-actual-voter" title="Average points from the people who gave this song points.">
                   Avg pts / actual voter
                 </SortableTableHead>
               ) : null}
@@ -147,12 +149,12 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[8%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("round-share")}
                   params={currentParams}
                   path="/songs"
                   sortKey="round-share"
-                  title="Song points divided by all eligible points in its round."
+                  title="How much of the round’s points went to this song."
                 >
                   Round share
                 </SortableTableHead>
@@ -162,18 +164,18 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[10%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("support-eb")}
                   params={currentParams}
                   path="/songs"
                   sortKey="support-eb"
-                  title="Empirical-Bayes shrunk support index. Shrinks noisy small-sample extremes toward 1.0 using Var(SI)=τ²+φ/E estimated from the corpus."
+                  title="Support compared with an even share of the available points. Above 1× is stronger; small samples are adjusted toward 1×."
                 >
                   Adjusted support
                 </SortableTableHead>
               ) : null}
               {isVisible("appeal-spread") ? (
-                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-[10%]" defaultDirection={defaultSongSortDirection("appeal-spread")} params={currentParams} path="/songs" sortKey="appeal-spread" title="Reach percentile minus round-share percentile across qualifying songs in this scope (at least 5 eligible voters), in percentage points. Positive = thin spread; negative = cult classic.">
+                <SortableTableHead activeDirection={direction} activeSort={sort} align="right" className="w-32" defaultDirection={defaultSongSortDirection("appeal-spread")} params={currentParams} path="/songs" sortKey="appeal-spread" title="Positive: points spread across more voters. Negative: stronger backing from fewer voters.">
                   Reach vs share spread
                 </SortableTableHead>
               ) : null}
@@ -182,12 +184,12 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[8%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("support-z")}
                   params={currentParams}
                   path="/songs"
                   sortKey="support-z"
-                  title="Standardized surplus vs expected points: (points − expected) / sqrt(φ · expected)."
+                  title="How far the score was above or below expectations, allowing for round size."
                 >
                   Statistical surprise
                 </SortableTableHead>
@@ -197,12 +199,12 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[9%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("normalized-index")}
                   params={currentParams}
                   path="/songs"
                   sortKey="normalized-index"
-                  title="Raw support index: points divided by expected points from eligible ballot budgets."
+                  title="Support compared with an even share of the available points, without the small-sample adjustment."
                 >
                   Support (raw)
                 </SortableTableHead>
@@ -212,7 +214,7 @@ export function SongsTable({
                   activeDirection={direction}
                   activeSort={sort}
                   align="right"
-                  className="w-[9%]"
+                  className="w-32"
                   defaultDirection={defaultSongSortDirection("percentile")}
                   params={currentParams}
                   path="/songs"
@@ -224,36 +226,16 @@ export function SongsTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((song) => (
+            {rows.map((song, index) => (
               <TableRow key={song.id}>
+                <TableCell className="font-mono text-zinc-500">{rowOffset + index + 1}</TableCell>
                 <TableCell>
-                  <div className="min-w-0">
-                    <p className="font-medium leading-5 text-zinc-100">
-                      {song.spotifyUrl ? (
-                        <a
-                          className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
-                          href={song.spotifyUrl}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          <span className="whitespace-normal" title={song.title}>
-                            {song.title}
-                          </span>
-                          <ExternalLink
-                            aria-label="Open on Spotify"
-                            className="size-3 shrink-0"
-                          />
-                        </a>
-                      ) : (
-                        <span>
-                          {song.title}
-                        </span>
-                      )}
+                  <div className="min-w-0 lg:flex lg:items-baseline lg:gap-1.5" title={`${song.title} — ${song.artist}`}>
+                    <p className="min-w-0 truncate font-medium leading-5 text-zinc-100">
+                      {song.spotifyUrl ? <a className="hover:text-lime-200" href={song.spotifyUrl} rel="noreferrer" target="_blank">{song.title}<ExternalLink aria-label="Open on Spotify" className="ml-1 inline size-3" /></a> : song.title}
                     </p>
-                    <p className="mt-1 text-sm leading-5 text-zinc-400">
-                      {song.artist}
-                      
-                    </p>
+                    <span className="hidden shrink-0 text-zinc-600 lg:inline" aria-hidden="true">—</span>
+                    <p className="min-w-0 truncate text-sm leading-5 text-zinc-400 lg:max-w-[45%]">{song.artist}</p>
                   </div>
                 </TableCell>
                 <TableCell>
@@ -272,8 +254,8 @@ export function SongsTable({
                   </Link>
                 </TableCell>
                 <TableCell className="max-w-0 min-w-0">
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="min-w-0">
+                  <div className="min-w-0 lg:flex lg:items-baseline lg:gap-1.5">
+                    <div className="min-w-0 shrink-0">
                       <MusicLeagueLink
                         className="text-zinc-300"
                         href={musicLeagueUrl(song.leagueMusicLeagueId)}
@@ -286,6 +268,7 @@ export function SongsTable({
                         })}
                       </MusicLeagueLink>
                     </div>
+                    <span className="hidden text-zinc-600 lg:inline" aria-hidden="true">/</span>
                     <div className="min-w-0">
                       <MusicLeagueLink
                         className="text-xs text-zinc-500"
@@ -305,11 +288,8 @@ export function SongsTable({
                   {song.points}
                 </TableCell>
                 {isVisible("positive-reach") ? (
-                  <TableCell className="text-right font-mono">
-                    {percent(song.positiveReach)}
-                    <p className="mt-0.5 text-[10px] text-zinc-600">
-                      {song.positiveRows} of {song.eligibleRows}
-                    </p>
+                  <TableCell className="text-right font-mono" title={`${song.positiveRows} of ${song.eligibleRows} voters gave points`}>
+                    <span aria-label={`${percent(song.positiveReach)}, ${song.positiveRows} of ${song.eligibleRows} voters gave points`}>{percent(song.positiveReach)}</span>
                   </TableCell>
                 ) : null}
                 {isVisible("points-per-voter") ? (

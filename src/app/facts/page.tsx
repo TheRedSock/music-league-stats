@@ -1,3 +1,4 @@
+import { FactHighlights } from "@/components/analytics/fact-highlights";
 import { detailPage, type FactDetail } from "@/lib/detail-pagination";
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
@@ -223,7 +224,7 @@ function SpotifyTitle({
       rel="noreferrer"
       target="_blank"
     >
-      <span className="truncate">{title}</span>
+      <span className="truncate" title={title}>{title}</span>
       <ExternalLink aria-hidden="true" className="size-3 shrink-0" />
     </a>
   );
@@ -265,7 +266,7 @@ function SongFactHeading({ artist, spotifyUri, title }: {
   title: string;
 }) {
   const href = spotifyTrackUrl(spotifyUri);
-  const content = <><span className="block">{title}{href ? <ExternalLink aria-hidden="true" className="ml-1 inline size-3" /> : null}</span><span className="mt-1 block text-xs font-normal text-zinc-400">{artist}</span></>;
+  const content = <><span className="line-clamp-2" title={title}>{title}{href ? <ExternalLink aria-hidden="true" className="ml-1 inline size-3" /> : null}</span><span className="mt-1 block truncate text-xs font-normal text-zinc-400" title={artist}>{artist}</span></>;
   const className = "block min-w-0 text-sm font-medium leading-5 text-zinc-100";
   return href ? (
     <a className={`${className} hover:text-lime-200`} href={href} rel="noreferrer" target="_blank">
@@ -306,7 +307,7 @@ async function FactsPageContent({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const category = typeof params.category === "string" && ["artists", "songs", "rounds", "voting"].includes(params.category) ? params.category : "artists";
+  const category = typeof params.category === "string" && ["voting", "artists", "rounds", "songs"].includes(params.category) ? params.category : "voting";
   const result = await loadAnalytics(async () => {
     const options = await getCachedFilterOptions();
     const filter = resolveAnalyticsFilter(parseAnalyticsFilters(params), options);
@@ -373,19 +374,16 @@ async function FactsPageContent({
         </div>
       </div>
 
-      <section aria-label="Highlights" className="mt-6 grid gap-5 border-y border-white/10 py-5 md:grid-cols-3">
-        <div><h2 className="text-xs text-zinc-400">Most submitted artist</h2><p className="mt-2 text-lg font-semibold">{data.mostSubmittedArtists[0]?.artist ?? "No submissions yet"}</p><p className="mt-1 text-sm text-zinc-400">{data.mostSubmittedArtists[0]?.submissions ?? 0} submissions</p></div>
-        <div><h2 className="text-xs text-zinc-400">Closest round</h2><p className="mt-2 text-lg font-semibold">{data.closestRaces[0]?.roundName ?? "No scored rounds yet"}</p><p className="mt-1 text-sm text-zinc-400">{data.closestRaces[0] ? `${(data.closestRaces[0].topTwoShareGap * 100).toFixed(1)} percentage-point gap between first and second` : ""}</p></div>
-        <div><h2 className="text-xs text-zinc-400">Most repeated song</h2><p className="mt-2 text-lg font-semibold">{data.repeatedSongs[0]?.title ?? "No repeats"}</p><p className="mt-1 text-sm text-zinc-400">{data.repeatedSongs[0] ? `${data.repeatedSongs[0].artist} · ${data.repeatedSongs[0].submissions} submissions` : "Every track was submitted once."}</p></div>
-      </section>
+
       <nav aria-label="Fact categories" className="mt-6 flex flex-wrap gap-2">
-        {["artists", "songs", "rounds", "voting"].map(value => <Link key={value} aria-current={category === value ? "page" : undefined} className={category === value ? "rounded-md bg-lime-300 px-4 py-2 text-sm font-medium text-zinc-950" : "rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300"} href={buildAnalyticsHref("/facts", filterParams, {category:value})}>{value[0].toUpperCase()+value.slice(1)}</Link>)}
+        {["voting", "artists", "rounds", "songs"].map(value => <Link key={value} aria-current={category === value ? "page" : undefined} className={category === value ? "rounded-md bg-lime-300 px-4 py-2 text-sm font-medium text-zinc-950" : "rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300"} href={buildAnalyticsHref("/facts", filterParams, {category:value})}>{value[0].toUpperCase()+value.slice(1)}</Link>)}
       </nav>
+      <FactHighlights category={category} data={data} filterParams={filterParams} />
       {category === "artists" ? <>
       <section className="mt-4 grid gap-4 lg:grid-cols-3">
         <FactPanel
           {...panelDetails("mostSubmittedArtists", data.mostSubmittedArtists)}
-          description="Artists grouped by exact exported artist text, normalized for case."
+          description="Artist counts use Spotify credits where available, otherwise the exported artist name."
           dialog={
             <FactTable
               headers={[
@@ -422,7 +420,7 @@ async function FactsPageContent({
 
         <FactPanel
           {...panelDetails("artistLoyalists", data.artistLoyalists)}
-          description="The strongest one-player, one-artist repeats."
+          description="Players who returned to the same artist most often."
           dialog={
             <FactTable
               headers={[
@@ -471,7 +469,7 @@ async function FactsPageContent({
 
         <FactPanel
           {...panelDetails("diverseArtists", data.diverseArtists)}
-          description="Artists that reached the most different submitters."
+          description="Artists chosen by the most different players."
           dialog={
             <FactTable
               headers={[
@@ -925,7 +923,7 @@ async function FactsPageContent({
                   sourceRoundId={row.sourceRoundId}
                 />
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {`${row.submissions} songs from ${row.submitters} {row.submitters === 1 ? "submitter" : "submitters"}`}
+                  {row.submissions} songs from {row.submitters} {row.submitters === 1 ? "submitter" : "submitters"}
                 </p>
               </>
             ),

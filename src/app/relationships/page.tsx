@@ -59,7 +59,7 @@ const tabs: Array<{ tab: RelationshipTab; label: string; description: string }> 
   {
     tab: "given",
     label: "Support",
-    description: "Directional support: giver → receiver. Each direction is a separate row.",
+    description: "Points from one player to another. Each direction has its own row.",
   },
   {
     tab: "mutual",
@@ -69,12 +69,12 @@ const tabs: Array<{ tab: RelationshipTab; label: string; description: string }> 
   {
     tab: "alignment",
     label: "Voting similarity",
-    description: "Agreement on shared songs after removing each voter's round average.",
+    description: "How similarly two players scored the same songs.",
   },
   {
     tab: "timing",
     label: "Timing",
-    description: "Average ballot completion percentile inside each round.",
+    description: "Who tends to vote early or late within a round.",
   },
 ];
 
@@ -241,16 +241,16 @@ async function RelationshipsPageContent({
       </div>
 
       <Card className="mt-5">
-        <CardHeader>
+        <CardHeader className="flex flex-col gap-4 space-y-0 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
           <CardTitle>{activeTab.label} comparisons</CardTitle>
           <CardDescription>{activeTab.description}</CardDescription>
-          <p className="text-xs text-zinc-400">{tab === "timing" ? "Lower means earlier voting." : `Based on at least ${minimumRounds} shared rounds.`} <Link href="/faq#voting-similarity" className="underline underline-offset-4">About these measures</Link></p>
-        </CardHeader>
-        <CardContent>
-          <Form action="/relationships" className="mb-4 flex flex-wrap items-end gap-2">
+          <p className="text-xs text-zinc-400">{tab === "timing" ? "Lower means earlier voting." : `Based on at least ${minimumRounds} shared rounds.`} <Link href={`/faq#${tab === "alignment" ? "voting-similarity" : tab === "timing" ? "timing" : "support"}`} className="underline underline-offset-4">About these measures</Link></p>
+          </div>
+          <Form action="/relationships" className="flex min-w-0 flex-wrap items-end gap-2 lg:w-96 lg:shrink-0">
             {filter.leagueIds.map(id => <input type="hidden" key={id} name="league" value={id} />)}
             <input type="hidden" name="tab" value={tab} /><input type="hidden" name="sort" value={sort} /><input type="hidden" name="dir" value={direction} />
-            <label className="min-w-0 flex-1 sm:max-w-sm"><span className="mb-1 block text-xs text-zinc-400">Focus on a player</span>
+            <label className="min-w-0 flex-1"><span className="mb-1 block text-xs text-zinc-400">Focus on a player</span>
               <select name="focus" defaultValue={focus ?? ""} className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm">
                 <option value="">All players</option>
                 {playerOptions.rows.map(player => <option key={player.id} value={player.id}>{player.name}</option>)}
@@ -258,6 +258,8 @@ async function RelationshipsPageContent({
             </label>
             <button type="submit" className={buttonStyles({variant:"secondary"})}>Compare</button>
           </Form>
+        </CardHeader>
+        <CardContent>
           <div className="flex flex-wrap items-center gap-2">
             {tabs.map((item) => (
               <Link
@@ -303,7 +305,7 @@ async function RelationshipsPageContent({
                       activeSort={sort}
                       align="right"
                       className="w-[14%]"
-                      title={tab === "alignment" ? "Cosine similarity of budget-normalized votes after subtracting each voter's shared-song mean per round. Range −100 to +100; zero means no linear agreement, negative means opposing preferences." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "Combined points exchanged divided by the eligible ballot budgets of both players." : "Points awarded divided by eligible opportunities, including zero-point votes."}
+                      title={tab === "alignment" ? "Agreement on shared songs: −100 means opposing choices, +100 means similar choices." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "The share of available ballot points two players gave each other." : "Average points per chance to vote for the recipient’s songs, including zeroes."}
                       defaultDirection={defaultRelationshipSortDirection(
                         tab === "alignment"
                           ? "alignment"
@@ -335,7 +337,7 @@ async function RelationshipsPageContent({
                       defaultDirection="desc"
                       params={currentParams}
                       path="/relationships"
-                      title={tab === "alignment" ? "Shared-song votes, including inferred zeroes, from rounds where both voters show variation. Excludes both players' submissions." : tab === "timing" ? "Submitted ballots contributing to the timing average." : "Eligible song-voter combinations, including inferred zeroes; excludes self-votes and missing ballots."}
+                      title={tab === "alignment" ? "Votes compared on songs both players could vote for." : tab === "timing" ? "Submitted ballots contributing to the timing average." : "Number of chances to vote for the other player’s songs."}
                       sortKey={tab === "alignment" ? "features" : "opportunities"}
                     >
                       {sampleLabel}

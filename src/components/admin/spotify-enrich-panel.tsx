@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, Sparkles } from "lucide-react";
+import { LoaderCircle, Music2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -77,7 +77,7 @@ export function SpotifyEnrichPanel({
       setError(
         caught instanceof Error
           ? caught.message
-          : "Spotify artist enrich failed.",
+          : "Spotify artist credits failed.",
       );
       setMessage("");
       setProgress(null);
@@ -105,14 +105,11 @@ export function SpotifyEnrichPanel({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles aria-hidden="true" className="size-4 text-lime-300" />
-              Spotify artist enrich
+              <Music2 aria-hidden="true" className="size-4 text-lime-300" />
+              Spotify artist credits
             </CardTitle>
             <CardDescription className="mt-1">
-              Resolve collab credits via Spotify{" "}
-              <code className="text-zinc-300">track.artists[]</code> so Facts
-              artist streaks split correctly. Prefer ambiguous-only to skip
-              single-artist tracks.
+              Check Spotify’s artist credits to improve artist counts and repeat-artist facts. Song scores and voting measures stay the same.
             </CardDescription>
           </div>
           <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -129,19 +126,15 @@ export function SpotifyEnrichPanel({
           />
           <span>
             <span className="font-medium text-zinc-100">
-              Ambiguous collabs only
+              Likely collaborations only
             </span>
             <span className="mt-0.5 block text-zinc-500">
-              Seed tracks whose CSV artist string looks multi-credit (
-              {counts
-                ? `${counts.ambiguousPending} candidates`
-                : "…"}
-              ). Uncheck to enrich all tracks not yet ok (
-              {counts ? `${counts.allPending} candidates` : "…"}
-              ).
+              {counts ? counts.ambiguousPending : "…"} tracks have names that suggest multiple artists. This is the quickest useful check.
             </span>
           </span>
         </label>
+
+        {!ambiguousOnly ? <p className="rounded-md border border-white/10 p-3 text-sm text-zinc-400">Checking all {counts?.allPending ?? "…"} remaining tracks can find collaborators missed by the name check and correct artist names. Most single-artist tracks will be unchanged; no extra scoring metrics are unlocked.</p> : null}
 
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
           <span>ok {counts?.enrichedOk ?? 0}</span>
@@ -155,7 +148,7 @@ export function SpotifyEnrichPanel({
             {pending ? (
               <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
             ) : (
-              <Sparkles aria-hidden="true" className="size-4" />
+              <Music2 aria-hidden="true" className="size-4" />
             )}
             {pending
               ? "Enriching…"
@@ -179,8 +172,7 @@ export function SpotifyEnrichPanel({
           </p>
         ) : status?.status === "completed" ? (
           <p className="text-sm text-zinc-400">
-            Artist splits are ready for Facts. Re-run after new imports to
-            catch new collabs.
+            Artist credits are ready for Facts. Run again after new imports to check new tracks.
           </p>
         ) : (
           <p className="text-sm text-zinc-500">

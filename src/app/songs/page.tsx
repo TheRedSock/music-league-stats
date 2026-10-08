@@ -11,6 +11,7 @@ import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
+import { SongsTableControls } from "@/components/analytics/songs-column-picker";
 import { SongsTable } from "@/components/analytics/songs-table";
 import { Container } from "@/components/layout/container";
 import { buttonStyles } from "@/components/ui/button";
@@ -105,7 +106,7 @@ async function SongsPageContent({
   }
 
   return (
-    <Container className="py-6 sm:py-10">
+    <Container className="max-w-[1500px] py-6 sm:py-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">
@@ -172,9 +173,7 @@ async function SongsPageContent({
           </span>{" "}
           {data.total === 1 ? "song" : "songs"}
         </p>
-        <p className="text-xs text-zinc-500">
-          Page {Math.min(page, totalPages)} of {totalPages}
-        </p>
+        <div className="flex items-center gap-4"><p className="text-xs text-zinc-500">Page {Math.min(page, totalPages)} of {totalPages}</p><SongsTableControls /></div>
       </div>
 
       {data.rows.length ? (
@@ -183,6 +182,7 @@ async function SongsPageContent({
             <SongsTable
               currentParams={currentParams}
               direction={direction}
+              rowOffset={(page - 1) * data.pageSize}
               rows={data.rows}
               sort={sort}
             />

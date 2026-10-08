@@ -1,8 +1,8 @@
+import { PlayerTimingPanel } from "@/components/analytics/player-timing-panel";
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { ordinal, formatPoints } from "@/lib/format";
 import {
-  Clock3,
   ExternalLink,
   Gauge,
   Info,
@@ -40,12 +40,10 @@ import {
   resolveCompetitorRef,
   scopeQueryParams,
   truncateArtistForMeta,
-  truncateRoundName,
   type DirectionalRelationship,
   type MutualRelationship,
   type SearchParams,
   type SongAnalyticsRow,
-  type TimingRow,
 } from "@/lib/analytics";
 import { musicLeagueUrl } from "@/lib/music-league-urls";
 
@@ -59,11 +57,7 @@ function metric(value: number | null | undefined, digits = 2): string {
 
 
 
-function percentileLabel(value: number | null | undefined): string {
-  return value === null || value === undefined
-    ? "—"
-    : `${ordinal(value * 100)} percentile`;
-}
+
 
 function relationshipExtremes(
   relationships: DirectionalRelationship[],
@@ -185,64 +179,6 @@ function SubmissionList({
   );
 }
 
-function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
-  return (
-    <div>
-      <h3 className="text-sm font-medium text-zinc-400">
-        {label}
-      </h3>
-      <ol className="mt-2 divide-y divide-white/[0.06]">
-        {rows.map((row) => (
-          <li
-            className="grid grid-cols-[1fr_auto] gap-4 py-3"
-            key={row.roundId}
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm text-zinc-200">
-                <MusicLeagueScopeLinks
-                  leagueHref={musicLeagueUrl(row.leagueMusicLeagueId)}
-                  leagueLabel={leagueTableLabel({
-                    name: row.leagueName,
-                    slug: row.leagueSlug,
-                  })}
-                  leagueTitle={row.leagueName}
-                  roundHref={musicLeagueUrl(
-                    row.leagueMusicLeagueId,
-                    row.sourceRoundId,
-                  )}
-                  roundLabel={
-                    <>
-                      R{row.ordinal} {truncateRoundName(row.roundName)}
-                    </>
-                  }
-                  roundTitle={row.roundName}
-                />
-              </p>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
-                <div
-                  aria-hidden="true"
-                  className="h-full rounded-full bg-violet-300"
-                  style={{ width: `${row.relativeOrder! * 100}%` }}
-                />
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="font-mono text-sm text-violet-200">
-                {percentileLabel(row.relativeOrder)}
-              </p>
-              <p className="text-[10px] text-zinc-600">
-                {row.ballotRank && row.tieCount
-                  ? `${row.ballotRank}${row.tieCount > 1 ? `-${row.ballotRank + row.tieCount - 1}` : ""} of ${row.observedVoters}`
-                  : `${row.observedVoters} voters`}
-              </p>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </div>
-  );
-}
-
 async function PlayerProfilePageContent({
   params,
   searchParams,
@@ -321,19 +257,6 @@ async function PlayerProfilePageContent({
   const mutual = mutualExtremes(profile.mutualRelationships);
   const highestAlignments = profile.alignments.slice(0, 3);
   const lowestAlignments = profile.alignments.slice(-3).reverse();
-  const votedTiming = profile.timing.filter((row) => row.relativeOrder !== null);
-  const orderedTiming = [...votedTiming].sort(
-    (left, right) => left.relativeOrder! - right.relativeOrder!,
-  );
-  const lowestTiming = orderedTiming.slice(0, 3);
-  const highestTiming = orderedTiming.slice(-3).reverse();
-  const missedBallots = profile.timing.filter(
-    (row) => row.participation === "did_not_vote",
-  ).length;
-  const averageTiming = votedTiming.length
-    ? votedTiming.reduce((sum, row) => sum + row.relativeOrder!, 0) /
-      votedTiming.length
-    : null;
   const overviewCards = [
     { label: "Points", value: overview?.totalPoints.toLocaleString() ?? "—" },
     { label: "Submissions", value: overview?.submissions.toLocaleString() ?? "—" },
@@ -408,7 +331,7 @@ async function PlayerProfilePageContent({
         <Card className="mt-6">
           <CardHeader>
             <Medal aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-            <CardTitle>Submission range</CardTitle>
+            <CardTitle>Best and worst songs</CardTitle>
             <CardDescription>
               Highest and lowest are ranked by adjusted support. <Link href="/faq#adjusted-support" className="underline underline-offset-4">About this measure</Link>
             </CardDescription>
@@ -450,27 +373,20 @@ async function PlayerProfilePageContent({
           {
             direction: "received" as const,
             title: "Points received by voter",
-            description: `Who gave ${player.name}'s songs more or fewer points per eligible opportunity.`,
+            description: `Average points each voter gave ${player.name}’s songs, including zeroes.`,
             groups: received,
           },
           {
             direction: "given" as const,
             title: "Points given by recipient",
-            description: `Whose songs ${player.name} gave more or fewer points per eligible opportunity.`,
+            description: `Average points ${player.name} gave each player’s songs, including zeroes.`,
             groups: given,
           },
         ].map(({ description, direction, groups, title }) => (
           <Card key={direction}>
             <CardHeader>
               <Network aria-hidden="true" className="mb-2 size-5 text-violet-300" />
-              <CardTitle>
-                <Link
-                  className="hover:text-lime-200"
-                  href={compareHref(direction, "rate")}
-                >
-                  {title}
-                </Link>
-              </CardTitle>
+              <div className="flex flex-wrap items-baseline justify-between gap-2"><CardTitle>{title}</CardTitle><Link className="text-xs text-lime-300 hover:underline" href={compareHref(direction, "rate")}>View all →</Link></div>
               <CardDescription>{description}</CardDescription>
             </CardHeader>
             <CardContent className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2">
@@ -534,16 +450,9 @@ async function PlayerProfilePageContent({
       <Card className="mt-6">
         <CardHeader>
           <Network aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-          <CardTitle>
-            <Link
-              className="hover:text-lime-200"
-              href={compareHref("mutual", "share")}
-            >
-              Mutual voting support
-            </Link>
-          </CardTitle>
+          <div className="flex flex-wrap items-baseline justify-between gap-2"><CardTitle>Mutual voting support</CardTitle><Link className="text-xs text-lime-300 hover:underline" href={compareHref("mutual", "share")}>View all →</Link></div>
           <CardDescription>
-            {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons use the same adaptive scope participation minimum as Compare.`}
+            {`Points ${player.name} and each player gave one another, as totals and as a share of their voting budgets.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2 xl:grid-cols-4">
@@ -621,7 +530,7 @@ async function PlayerProfilePageContent({
         <Card>
           <CardHeader>
             <Gauge aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <CardTitle>
                 <Link
                   className="hover:text-lime-200"
@@ -636,18 +545,13 @@ async function PlayerProfilePageContent({
                   <span className="sr-only">Show alignment formula details</span>
                 </summary>
                 <p className="absolute left-0 top-6 z-20 w-72 rounded-xl border border-white/10 bg-zinc-950 p-3 text-xs font-normal leading-5 text-zinc-300 shadow-2xl">
-                  Compares other players’ songs, including inferred zeroes.
-                  Each ballot is divided by its point total, then its average
-                  on shared songs in that round is subtracted. Cosine similarity
-                  compares the pooled deviations. Flat ballots contribute no
-                  information. Mutual support is shown separately.
+                  Compares choices on songs both players could vote for. <Link href="/faq#voting-similarity" className="underline">How similarity is calculated</Link>
                 </p>
               </details>
+              <Link className="ml-auto text-xs text-lime-300 hover:underline" href={compareHref("alignment", "alignment")}>View all →</Link>
             </div>
             <CardDescription>
-              Agreement on shared songs after removing each voter’s round
-              average. Shown only after the pair meets sample and coverage
-              thresholds.
+              How similarly they scored the same songs. Higher means closer agreement.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -682,7 +586,7 @@ async function PlayerProfilePageContent({
                               {alignment.competitorName}
                             </Link>
                             <p className="mt-0.5 text-[11px] text-zinc-600">
-                              {alignment.comparableFeatures} features ·{" "}
+                              {alignment.comparableFeatures} song comparisons ·{" "}
                               {alignment.sharedRounds}/{alignment.scopeRounds} rounds
                             </p>
                           </div>
@@ -709,58 +613,7 @@ async function PlayerProfilePageContent({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <Clock3 aria-hidden="true" className="mb-2 size-5 text-violet-300" />
-            <CardTitle>
-              <Link
-                className="hover:text-lime-200"
-                href={compareHref("timing", "timing")}
-              >
-                Relative voting order
-              </Link>
-            </CardTitle>
-            <CardDescription>
-              One ballot timestamp per voter and round (the latest exported
-              cast time), ranked among observed voters in that same round.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {votedTiming.length ? (
-              <>
-                <div className="mb-5">
-                  <p className="font-mono text-3xl font-semibold text-white">
-                    {percentileLabel(averageTiming)}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    Average relative voting order
-                  </p>
-                </div>
-                <div className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2">
-                  <TimingList
-                    label="Highest percentiles"
-                    rows={highestTiming}
-                  />
-                  <TimingList label="Lowest percentiles" rows={lowestTiming} />
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-zinc-500">
-                No recorded ballot timing in this scope.
-              </p>
-            )}
-            <p className="mt-4 text-xs leading-5 text-zinc-600">
-              A lower percentile means the recorded ballot completion preceded
-              more observed ballots. Percentiles use a midpoint rank within the
-              round, so tied earliest ballots no longer display as 0th
-              percentile. The lists show the three highest and three lowest
-              recorded percentiles.
-              {missedBallots
-                ? ` ${missedBallots} submitted ${missedBallots === 1 ? "round has" : "rounds have"} no exported ballot and ${missedBallots === 1 ? "is" : "are"} excluded.`
-                : ""}
-            </p>
-          </CardContent>
-        </Card>
+        <PlayerTimingPanel rows={profile.timing} path={playerPath(player)} filterParams={filterParams} query={query} />
       </section>
     </Container>
   );

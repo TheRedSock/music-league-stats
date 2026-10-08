@@ -194,10 +194,10 @@ async function HomePageContent({
 
             <section
               aria-labelledby="songs-heading"
-              className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]"
+              className="grid items-start gap-4 lg:grid-cols-[1.3fr_0.7fr]"
             >
               <Card>
-                <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+                <CardHeader className="flex items-start justify-between gap-4 space-y-0">
                   <div>
                     <CardTitle id="songs-heading">
                       Standout songs
@@ -217,7 +217,7 @@ async function HomePageContent({
                 </CardHeader>
                 <CardContent>
                   <ol className="divide-y divide-white/[0.06]">
-                    {data.topSongs.map((song, index) => (
+                    {data.topSongs.slice(0, 5).map((song, index) => (
                       <li
                         className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 py-3.5"
                         key={song.id}
@@ -239,8 +239,8 @@ async function HomePageContent({
                             ) : (
                               song.title
                             )}{" "}
-                            <span className="mt-1 block font-normal text-zinc-400">
-                              {song.artist}
+                            <span className="mt-1 flex min-w-0 items-baseline gap-1.5 font-normal text-zinc-400">
+                              <span className="truncate" title={song.artist}>{song.artist}</span><span className="shrink-0 text-zinc-600">·</span><Link className="max-w-32 shrink-0 truncate text-xs hover:text-lime-200" title={`Submitted by ${song.submitterName}`} href={buildAnalyticsHref(`/players/${song.submitterSlug ?? song.submitterId}`, filterParams, {})}>{song.submitterName}</Link>
                             </span>
                           </p>
                           <p className="mt-0.5 truncate text-xs text-zinc-500">

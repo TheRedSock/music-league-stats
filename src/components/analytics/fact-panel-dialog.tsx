@@ -32,7 +32,7 @@ export function FactPanelDialog({ children, description, dialogClassName, itemCo
       open={detail.open && dismissedHref !== current}
       onClose={() => { setDismissedHref(current); router.push(detail.closeHref, { scroll: false }); }}>
       <div className="space-y-4">
-        <Form action="/facts" scroll={false} className="flex items-end gap-2">
+        <Form action={detail.href.split("?")[0]} scroll={false} className="flex items-end gap-2">
           {[...query].map(([name,value],index) => <input key={`${name}-${index}`} type="hidden" name={name} value={value} />)}
           <label className="min-w-0 flex-1 space-y-1 text-sm">Search this list<input key={detail.search} defaultValue={detail.search} name="detailSearch" maxLength={160} className="block h-10 w-full rounded-md border border-white/15 bg-zinc-900 px-3" /></label>
           <Button type="submit" variant="secondary">Search</Button>

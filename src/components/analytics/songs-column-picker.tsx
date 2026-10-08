@@ -18,16 +18,21 @@ export const SONG_TABLE_COLUMN_LABELS: Record<SongTableColumnId, string> = {
   "normalized-index": "Support index (raw)",
   percentile: "Round percentile",
 };
-export const DEFAULT_SONG_TABLE_COLUMNS: SongTableColumnId[] = ["positive-reach"];
-const oldDefaults = ["positive-reach", "points-per-voter", "round-share", "support-eb", "appeal-spread"];
+export const DEFAULT_SONG_TABLE_COLUMNS: SongTableColumnId[] = ["support-eb"];
+const oldDefaults = [["positive-reach"], ["positive-reach", "points-per-voter", "round-share", "support-eb", "appeal-spread"]];
 const picker = createTableColumnPicker({
   ids: SONG_TABLE_COLUMN_IDS,
   labels: SONG_TABLE_COLUMN_LABELS,
   defaults: DEFAULT_SONG_TABLE_COLUMNS,
-  storageKey: "songs-table-columns-v3",
-  legacyKey: "songs-table-columns-v2",
-  migrate: columns => columns.length === oldDefaults.length && oldDefaults.every(id => columns.includes(id as SongTableColumnId))
+  storageKey: "songs-table-columns-v4",
+  legacyKey: ["songs-table-columns-v3", "songs-table-columns-v2"],
+  migrate: columns => oldDefaults.some(defaults => columns.length === defaults.length && defaults.every(id => columns.includes(id as SongTableColumnId)))
     ? DEFAULT_SONG_TABLE_COLUMNS : columns,
 });
 export const useSongTableColumns = picker.useColumns;
 export const SongsColumnPicker = picker.ColumnPicker;
+
+export function SongsTableControls() {
+  const { columns, toggle } = useSongTableColumns();
+  return <SongsColumnPicker columns={columns} onToggle={toggle} />;
+}

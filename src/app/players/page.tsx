@@ -10,7 +10,7 @@ import {
   AnalyticsEmpty,
   AnalyticsUnavailable,
 } from "@/components/analytics/analytics-state";
-import { PlayersTable } from "@/components/analytics/players-table";
+import { PlayersTable, PlayersTableControls } from "@/components/analytics/players-table";
 import { Container } from "@/components/layout/container";
 import { buttonStyles } from "@/components/ui/button";
 import {
@@ -152,14 +152,12 @@ async function PlayersPageContent({
           </Form>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-zinc-400">
-          <span className="font-mono text-zinc-100">{data.rows.length}</span>{" "}
-          {data.rows.length === 1 ? "player" : "players"}
-        </p>
-        <p className="text-xs text-zinc-500">
-          {`Adjusted ranking requires ${data.minimumRounds} rounds.`} <Link href="/faq#rankings" className="underline underline-offset-4">Why?</Link>
-        </p>
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+          <p className="text-sm text-zinc-400"><span className="font-mono text-zinc-100">{data.rows.length}</span> {data.rows.length === 1 ? "player" : "players"}</p>
+          <p className="text-xs text-zinc-500">Average round index requires {data.minimumRounds} rounds. <Link href="/faq#rankings" className="underline underline-offset-4">Why?</Link></p>
+        </div>
+        <PlayersTableControls />
       </div>
 
       {data.rows.length ? (
