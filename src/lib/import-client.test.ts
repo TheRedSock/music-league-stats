@@ -18,11 +18,13 @@ async function reference(rows: unknown[]) {
 }
 
 describe("upload chunk byte accounting", () => {
+  // The deliberately slow reference can exceed five seconds on shared CI CPUs.
+  // Keep the full fixture and exact equality check; this is not a speed benchmark.
   it("preserves boundaries and hashes across UTF-8, escapes, nulls and index digit changes", async () => {
     const rows = Array.from({ length: 5101 }, (_, i) => ({ id: i, note: '🎵 Æø漢字\\"\n'.repeat(i % 2 ? 3 : 120) }));
     rows.push(null as never, undefined as never);
     expect(await makeChunks("votes", rows)).toEqual(await reference(rows));
-  });
+  }, 30_000);
   it("preserves the exact byte limit, including envelope overhead", async () => {
     const maxLength = 900 * 1024 - new TextEncoder().encode(JSON.stringify({ kind: "votes", index: 0, startRow: 0, rows: [""], hash: "0".repeat(64) })).length;
     for (const length of [maxLength - 1, maxLength]) {
