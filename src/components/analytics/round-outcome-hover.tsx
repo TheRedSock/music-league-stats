@@ -1,5 +1,8 @@
 "use client";
 
+import { formatPoints } from "@/lib/format";
+
+
 import { useId, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
@@ -59,7 +62,7 @@ export function RoundOutcomeHover({
                   {song.title}
                 </p>
                 <p className="mt-0.5 truncate pl-7 text-xs text-zinc-500">
-                  {song.artist} · {song.points} pts ·{" "}
+                  {song.artist} · {formatPoints(song.points)} ·{" "}
                   {song.roundPointShare == null
                     ? "—"
                     : `${(song.roundPointShare * 100).toFixed(1)}% share`}

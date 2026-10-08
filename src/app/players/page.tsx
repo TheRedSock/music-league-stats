@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { Search } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -50,7 +52,7 @@ const sortLabels = {
   "appeal-spread": "Reach vs share spread",
 } as const;
 
-export default async function PlayersPage({
+async function PlayersPageContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -200,4 +202,8 @@ export default async function PlayersPage({
       </Card>
     </Container>
   );
+}
+
+export default function PlayersPage(props: { searchParams: Promise<SearchParams>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><PlayersPageContent {...props} /></Suspense>;
 }

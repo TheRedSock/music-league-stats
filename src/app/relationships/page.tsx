@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
 import { Network, Search } from "lucide-react";
 import type { Metadata } from "next";
@@ -88,7 +90,7 @@ function valueFor(tab: RelationshipTab, row: RelationshipTableRow): string {
   return metric(row.pointsPerOpportunity);
 }
 
-export default async function RelationshipsPage({
+async function RelationshipsPageContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -400,4 +402,8 @@ export default async function RelationshipsPage({
       </Card>
     </Container>
   );
+}
+
+export default function RelationshipsPage(props: { searchParams: Promise<SearchParams>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><RelationshipsPageContent {...props} /></Suspense>;
 }

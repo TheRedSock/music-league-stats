@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import type { Metadata } from "next";
 
 import { ScopeMaterializationSplash } from "@/components/analytics/analytics-building";
@@ -30,7 +32,7 @@ export const metadata: Metadata = {
     "Score progression across rounds and interactive voting relationship graphs.",
 };
 
-export default async function RelationshipGraphsPage({
+async function RelationshipGraphsPageContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -91,4 +93,8 @@ export default async function RelationshipGraphsPage({
       )}
     </GraphsShell>
   );
+}
+
+export default function RelationshipGraphsPage(props: { searchParams: Promise<SearchParams>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><RelationshipGraphsPageContent {...props} /></Suspense>;
 }

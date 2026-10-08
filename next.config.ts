@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   cacheComponents: true,
   reactStrictMode: true,
+  agentRules: false,
   async redirects() {
     return [
       {

@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
+import { formatPoints } from "@/lib/format";
 import {
   BarChart3,
   Gauge,
@@ -8,7 +11,6 @@ import {
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
 import { MusicLeagueScopeLinks } from "@/components/analytics/music-league-link";
@@ -224,7 +226,7 @@ async function DashboardAlignmentCard({
   );
 }
 
-export default async function HomePage({
+async function HomePageContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -405,7 +407,7 @@ export default async function HomePage({
                             {song.supportIndexEb?.toFixed(2) ?? "—"}×
                           </p>
                           <p className="text-[11px] text-zinc-600">
-                            {song.points} pts
+                            {formatPoints(song.points)}
                             {song.supportZ !== null
                               ? ` · z ${song.supportZ.toFixed(1)}`
                               : ""}
@@ -443,4 +445,8 @@ export default async function HomePage({
       </div>
     </Container>
   );
+}
+
+export default function HomePage(props: { searchParams: Promise<SearchParams>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><HomePageContent {...props} /></Suspense>;
 }

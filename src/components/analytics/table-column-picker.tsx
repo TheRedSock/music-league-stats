@@ -1,9 +1,8 @@
 "use client";
 
 import { Columns3 } from "lucide-react";
-import { useId, useState, useSyncExternalStore } from "react";
-import { buttonStyles } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { useSyncExternalStore } from "react";
+import { Popover } from "@/components/ui/popover";
 
 /** Each table owns a stable external store and independent saved preferences. */
 export function createTableColumnPicker<Id extends string>({
@@ -65,64 +64,23 @@ export function createTableColumnPicker<Id extends string>({
     return { columns, toggle, isVisible: (column: Id) => columns.includes(column) };
   }
   function ColumnPicker({ columns, onToggle }: { columns: readonly Id[]; onToggle: (column: Id) => void }) {
-    const [open, setOpen] = useState(false);
-    const menuId = useId();
-
     return (
-      <div className="relative">
-        <button
-          aria-controls={menuId}
-          aria-expanded={open}
-          aria-haspopup="true"
-          className={buttonStyles({ variant: "secondary" })}
-          onClick={() => setOpen((value) => !value)}
-          type="button"
-        >
-          <Columns3 aria-hidden="true" className="size-4" />
-          Columns
-        </button>
-        {open ? (
-          <>
-            <button
-              aria-label="Close columns menu"
-              className="fixed inset-0 z-10 cursor-default"
-              onClick={() => setOpen(false)}
-              type="button"
-            />
-            <div
-              className="absolute right-0 z-20 mt-2 w-64 rounded-xl border border-white/10 bg-zinc-950 p-2 shadow-xl"
-              id={menuId}
-              role="menu"
-            >
-              <p className="px-2 py-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-                Toggle metric columns
-              </p>
-              <ul className="space-y-0.5">
-                {ids.map((column) => {
-                  const checked = columns.includes(column);
-                  return (
-                    <li key={column}>
-                      <label
-                        className={cn(
-                          "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-zinc-200 hover:bg-white/[0.04]",
-                        )}
-                      >
-                        <input
-                          checked={checked}
-                          className="size-3.5 rounded border-white/20 bg-zinc-900 text-lime-300 focus:ring-lime-300/30"
-                          onChange={() => onToggle(column)}
-                          type="checkbox"
-                        />
-                        <span>{labels[column]}</span>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </>
-        ) : null}
-      </div>
+      <Popover label="Table columns" trigger={<><Columns3 aria-hidden="true" className="size-4" />Columns</>}>
+        <p className="mb-2 text-sm font-medium">Show columns</p>
+        <ul className="space-y-1">
+          {ids.map((column) => (
+            <li key={column}>
+              <label className="flex cursor-pointer items-center gap-3 rounded px-2 py-2 text-sm hover:bg-white/5">
+                <input checked={columns.includes(column)}
+                  disabled={columns.length === 1 && columns.includes(column)}
+                  className="size-4 accent-lime-300"
+                  onChange={() => onToggle(column)} type="checkbox" />
+                <span>{labels[column]}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      </Popover>
     );
   }
 

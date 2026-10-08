@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { qualificationRoundFloor } from "@/lib/participation";
 import { ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
@@ -301,7 +303,7 @@ function SongFactPreview({ row, metrics, metricsTitle, filterParams }: {
   );
 }
 
-export default async function FactsPage({
+async function FactsPageContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -1172,4 +1174,8 @@ export default async function FactsPage({
 
     </Container>
   );
+}
+
+export default function FactsPage(props: { searchParams: Promise<SearchParams>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><FactsPageContent {...props} /></Suspense>;
 }

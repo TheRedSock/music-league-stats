@@ -1,5 +1,7 @@
 "use client";
 
+import { formatPoints } from "@/lib/format";
+
 import {
   useId,
   useState,
@@ -39,12 +41,10 @@ const BUCKET_COLORS: Record<PointBucket["label"], string> = {
   "5+": "#facc15",
 };
 
-function formatPoints(value: number): string {
-  return `${value.toLocaleString()} pts`;
-}
+
 
 function formatVotes(value: number): string {
-  return `${value.toLocaleString()} votes`;
+  return `${value.toLocaleString()} ${value === 1 ? "vote" : "votes"}`;
 }
 
 function buildPieSlices(

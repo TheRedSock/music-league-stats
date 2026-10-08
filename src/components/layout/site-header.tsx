@@ -10,7 +10,7 @@ import { buttonStyles } from "@/components/ui/button";
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-zinc-950/75 backdrop-blur-xl">
-      <Container className="flex h-16 items-center justify-between gap-2 sm:gap-6">
+      <Container className="flex min-h-16 flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3 md:flex-nowrap md:gap-5">
         <ScopedLink
           className="flex shrink-0 items-center gap-2.5"
           href="/"
@@ -32,7 +32,7 @@ export function SiteHeader() {
           className={buttonStyles({
             variant: "secondary",
             size: "sm",
-            className: "hidden sm:inline-flex",
+            className: "ml-auto inline-flex md:ml-0",
           })}
           href="/admin"
         >

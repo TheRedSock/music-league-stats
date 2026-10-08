@@ -1,5 +1,7 @@
 "use client";
 
+import { ordinal } from "@/lib/format";
+
 import { ExternalLink } from "lucide-react";
 import Link from "next/link";
 
@@ -347,7 +349,7 @@ export function SongsTable({
                   <TableCell className="text-right font-mono">
                     {song.performancePercentile === null
                       ? "—"
-                      : `${song.performancePercentile.toFixed(0)}th`}
+                      : ordinal(song.performancePercentile)}
                   </TableCell>
                 ) : null}
               </TableRow>

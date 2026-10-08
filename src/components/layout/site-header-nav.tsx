@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowLeft } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 import { ScopedLink } from "@/components/analytics/scoped-link";
@@ -22,12 +21,12 @@ function navItemActive(pathname: string, href: string): boolean {
 
 export function StaticSiteHeaderNav() {
   return (
-    <nav aria-label="Main navigation" className="ml-auto">
-      <ul className="flex items-center gap-1">
+    <nav aria-label="Main navigation" className="order-last w-full min-w-0 md:order-none md:ml-auto md:w-auto">
+      <ul className="grid grid-cols-5 items-center gap-1 md:flex">
         {navigation.map((item) => (
           <li key={item.href}>
             <ScopedLink
-              className="rounded-full px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3"
+              className="inline-flex w-full justify-center rounded px-1.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3"
               href={item.href}
             >
               {item.label}
@@ -41,30 +40,19 @@ export function StaticSiteHeaderNav() {
 
 export function SiteHeaderNav() {
   const pathname = usePathname();
-  const onPlayerProfile = /^\/players\/[^/]+/.test(pathname);
 
   return (
-    <nav aria-label="Main navigation" className="ml-auto">
-      <ul className="flex items-center gap-1">
-        {onPlayerProfile ? (
-          <li>
-            <ScopedLink
-              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 text-sm text-zinc-300 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3"
-              href="/players"
-            >
-              <ArrowLeft aria-hidden="true" className="size-3.5" />
-              Back
-            </ScopedLink>
-          </li>
-        ) : null}
+    <nav aria-label="Main navigation" className="order-last w-full min-w-0 md:order-none md:ml-auto md:w-auto">
+      <ul className="grid grid-cols-5 items-center gap-1 md:flex">
         {navigation.map((item) => (
           <li key={item.href}>
             <ScopedLink
               className={cn(
-                "rounded-full px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3",
+                "inline-flex w-full justify-center rounded px-1.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-white/[0.05] hover:text-white sm:px-3",
                 navItemActive(pathname, item.href) &&
                   "bg-white/[0.06] text-lime-200",
               )}
+              aria-current={navItemActive(pathname, item.href) ? "page" : undefined}
               href={item.href}
             >
               {item.label}

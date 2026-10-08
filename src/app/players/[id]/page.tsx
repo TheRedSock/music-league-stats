@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
+import { ordinal, formatPoints } from "@/lib/format";
 import {
   Clock3,
   ExternalLink,
@@ -55,14 +58,7 @@ function metric(value: number | null | undefined, digits = 2): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
 }
 
-function ordinal(value: number): string {
-  const rounded = Math.round(value);
-  const suffix =
-    rounded % 100 >= 11 && rounded % 100 <= 13
-      ? "th"
-      : ["th", "st", "nd", "rd"][rounded % 10] ?? "th";
-  return `${rounded}${suffix}`;
-}
+
 
 function percentileLabel(value: number | null | undefined): string {
   return value === null || value === undefined
@@ -180,7 +176,7 @@ function SubmissionList({
                 <p className="font-mono text-sm text-lime-200">
                   {metric(song.supportIndexEb ?? song.supportIndex)}×
                 </p>
-                <p className="text-[11px] text-zinc-600">{song.points} pts</p>
+                <p className="text-[11px] text-zinc-600">{formatPoints(song.points)}</p>
               </div>
             </li>
           );
@@ -248,7 +244,7 @@ function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
   );
 }
 
-export default async function PlayerProfilePage({
+async function PlayerProfilePageContent({
   params,
   searchParams,
 }: {
@@ -351,7 +347,7 @@ export default async function PlayerProfilePage({
         overview?.averageRoundPercentile === null ||
         overview?.averageRoundPercentile === undefined
           ? "—"
-          : `${overview.averageRoundPercentile.toFixed(0)}th`,
+          : ordinal(overview.averageRoundPercentile),
     },
   ];
   const compareHref = (
@@ -436,8 +432,7 @@ export default async function PlayerProfilePage({
           <CardTitle>Point distributions</CardTitle>
           <CardDescription>
             Active ballots include inferred zeroes for omitted eligible songs.
-            Bars and ratios are weighted by represented points; vote counts are
-            shown as supporting context.
+            Bar heights show vote counts; the percentage view shows each score’s share of votes.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -560,12 +555,12 @@ export default async function PlayerProfilePage({
             {
               label: "Most combined points",
               rows: mutual.mostPoints,
-              value: (row: MutualRelationship) => `${row.points} pts`,
+              value: (row: MutualRelationship) => formatPoints(row.points),
             },
             {
               label: "Fewest combined points",
               rows: mutual.leastPoints,
-              value: (row: MutualRelationship) => `${row.points} pts`,
+              value: (row: MutualRelationship) => formatPoints(row.points),
             },
             {
               label: "Highest ballot share",
@@ -773,4 +768,8 @@ export default async function PlayerProfilePage({
       </section>
     </Container>
   );
+}
+
+export default function PlayerProfilePage(props: { searchParams: Promise<SearchParams>; params: Promise<{ id: string }>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><PlayerProfilePageContent {...props} /></Suspense>;
 }

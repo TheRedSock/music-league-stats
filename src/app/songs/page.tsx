@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { ArrowLeft, ArrowRight, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -57,7 +59,7 @@ const sortLabels = {
   newest: "Newest",
 } as const;
 
-export default async function SongsPage({
+async function SongsPageContent({
   searchParams,
 }: {
   searchParams: Promise<SearchParams>;
@@ -261,4 +263,8 @@ export default async function SongsPage({
       </Card>
     </Container>
   );
+}
+
+export default function SongsPage(props: { searchParams: Promise<SearchParams>; }) {
+  return <Suspense fallback={<AnalyticsLoadingShell />}><SongsPageContent {...props} /></Suspense>;
 }

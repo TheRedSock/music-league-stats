@@ -1,5 +1,8 @@
 "use client";
 
+import { formatPoints } from "@/lib/format";
+
+
 import { ExternalLink, ListMusic } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -299,7 +302,7 @@ export function HighestVotedSongsPanel({
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="font-mono text-sm text-lime-200">
-                    {row.pointsGiven} pts
+                    {formatPoints(row.pointsGiven)}
                   </p>
                   <p className="text-[11px] text-zinc-600">
                     ballot {metric(row.ballotBlowout)}×
@@ -382,7 +385,7 @@ export function HighestVotedSongsPanel({
                 </p>
 
                 {sorted.length ? (
-                  <Table className="table-fixed">
+                  <Table className="min-w-[48rem] table-fixed">
                     <TableHeader>
                       <TableRow>
                         <SortHeader

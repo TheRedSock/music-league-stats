@@ -3,6 +3,7 @@
 import { PendingLink } from "@/components/analytics/pending-link";
 import { SortableTableHead } from "@/components/analytics/sortable-table-head";
 import { PlayersColumnPicker, usePlayerTableColumns, PLAYER_TABLE_COLUMN_LABELS, type PlayerTableColumnId } from "@/components/analytics/players-column-picker";
+import { ordinal } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TruncatedCell } from "@/components/ui/table";
 import type { PlayerDirectoryRow } from "@/lib/analytics";
@@ -20,7 +21,7 @@ function metric(player: PlayerDirectoryRow, column: PlayerTableColumnId): string
     case "points-per-voter": return value(player.pointsPerEligibleVoter);
     case "performance": return player.provisional || player.averageRoundIndex === null ? "—" : `${value(player.averageRoundIndex)}×`;
     case "appeal-spread": return player.appealSpread == null ? "—" : `${player.appealSpread > 0 ? "+" : ""}${player.appealSpread.toFixed(1)} pp`;
-    case "percentile": return player.averageRoundPercentile === null ? "—" : `${player.averageRoundPercentile.toFixed(0)}th`;
+    case "percentile": return player.averageRoundPercentile === null ? "—" : ordinal(player.averageRoundPercentile);
     case "wins": return player.roundWins;
     case "top-quartile": return player.topQuartileRate === null ? "—" : `${(player.topQuartileRate * 100).toFixed(0)}%`;
   }
@@ -41,7 +42,7 @@ export function PlayersTable({ currentParams, direction, rows, sort }: {
       <div className="overflow-x-auto border-t border-white/[0.06]">
         <Table className="table-fixed" style={{ minWidth: 340 + columns.length * 110 }}>
           <TableHeader><TableRow>
-            <TableHead className="w-14" title="Rank by average round index among qualified players, regardless of the table sort.">Rank</TableHead>
+            <TableHead className="w-24" title="Rank by average round index among qualified players, regardless of the table sort.">Adjusted rank</TableHead>
             <SortableTableHead activeDirection={direction} activeSort={sort} className="w-[20%]" defaultDirection="asc" params={currentParams} path="/players" sortKey="name">Player</SortableTableHead>
             <SortableTableHead activeDirection={direction} activeSort={sort} align="right" defaultDirection="desc" params={currentParams} path="/players" sortKey="points">Points</SortableTableHead>
             {columns.map(column => (
