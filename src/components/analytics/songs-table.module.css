@@ -1,0 +1,92 @@
+.table {
+  table-layout: auto;
+}
+
+.table th,
+.table td {
+  padding-inline: 0.5rem;
+  white-space: nowrap;
+}
+
+/* Other columns keep their full contents and take only the width they need. */
+.table th {
+  width: 1px;
+}
+
+.table td {
+  padding-block: 0.625rem;
+}
+
+.table .songColumn,
+.table .scopeColumn {
+  min-width: 6rem;
+  max-width: 0;
+}
+
+.table .songColumn {
+  width: 60%;
+}
+
+.table .scopeColumn {
+  width: 40%;
+}
+
+/* Long text must not contribute an intrinsic minimum to the flexible columns. */
+.songContent,
+.scopeContent {
+  container-type: inline-size;
+}
+
+.songTitle {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.artist {
+  flex: 1;
+  min-width: 0;
+  container-type: inline-size;
+  container-name: song-artist;
+}
+
+.artistLabel {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.leagueLink {
+  flex-shrink: 0;
+  max-width: calc(100% - 2.75rem);
+}
+
+.roundLink {
+  flex: 1;
+  min-width: 2rem;
+  container-type: inline-size;
+  container-name: song-round;
+}
+
+.roundLabel {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.roundName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Hide secondary text only when its own remaining space is too small. */
+@container song-artist (width < 3rem) {
+  .artistLabel {
+    visibility: hidden;
+  }
+}
+
+@container song-round (width < 4rem) {
+  .roundName {
+    display: none;
+  }
+}

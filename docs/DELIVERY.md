@@ -104,3 +104,14 @@ Screenshots: `delivery-evidence/followup-*.png`. Main is unchanged; no push, dep
 Removed the Songs-only 1,500 px maximum width: the page now uses the same 1,280 px container as the header and other pages. The measures note and FAQ link share a footer row with pagination; controls wrap when both Previous and Next need more room on mobile. Statistical surprise remains opt-in, with adjusted support as the default optional column.
 
 Validation: type checking, targeted ESLint and diff checks passed. Browser measurements at 1920×1080 confirm identical header/page bounds and aligned note/Next centres. At 390×844, the note and Next also share a row with no document overflow; pagination remains usable on page two. Evidence: `delivery-evidence/songs-shared-width-footer-*.png`.
+
+
+### Songs adaptive column widths
+
+Halved horizontal cell padding from 16 to 8 px per side. Replaced the fixed table minimum (840 px plus 120 px per selected measure) and fixed metric widths with native content sizing. Submitter, row number and numeric columns retain their complete text; Song and League / round share the remaining space and shrink to 96 px each before the table scrolls. The shared page/header maximum width is unchanged.
+
+Song titles take priority over artists; league labels and round numbers take priority over round names. Secondary text truncates to the space left in each individual row and disappears when that remainder becomes too small, using CSS container queries without layout-measuring JavaScript. Full song/artist text remains in hover and accessible labels; round links retain their full hover descriptions. The requested metric headings have explicit two-line breaks, including “Avg pts /” above “actual voter” and “Reach vs” above “share spread”. Sort announcements and help lookup use the same labels with spaces instead of line breaks.
+
+Validation: TypeScript, targeted ESLint and diff checks passed. Live browser checks used 1920×1080, 1080×900, 960×900, 768×1024 and 390×844. All nine optional measures fit in the shared 1,198 px desktop table and in the 983 px available width at 1080 px. At 960 px both flexible columns reached 96 px before contained scrolling appeared; no protected header or cell overflowed. Three measures fit at 768 px without scrolling. On the phone, the default selection uses a roughly 451 px table instead of the previous 960 px minimum, and keyboard scrolling reaches the intact numeric columns without document overflow. Adjusted-support sorting was verified with real data, including longer submitter names. Statistical surprise remains opt-in; the browser was restored to adjusted support as its only optional column and total-points sorting.
+
+Evidence: `delivery-evidence/songs-adaptive-columns-{desktop,compact,mobile}.png`. No scoring calculations, database queries or column preferences were changed by the implementation.

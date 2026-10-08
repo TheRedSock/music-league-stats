@@ -35,7 +35,8 @@ export function SortableTableHead({
   sortKey: string;
   title?: string;
 }) {
-  const help = title ?? tableColumnHelp(typeof children === "string" ? children : sortKey);
+  const label = typeof children === "string" ? children.replaceAll("\n", " ") : sortKey;
+  const help = title ?? tableColumnHelp(label);
   const active = activeSort === sortKey;
   const nextDirection: SortDirection = active
     ? activeDirection === "desc"
@@ -65,9 +66,9 @@ export function SortableTableHead({
           active && "text-lime-200",
         )}
         href={href}
-        pendingLabel={`Sorting by ${typeof children === "string" ? children : sortKey}`}
+        pendingLabel={`Sorting by ${label}`}
       >
-        <span>{children}</span>
+        <span className={typeof children === "string" && children.includes("\n") ? "whitespace-pre" : undefined}>{children}</span>
         {active ? (
           <span aria-hidden="true" className="font-mono text-[10px]">
             {activeDirection === "desc" ? "v" : "^"}
