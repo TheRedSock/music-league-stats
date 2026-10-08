@@ -14,11 +14,12 @@ export const PLAYER_TABLE_COLUMN_LABELS: Record<PlayerTableColumnId, string> = {
   wins: "Wins", "top-quartile": "Top quartile",
 };
 export const DEFAULT_PLAYER_TABLE_COLUMNS: PlayerTableColumnId[] = [
-  "songs", "rounds", "points-per-song", "points-per-voter", "performance", "appeal-spread", "wins",
+  "rounds", "performance", "wins",
 ];
 const picker = createTableColumnPicker({
   ids: PLAYER_TABLE_COLUMN_IDS, labels: PLAYER_TABLE_COLUMN_LABELS,
-  defaults: DEFAULT_PLAYER_TABLE_COLUMNS, storageKey: "players-table-columns-v1",
+  defaults: DEFAULT_PLAYER_TABLE_COLUMNS, storageKey: "players-table-columns-v2", legacyKey: "players-table-columns-v1",
+  migrate: columns => columns.length === 7 && ["songs", "rounds", "points-per-song", "points-per-voter", "performance", "appeal-spread", "wins"].every(id => columns.includes(id as PlayerTableColumnId)) ? DEFAULT_PLAYER_TABLE_COLUMNS : columns,
 });
 export const usePlayerTableColumns = picker.useColumns;
 export const PlayersColumnPicker = picker.ColumnPicker;

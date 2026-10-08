@@ -22,7 +22,7 @@ export function SiteFooter() {
           GitHub
         </a>
         <ScopedLink className="transition-colors hover:text-zinc-200" href="/faq">
-          FAQ
+          How the stats work
         </ScopedLink>
         <span className="sm:ml-auto">
           Made by{" "}

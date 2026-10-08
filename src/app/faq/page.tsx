@@ -1,183 +1,34 @@
-import { ArrowLeft, HelpCircle } from "lucide-react";
 import type { Metadata } from "next";
-
-import { ScopedLink } from "@/components/analytics/scoped-link";
+import Link from "next/link";
 import { Container } from "@/components/layout/container";
-import { Badge } from "@/components/ui/badge";
-import { buttonStyles } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 
-export const metadata: Metadata = {
-  title: "FAQ",
-  description: "Plain-language explanations of Music League Tracker metrics.",
-};
+export const metadata: Metadata = { title: "How the stats work", description: "Rankings, voting similarity and the numbers behind Music League results." };
 
-const sections = [
-  {
-    title: "What is an eligible opportunity?",
-    body: "If you voted in a round, every visible song you did not submit is a song you could have voted for. Each of those possible choices is an eligible opportunity. If the export has no row for one of those songs, the app treats that choice as zero points.",
-  },
-  {
-    title: "What is positive reach?",
-    body: "Positive reach asks: out of everyone who could vote for this song, how many gave it more than zero? A song with 40% positive reach got points from 40% of its eligible voters.",
-  },
-  {
-    title: "What is points per voter?",
-    body: "This is the average points received per eligible opportunity. It is useful when one song had more people able to vote on it than another.",
-  },
-  {
-    title: "What is support index (raw)?",
-    body: "Raw support index is points received divided by expected points from the eligible ballot budgets that could reach the song. 1.0× means expected support, 2.0× means twice expected, and 0.5× means half expected. It is fair within a round, but extreme values are easier in small rooms because a few strong votes move a smaller denominator more.",
-  },
-  {
-    title: "What is support index (EB)?",
-    body: "Support index (EB) is an empirical-Bayes version of raw support index. It shrinks the ratio toward 1.0× using sample-size variance estimated from the full corpus (Var(SI) ≈ τ² + φ/E). Songs from small or noisy samples are pulled toward expected support; songs with more eligible ballot mass keep more of their raw signal. The dashboard top-songs list and the default Songs sort use this for cross-round comparison. If variance cannot be estimated, the app falls back to the raw index instead of forcing every song to 1.0×.",
-  },
-  {
-    title: "What is support z?",
-    body: "Support z is the standardized surplus under the same variance model: (points − expected) / sqrt(φ × expected). It answers how surprising the result is if the song were only at expected support, not what the best estimate of the true multiplier is. A 2.0× result in a large round scores a higher z than the same 2.0× in a tiny round. On the Songs page it is optional via Columns; reach vs share spread is shown by default alongside Support (EB).",
-  },
-  {
-    title: "When should I use raw SI vs EB vs z?",
-    body: "Use raw support index to compare songs inside the same round or to see the unadjusted multiplier. Use support index (EB) for cross-round or all-league leaderboards where small-sample blowouts should not dominate. Use support z when you care about statistical surprise under a null of expected support. Round percentile stays a within-round rank and is optional on the Songs table via Columns.",
-  },
-  {
-    title: "What is average round index?",
-    body: "For players, each round compares their total points with the expected points for their submitted songs in that round. The profile and leaderboard average those round-local indexes so playing more rounds does not automatically make the score better.",
-  },
-  {
-    title: "What is a percentile?",
-    body: "A percentile says where a song or player landed inside the round. Higher is better for performance percentiles. For relative voting order, lower means the ballot was completed earlier than more observed voters; ties use the middle of the tied positions. On Songs, round percentile is hidden by default and can be added from the Columns control.",
-  },
-  {
-    title: "What is top quartile?",
-    body: "Top quartile means the player landed in the top 25% of round-local performance for that round. The percentage shown is how often that happened across entered rounds.",
-  },
-  {
-    title: "What is vote-pattern alignment?",
-    body: "Alignment compares votes on other players' songs, including inferred zeroes. Each vote is divided by that voter's ballot budget, then the voter's mean on the pair's shared songs in that round is subtracted. Cosine similarity compares the deviations across qualifying rounds, removing the positive baseline from broad voting. Scores range from −100% to +100%: positive means agreement, zero means no linear agreement, and negative means opposing preferences. Rounds where either shared-song ballot is flat do not contribute features or coverage. Mutual support is shown separately. Alignment describes voting behavior only, not friendship, causality, or listening habits.",
-  },
-  {
-    title: "What is mutual ballot share?",
-    body: "Mutual ballot share looks at points two players gave to each other's songs and divides them by the eligible ballot points involved. It is budget-aware, so a large ballot and a small ballot can be compared more fairly.",
-  },
-  {
-    title: "What are ballot blowout and crowd contrast?",
-    body: "On a player profile, Highest votes given ranks songs by points that player allocated. Ballot blowout is the points-sort tiebreaker: points ÷ fair share of that player's own ballot that round, then diluted by how many songs on the same ballot got at least that many points. Crowd contrast uses the same fair-share idea against other voters on that song (song points ÷ eligible voters), diluted by how many voters gave ≥ that score. A unique personal 5 on a sparse ballot scores high on ballot blowout even if others also liked the song; a 5 that is the only top score on a crowded song scores high on crowd contrast.",
-  },
-  {
-    title: "What is the Compare page?",
-    body: "Compare shows directional Support (giver → receiver), Mutual support, Alignment, and Timing. “Awarded ≥1 pt” counts eligible opportunities receiving points; the remaining opportunities received zero. Profile section titles link there with the current scope, focused player, and matching sort already selected.",
-  },
-  {
-    title: "What is the Graphs page?",
-    body: "Graphs visualizes player relationships from the same metrics as Compare: Bubbles (alignment communities), Flow (directed points-given), Matrix (affinity heatmap), and Ego (one player’s neighbors). Bubbles uses only positive centered alignment, including its fallback links; zero and negative scores do not connect communities. Matrix keeps zero neutral, with red for opposing preferences and blue for agreement. Ego shows negative alignment as red links. Flow and Bubbles use a connection budget per player so the slider stays useful as scope changes: 0% is dense, 50% balances detail (about 1.5 arrows per player in Flow, 1.25 links in Bubbles), and 100% removes qualifying links. Show all links bypasses that budget. Equal strengths stay together, so short scopes can still change in steps. Both views show thin gray fallback links by default; smaller fallback nodes in Bubbles inherit their connected core’s color without affecting community detection. Nodes with no path to a core stay gray. Matrix and Ego filter by rank from all links at 0% to none at 100%. These describe ballot patterns only — not friendship or listening habits.",
-  },
-  {
-    title: "What is the Facts page?",
-    body: "Facts groups submissions and vote outcomes to surface dataset-level patterns: repeated artists, dense rounds, appeal shape, round races and landslides, and playlist-position vote distribution (from submissions.csv slate order). Thin-spread songs and Crowd pleasers rank by reach percentile minus round-share percentile; Cult classics and Niche devotion rank by the most negative gaps. Spread is expressed in percentile points (pp), with tied values assigned their midpoint percentile. Song percentiles compare qualifying songs in the selected scope; player percentiles compare qualified players using their average reach and share. Player appeal panels use the same adaptive participation floor (closer to half for small scopes, easing logarithmically to one third at full scope) as other rankings. It uses the same league scope filter as the analytics pages.",
-  },
-  {
-    title: "How are playlist-position quartiles assigned?",
-    body: "Each round’s slate is split into four equal-count buckets (sizes differ by at most one song). When the slate length is not divisible by 4, leftover slots go to earlier buckets first — e.g. 19 songs → 5-5-5-4 and 21 → 6-5-5-5 — so a boundary song is not pushed into 75–100% by continuous percentile cuts. Correlation vs points still uses continuous position (index ÷ (n−1)).",
-  },
+const topics = [
+  { id: "rankings", title: "Why do the rankings differ?", summary: "Points reward the total earned. Average round index compares performance across rounds of different sizes.", detail: "For each round, the player’s points are divided by the expected points for their submissions, then those round indexes are averaged. 1.0 means expected support. Adjusted rank always refers to this measure, even when the table is sorted by something else. The minimum rounds required is shown beside the results: roughly half the rounds for a small scope, easing to one third across all leagues. A dash means the player has not reached that threshold. Wins include ties; top quartile counts finishes in the top 25%." },
+  { id: "song-measures", title: "What does each song measure tell me?", summary: "Songs starts with total points. Voters reached shows how many eligible voters gave the song at least one point.", detail: "Points per eligible voter includes zeroes; points per actual voter includes only voters who gave points. Round share is the song’s fraction of all eligible points in its round. Round percentile is its position within that round, with higher values meaning a better finish. Columns contains the additional measures. Choosing a sort also shows the relevant column." },
+  { id: "adjusted-support", title: "How does adjusted support work?", summary: "It compares points with the round’s expected support and reduces extremes from small samples. The Home standout songs use it.", detail: "Raw support index = points ÷ expected points from eligible ballot budgets. Adjusted support is the empirical-Bayes estimate: the raw index is shrunk toward 1.0 using corpus-estimated variance, Var(SI) ≈ τ² + φ/E. It is an estimate, not an observed multiplier. When variance cannot be estimated, the raw index is used. Statistical surprise (support z) is (points − expected) ÷ √(φ × expected): a standardized surplus under the expected-support model. Neither measure is a judgment of musical quality." },
+  { id: "voting-similarity", title: "Do these players vote alike?", summary: "Voting similarity runs from −100 to +100. Positive means agreement, zero means no linear agreement, and negative means opposing preferences.", detail: "Only songs both players could vote for are compared; both players’ own submissions are excluded. Votes, including inferred zeroes, are divided by the voter’s ballot budget and centered on their shared-song mean in each round. Cosine similarity compares the pooled deviations. Rounds where either shared ballot is flat do not contribute. This is not the percentage of songs both players liked. Shared-round and song-comparison counts describe the available sample. Mutual support is a separate measure: points exchanged divided by eligible ballot budgets." },
+  { id: "zeroes", title: "Why are there votes worth zero?", summary: "An active voter could have chosen every eligible song they did not submit. Missing choices count as zero.", detail: "A ballot is active when it has at least one exported vote row, including an explicit zero. A scored submission was visible to voters or has exported votes. Self-votes are excluded. A player who submitted but did not vote creates no inferred zeroes and is marked as having missed the ballot. Imports keep the original rows; analytics adds eligible opportunities for calculation." },
+  { id: "vote-details", title: "What are ballot blowout and crowd contrast?", summary: "They distinguish a voter’s unusually strong choices from scores that stand out among other voters.", detail: "Highest votes given sorts by points, with ballot blowout as its tiebreaker. Ballot blowout compares the score with an equal share of that voter’s ballot, divided again by the number of songs on the ballot scoring at least as much. Crowd contrast compares with points per eligible voter on that song, divided by the number of voters giving at least that score. The detail table can be searched and sorted independently." },
+  { id: "facts", title: "How should I read the Facts page?", summary: "Repeated artists and songs are counts. Reach versus share describes whether support is broad or concentrated.", detail: "Spread is reach percentile minus round-share percentile, in percentage points; ties use midpoint percentiles. Positive means broader reach relative to point share, negative means more concentrated support. Song comparisons require at least five eligible voters; player comparisons require at least three songs and the participation threshold. Most repeated artists counts repeated submissions, not consecutive streaks. Playlist position and points reports correlation, not causation. Playlist quartiles contain nearly equal song counts, with leftover positions assigned to earlier groups." },
+  { id: "graphs", title: "Which graph should I use?", summary: "League race follows standings. Voting similarity groups shared preferences. Support flow shows who gives points to whom.", detail: "Matrix compares every pair, including negative and zero similarity; an empty cell means no qualifying comparison. Player connections focuses on one person. Graphs describe voting behavior, not friendships or listening history. League race uses only rounds with exported votes; missed rounds add zero, multiple submissions are summed, and early/late averages split the displayed rounds in half (the middle round belongs to the early half). Selected round subsets restart totals at zero." },
+  { id: "scope", title: "Which leagues am I looking at?", summary: "Pages open with all leagues. The league selector can choose the latest league, a single league, or a combination.", detail: "Scope is carried in navigation links and shared URLs. Public round filters are retired; graph progression can still show a subset of displayed rounds. A new league combination may need its results prepared before comparisons are available. Imports and refreshes can temporarily show an updating state. Exports do not include listening behavior, private intent or reliable voting-deadline context." },
+  { id: "timing", title: "What does ballot position mean?", summary: "It shows how early a player voted compared with the other voters in that round. Lower is earlier.", detail: "The latest exported vote timestamp for each ballot is ranked within its round; ties use the middle position. Missing ballots do not enter the average. Timing does not establish whether someone voted before or after a deadline." },
 ];
 
-const glossary = [
-  ["Active ballot", "A voter with at least one exported vote row in a round."],
-  ["Inferred zero", "A missing vote row for a song the active voter could have voted for."],
-  ["Did not vote", "A submitter with no exported vote row in that round."],
-  ["Support index (raw)", "Points ÷ expected points from eligible ballot budgets."],
-  ["Support index (EB)", "Raw support index shrunk toward 1.0× for sample-size noise."],
-  ["Support z", "Standardized points surplus vs expected under the EB variance model."],
-  ["Scope", "The selected league and/or round filter."],
-  ["Comparable features", "The ballot items used when comparing two voters."],
-  ["Provisional", "A player with fewer entered rounds than the selected ranking threshold."],
-  [
-    "Ballot blowout",
-    "Points ÷ fair share of the voter's own ballot, diluted by tied top scores.",
-  ],
-  [
-    "Crowd contrast",
-    "Points ÷ fair share among voters on that song, diluted by tied top scores.",
-  ],
-] as const;
-
 export default function FaqPage() {
-  return (
-    <Container className="py-10 sm:py-14">
-      <ScopedLink
-        className={buttonStyles({ variant: "ghost", size: "sm", className: "-ml-3" })}
-        href="/"
-      >
-        <ArrowLeft aria-hidden="true" className="size-4" />
-        Dashboard
-      </ScopedLink>
-
-      <div className="mt-6 max-w-3xl">
-        <Badge variant="success">
-          <HelpCircle aria-hidden="true" className="mr-1.5 size-3" />
-          Metrics explained
-        </Badge>
-        <h1 className="mt-4 text-4xl font-semibold tracking-[-0.045em] text-white sm:text-6xl">
-          FAQ
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-zinc-400">
-          Short explanations for the statistics used across the dashboard,
-          songs, players, and player profiles.
-        </p>
-      </div>
-
-      <section className="mt-9 grid gap-4 lg:grid-cols-2" aria-label="Metric explanations">
-        {sections.map((section) => (
-          <Card key={section.title}>
-            <CardHeader>
-              <CardTitle className="text-base">{section.title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm leading-6 text-zinc-400">{section.body}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </section>
-
-      <Card className="mt-6 border-dashed">
-        <CardHeader>
-          <CardTitle>Glossary</CardTitle>
-          <CardDescription>
-            Quick translations for labels that appear in tables and charts.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {glossary.map(([term, definition]) => (
-              <div key={term}>
-                <dt className="text-sm font-medium text-zinc-100">{term}</dt>
-                <dd className="mt-1 text-sm leading-6 text-zinc-500">
-                  {definition}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card className="mt-6 border-violet-300/15 bg-violet-300/[0.04]">
-        <CardHeader>
-          <CardTitle>What the app does not know</CardTitle>
-          <CardDescription>
-            Music League CSV exports do not include listening behavior, private
-            intent, or reliable deadline context. The app describes league
-            outcomes and voting patterns only.
-          </CardDescription>
-        </CardHeader>
-      </Card>
-    </Container>
-  );
+  return <Container className="py-6 sm:py-10">
+    <div className="max-w-3xl">
+      <h1 className="text-3xl font-semibold tracking-tight">How the stats work</h1>
+      <nav aria-label="Metric topics" className="my-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-lime-300">
+        <Link href="#rankings">Rankings</Link><Link href="#song-measures">Songs</Link><Link href="#voting-similarity">Voting similarity</Link><Link href="#zeroes">Zeroes</Link><Link href="#graphs">Graphs</Link>
+      </nav>
+      {topics.map(topic => <section key={topic.id} id={topic.id} className="scroll-mt-32 border-t border-white/10 py-6">
+        <h2 className="text-lg font-semibold">{topic.title}</h2>
+        <p className="mt-2 text-sm leading-6 text-zinc-300">{topic.summary}</p>
+        <details className="mt-3 text-sm text-zinc-400"><summary className="cursor-pointer text-lime-300">Details</summary><p className="mt-3 leading-7">{topic.detail}</p></details>
+      </section>)}
+    </div>
+  </Container>;
 }

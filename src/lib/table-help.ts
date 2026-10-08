@@ -27,10 +27,13 @@ const COLUMN_HELP: Record<string, string> = {
   wins: "Number of first-place round finishes, including ties.",
   "top 25%": "Proportion of entered rounds finished in the top quarter of players.",
   "top quartile": "Proportion of entered rounds finished in the top quarter of players.",
+  "voters reached": "Share of eligible voters who awarded at least one point.",
+  "adjusted support": "Estimated support relative to expected points, adjusted for sample size.",
+  "statistical surprise": "Standardized points surplus under the expected-support model.",
   "positive reach": "Share of eligible song-voter opportunities awarded at least one point, including zero-point opportunities in the denominator.",
   reach: "Share of eligible voters awarding at least one point; player rows average this across their songs.",
   share: "Share of all eligible round points earned by a song; player rows average this across their songs.",
-  spread: "Standardized reach minus standardized round point share, in standard deviations. Positive means broader, lighter support; negative means more concentrated support.",
+  spread: "Reach percentile minus round-share percentile, in percentage points. Positive means broader, lighter support; negative means more concentrated support.",
   chars: "Number of characters in the song title, including spaces and punctuation.",
   gap: "Difference between the highest and second-highest song shares of round points, in percentage points.",
   "top share": "Fraction of all eligible round points earned by the highest-scoring song.",
@@ -43,8 +46,8 @@ const COLUMN_HELP: Record<string, string> = {
   "progress / result": "Rows and chunks received while importing, song and vote totals on success, or an error on failure.",
   total: "Cumulative points through the selected round.",
   "this round": "Points earned in the selected round; a dash means the player did not enter.",
-  "early avg": "Average points per entered round in the first half of the league.",
-  "late avg": "Average points per entered round in the second half of the league.",
+  "early avg": "Average points per displayed round in the first half, including missed rounds.",
+  "late avg": "Average points per displayed round in the second half, including missed rounds.",
 };
 
 export function tableColumnHelp(label: string): string | undefined {

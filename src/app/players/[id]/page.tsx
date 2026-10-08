@@ -38,7 +38,6 @@ import {
   playerPath,
   resolveAnalyticsFilter,
   resolveCompetitorRef,
-  selectedFilterLabel,
   scopeQueryParams,
   truncateArtistForMeta,
   truncateRoundName,
@@ -74,10 +73,10 @@ function relationshipExtremes(
   return {
     most: [...sampled]
       .sort((a, b) => b.pointsPerEncounter - a.pointsPerEncounter)
-      .slice(0, 5),
+      .slice(0, 3),
     least: [...sampled]
       .sort((a, b) => a.pointsPerEncounter - b.pointsPerEncounter)
-      .slice(0, 5),
+      .slice(0, 3),
   };
 }
 
@@ -85,16 +84,16 @@ function mutualExtremes(relationships: MutualRelationship[]) {
   return {
     mostPoints: [...relationships]
       .sort((a, b) => b.points - a.points)
-      .slice(0, 5),
+      .slice(0, 3),
     leastPoints: [...relationships]
       .sort((a, b) => a.points - b.points)
-      .slice(0, 5),
+      .slice(0, 3),
     highestShare: [...relationships]
       .sort((a, b) => b.ballotPointShare - a.ballotPointShare)
-      .slice(0, 5),
+      .slice(0, 3),
     lowestShare: [...relationships]
       .sort((a, b) => a.ballotPointShare - b.ballotPointShare)
-      .slice(0, 5),
+      .slice(0, 3),
   };
 }
 
@@ -107,7 +106,7 @@ function SubmissionList({
 }) {
   return (
     <div>
-      <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+      <h3 className="text-sm font-medium text-zinc-400">
         {label}
       </h3>
       <ol className="mt-2 divide-y divide-white/[0.06]">
@@ -189,7 +188,7 @@ function SubmissionList({
 function TimingList({ label, rows }: { label: string; rows: TimingRow[] }) {
   return (
     <div>
-      <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+      <h3 className="text-sm font-medium text-zinc-400">
         {label}
       </h3>
       <ol className="mt-2 divide-y divide-white/[0.06]">
@@ -308,7 +307,7 @@ async function PlayerProfilePageContent({
         right.points - left.points ||
         left.title.localeCompare(right.title),
     );
-  const high = rankedSubmissions.slice(0, 5);
+  const high = rankedSubmissions.slice(0, 3);
   const low = [...rankedSubmissions]
     .sort(
       (left, right) =>
@@ -316,12 +315,12 @@ async function PlayerProfilePageContent({
         left.points - right.points ||
         left.title.localeCompare(right.title),
     )
-    .slice(0, 5);
+    .slice(0, 3);
   const received = relationshipExtremes(profile.relationships, "received");
   const given = relationshipExtremes(profile.relationships, "given");
   const mutual = mutualExtremes(profile.mutualRelationships);
-  const highestAlignments = profile.alignments.slice(0, 5);
-  const lowestAlignments = profile.alignments.slice(-5).reverse();
+  const highestAlignments = profile.alignments.slice(0, 3);
+  const lowestAlignments = profile.alignments.slice(-3).reverse();
   const votedTiming = profile.timing.filter((row) => row.relativeOrder !== null);
   const orderedTiming = [...votedTiming].sort(
     (left, right) => left.relativeOrder! - right.relativeOrder!,
@@ -336,9 +335,9 @@ async function PlayerProfilePageContent({
       votedTiming.length
     : null;
   const overviewCards = [
-    { label: "Exported points", value: overview?.totalPoints.toLocaleString() ?? "—" },
+    { label: "Points", value: overview?.totalPoints.toLocaleString() ?? "—" },
     { label: "Submissions", value: overview?.submissions.toLocaleString() ?? "—" },
-    { label: "Entered rounds", value: overview?.enteredRounds.toLocaleString() ?? "—" },
+    { label: "Rounds played", value: overview?.enteredRounds.toLocaleString() ?? "—" },
     { label: "Points / song", value: metric(overview?.pointsPerSubmission) },
     { label: "Avg round index", value: `${metric(overview?.averageRoundIndex)}×` },
     {
@@ -363,18 +362,16 @@ async function PlayerProfilePageContent({
     });
 
   return (
-    <Container className="py-10 sm:py-14">
-      <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+    <Container className="py-6 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-4xl font-semibold tracking-[-0.045em] text-white sm:text-6xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             {player.name}
           </h1>
         </div>
-        <div className="w-full lg:max-w-3xl">
+        <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />
-          <p className="mt-2 text-right text-xs text-zinc-500">
-            Showing {selectedFilterLabel(options, filter)}
-          </p>
+
         </div>
       </div>
 
@@ -383,16 +380,14 @@ async function PlayerProfilePageContent({
           <h2 className="sr-only" id="overview-heading">
             Overview
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <div className="grid grid-cols-3 gap-x-4 gap-y-5 border-y border-white/10 py-4 lg:grid-cols-6">
             {overviewCards.map((card) => (
-              <Card key={card.label}>
-                <CardContent className="p-5">
+              <div key={card.label}>
                   <p className="font-mono text-xl font-semibold text-white">
                     {card.value}
                   </p>
                   <p className="mt-1 text-xs text-zinc-500">{card.label}</p>
-                </CardContent>
-              </Card>
+              </div>
             ))}
           </div>
         </section>
@@ -402,7 +397,7 @@ async function PlayerProfilePageContent({
             <CardTitle>No submissions in this scope</CardTitle>
             <CardDescription>
               The player exists, but has no submitted songs under the selected
-              league and round filters. Voting activity may still appear below.
+              leagues. Voting activity may still appear below.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -414,13 +409,10 @@ async function PlayerProfilePageContent({
             <Medal aria-hidden="true" className="mb-2 size-5 text-lime-300" />
             <CardTitle>Submission range</CardTitle>
             <CardDescription>
-              Highest and lowest are ordered by empirical-Bayes support index
-              (SI_eb), which shrinks noisy small-sample extremes toward expected
-              support when comparing across rounds — not an objective judgment
-              of the songs.
+              Highest and lowest are ranked by adjusted support. <Link href="/faq#adjusted-support" className="underline underline-offset-4">About this measure</Link>
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-8 lg:grid-cols-2">
+          <CardContent className="grid min-w-0 grid-cols-1 gap-8 lg:grid-cols-2">
             <SubmissionList label="Highest round performance" rows={high} />
             <SubmissionList label="Lowest round performance" rows={low} />
           </CardContent>
@@ -432,7 +424,7 @@ async function PlayerProfilePageContent({
           <CardTitle>Point distributions</CardTitle>
           <CardDescription>
             Active ballots include inferred zeroes for omitted eligible songs.
-            Bar heights show vote counts; the percentage view shows each score’s share of votes.
+            Switch between vote counts and their share within the displayed scores.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -449,7 +441,7 @@ async function PlayerProfilePageContent({
         rows={profile.highestVotedSongs}
       />
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-2" aria-label="Directional relationships">
+      <section className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-2" aria-label="Directional relationships">
         {[
           {
             direction: "received" as const,
@@ -477,13 +469,13 @@ async function PlayerProfilePageContent({
               </CardTitle>
               <CardDescription>{description}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-7 sm:grid-cols-2">
+            <CardContent className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2">
               {[
                 ["Higher rate", groups.most],
                 ["Lower rate", groups.least],
               ].map(([label, rows]) => (
                 <div key={label as string}>
-                  <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+                  <h3 className="text-sm font-medium text-zinc-400">
                     {label as string}
                   </h3>
                   <ol className="mt-2 divide-y divide-white/[0.06]">
@@ -550,7 +542,7 @@ async function PlayerProfilePageContent({
             {`Combined points between ${player.name} and another player in both directions, shown both as totals and as the share of eligible ballot points allocated to each other. Comparisons use the same adaptive scope participation minimum as Compare.`}
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-7 sm:grid-cols-2 xl:grid-cols-4">
+        <CardContent className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               label: "Most combined points",
@@ -576,7 +568,7 @@ async function PlayerProfilePageContent({
             },
           ].map(({ label, rows, value }) => (
             <div key={label}>
-              <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+              <h3 className="text-sm font-medium text-zinc-400">
                 {label}
               </h3>
               <ol className="mt-2 divide-y divide-white/[0.06]">
@@ -621,7 +613,7 @@ async function PlayerProfilePageContent({
         </CardContent>
       </Card>
 
-      <section className="mt-6 grid gap-6 lg:grid-cols-2">
+      <section className="mt-6 grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
             <Gauge aria-hidden="true" className="mb-2 size-5 text-lime-300" />
@@ -631,7 +623,7 @@ async function PlayerProfilePageContent({
                   className="hover:text-lime-200"
                   href={compareHref("alignment", "alignment")}
                 >
-                  Vote-pattern alignment
+                  Voting similarity
                 </Link>
               </CardTitle>
               <details className="group relative">
@@ -656,13 +648,13 @@ async function PlayerProfilePageContent({
           </CardHeader>
           <CardContent>
             {profile.alignments.length ? (
-              <div className="grid gap-7 sm:grid-cols-2">
+              <div className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2">
                 {[
-                  ["Highest alignment", highestAlignments],
-                  ["Lowest alignment", lowestAlignments],
+                  ["Most similar voting", highestAlignments],
+                  ["Least similar voting", lowestAlignments],
                 ].map(([label, rows]) => (
                   <div key={label as string}>
-                    <h3 className="text-xs font-medium uppercase tracking-[0.15em] text-zinc-500">
+                    <h3 className="text-sm font-medium text-zinc-400">
                       {label as string}
                     </h3>
                     <ol className="mt-2 divide-y divide-white/[0.06]">
@@ -740,7 +732,7 @@ async function PlayerProfilePageContent({
                     Average relative voting order
                   </p>
                 </div>
-                <div className="grid gap-7 sm:grid-cols-2">
+                <div className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2">
                   <TimingList
                     label="Highest percentiles"
                     rows={highestTiming}

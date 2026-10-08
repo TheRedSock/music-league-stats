@@ -1,3 +1,5 @@
+import Form from "next/form";
+import Link from "next/link";
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { Search } from "lucide-react";
@@ -13,10 +15,6 @@ import { Container } from "@/components/layout/container";
 import { buttonStyles } from "@/components/ui/button";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   encodeScopeIds,
@@ -28,7 +26,6 @@ import {
   parsePlayerSortDirection,
   parseSearch,
   resolveAnalyticsFilter,
-  selectedFilterLabel,
   scopeQueryParams,
   type SearchParams,
 } from "@/lib/analytics";
@@ -94,27 +91,23 @@ async function PlayersPageContent({
   };
 
   return (
-    <Container className="py-10 sm:py-14">
-      <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+    <Container className="py-6 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">
             Players
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {selectedFilterLabel(options, filter)}
-          </p>
+
         </div>
-        <div className="w-full lg:max-w-3xl">
+        <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>
 
-      <Card className="mt-9">
-        <CardContent className="p-4 sm:p-5">
-          <form
+      <div className="mt-5">
+          <Form
             action="/players"
-            className="grid gap-3 sm:grid-cols-[1fr_15rem_auto]"
-            method="get"
+            className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_15rem_auto]"
           >
             {filter.leagueIds.length ? (
               filter.leagueIds.map((leagueId) => (
@@ -123,14 +116,14 @@ async function PlayersPageContent({
             ) : (
               <input name="league" type="hidden" value="all" />
             )}
-            <label className="relative">
+            <label className="relative col-span-2 sm:col-span-1">
               <span className="sr-only">Search players</span>
               <Search
                 aria-hidden="true"
                 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
               />
               <input
-                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 pl-10 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
+                className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 pl-10 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
                 defaultValue={search}
                 maxLength={100}
                 name="q"
@@ -141,7 +134,7 @@ async function PlayersPageContent({
             <label>
               <span className="sr-only">Sort players</span>
               <select
-                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40"
+                className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40"
                 key={sort}
                 defaultValue={sort}
                 name="sort"
@@ -154,11 +147,10 @@ async function PlayersPageContent({
               </select>
             </label>
             <button className={buttonStyles()} type="submit">
-              Apply
+              Search
             </button>
-          </form>
-        </CardContent>
-      </Card>
+          </Form>
+      </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-400">
@@ -166,7 +158,7 @@ async function PlayersPageContent({
           {data.rows.length === 1 ? "player" : "players"}
         </p>
         <p className="text-xs text-zinc-500">
-          {`Fewer than ${data.minimumRounds} entered rounds (adaptive scope minimum) is marked provisional; avg round index shows as — until then`}
+          {`Adjusted ranking requires ${data.minimumRounds} rounds.`} <Link href="/faq#rankings" className="underline underline-offset-4">Why?</Link>
         </p>
       </div>
 
@@ -187,19 +179,7 @@ async function PlayersPageContent({
         </div>
       )}
 
-      <Card className="mt-10 border-dashed">
-        <CardHeader>
-          <CardTitle className="text-sm">Participation and comparison</CardTitle>
-          <CardDescription>
-            A player is ranked only after the selected minimum number of
-            entered rounds (adaptive to the scope). Provisional is a sample-size label,
-            not a quality judgment. Round wins include ties; top-quartile rate
-            uses each round&apos;s local point percentile. Reach vs share spread
-            uses the same qualified player population as Facts. Columns lets
-            you add average percentile and top quartile, which start hidden.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+
     </Container>
   );
 }

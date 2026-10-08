@@ -204,7 +204,7 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {importKinds.map((kind) => (
-          <div key={kind}>
+          <div className="min-w-0" key={kind}>
             <p
               className="mb-1.5 text-sm font-medium text-zinc-200"
               id={`file-${kind}-label`}

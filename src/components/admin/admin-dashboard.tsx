@@ -38,11 +38,11 @@ import {
 import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 const ADMIN_SECTIONS = [
+  ["csv-sync", "Import CSVs"],
+  ["analytics-refresh", "Refresh analytics"],
   ["create-league", "Create league"],
   ["existing-leagues", "Existing leagues"],
-  ["analytics-refresh", "Refresh analytics"],
   ["spotify-enrichment", "Spotify enrichment"],
-  ["csv-sync", "CSV sync"],
   ["player-names", "Player names & slugs"],
   ["import-history", "Import history"],
 ] as const;
@@ -102,7 +102,25 @@ export function AdminDashboard({
           </ul>
         </nav>
         <div className="min-w-0 space-y-8">
-          <Card id="create-league" className="scroll-mt-24">
+          <Card id="csv-sync" className="scroll-mt-24">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <RefreshCw aria-hidden="true" className="size-4 text-lime-300" />
+                Import CSVs
+              </CardTitle>
+              <CardDescription>
+                Choose a league and its four exports. Imports update matching rows, keep missing rows and refresh results automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImportPanel leagues={leagues} />
+            </CardContent>
+          </Card>
+
+          <section id="analytics-refresh" className="scroll-mt-24" aria-label="Refresh analytics"><AnalyticsRefreshPanel initialStatus={materializationStatus} /></section>
+
+          <details id="create-league" className="scroll-mt-24 rounded-lg border border-white/10 p-4"><summary className="cursor-pointer font-medium">Create a league</summary>
+          <Card className="scroll-mt-24">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plus aria-hidden="true" className="size-4 text-lime-300" />
@@ -113,6 +131,7 @@ export function AdminDashboard({
               <LeagueForm />
             </CardContent>
           </Card>
+          </details>
 
           <section id="existing-leagues" className="scroll-mt-24" aria-labelledby="existing-leagues-heading">
             <div className="mb-4">
@@ -124,9 +143,10 @@ export function AdminDashboard({
               </h2>
             </div>
             {leagues.length ? (
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="divide-y divide-white/10 rounded-lg border border-white/10">
                 {leagues.map((league) => (
-                  <Card key={league.id}>
+                  <details key={league.id} className="group p-4">
+                    <summary className="cursor-pointer text-sm font-medium text-zinc-200">{league.name}<span className="ml-3 text-xs text-zinc-400">Edit</span></summary>
                     <CardHeader>
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
@@ -151,7 +171,7 @@ export function AdminDashboard({
                     <CardContent>
                       <LeagueForm league={league} />
                     </CardContent>
-                  </Card>
+                  </details>
                 ))}
               </div>
             ) : (
@@ -161,28 +181,14 @@ export function AdminDashboard({
             )}
           </section>
 
-          <section id="analytics-refresh" className="scroll-mt-24" aria-label="Refresh analytics"><AnalyticsRefreshPanel initialStatus={materializationStatus} /></section>
 
-          <section id="spotify-enrichment" className="scroll-mt-24" aria-label="Spotify enrichment"><SpotifyEnrichPanel initialStatus={spotifyEnrichStatus} /></section>
 
-          <Card id="csv-sync" className="scroll-mt-24">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <RefreshCw aria-hidden="true" className="size-4 text-lime-300" />
-                CSV sync
-              </CardTitle>
-              <CardDescription>
-                Upload all four exports. Existing rows are updated; missing rows
-                are left unchanged. Import marks the cache stale, then rebuilds it
-                in short steps.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ImportPanel leagues={leagues} />
-            </CardContent>
-          </Card>
+          <details id="spotify-enrichment" className="scroll-mt-24 rounded-lg border border-white/10 p-4"><summary className="cursor-pointer font-medium">Spotify artist data</summary><div className="mt-4"><SpotifyEnrichPanel initialStatus={spotifyEnrichStatus} /></div></details>
 
-          <Card id="player-names" className="scroll-mt-24">
+
+
+          <details id="player-names" className="scroll-mt-24 rounded-lg border border-white/10 p-4"><summary className="cursor-pointer font-medium">Edit player names and profile links</summary>
+          <Card className="scroll-mt-24">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <UserRoundCog aria-hidden="true" className="size-4 text-lime-300" />
@@ -198,6 +204,7 @@ export function AdminDashboard({
               <PlayerNameEditor players={players} />
             </CardContent>
           </Card>
+          </details>
 
           <section id="import-history" className="scroll-mt-24" aria-labelledby="import-history-heading">
             <div className="mb-4">
@@ -213,7 +220,7 @@ export function AdminDashboard({
             </div>
             <Card className="overflow-hidden">
               {history.length ? (
-                <Table className="table-fixed">
+                <Table className="min-w-[48rem] table-fixed">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[24%]">Created</TableHead>

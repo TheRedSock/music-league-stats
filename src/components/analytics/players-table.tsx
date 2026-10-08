@@ -4,7 +4,6 @@ import { PendingLink } from "@/components/analytics/pending-link";
 import { SortableTableHead } from "@/components/analytics/sortable-table-head";
 import { PlayersColumnPicker, usePlayerTableColumns, PLAYER_TABLE_COLUMN_LABELS, type PlayerTableColumnId } from "@/components/analytics/players-column-picker";
 import { ordinal } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TruncatedCell } from "@/components/ui/table";
 import type { PlayerDirectoryRow } from "@/lib/analytics";
 import { buildAnalyticsHref, type QueryValue } from "@/lib/analytics-url";
@@ -35,7 +34,8 @@ const titles: Partial<Record<PlayerTableColumnId, string>> = {
 export function PlayersTable({ currentParams, direction, rows, sort }: {
   currentParams: Record<string, QueryValue>; direction: SortDirection; rows: PlayerDirectoryRow[]; sort: PlayerSort;
 }) {
-  const { columns, toggle } = usePlayerTableColumns();
+  const { columns: savedColumns, toggle } = usePlayerTableColumns();
+  const columns = sort !== "name" && sort !== "points" && !savedColumns.includes(sort) ? [...savedColumns, sort] : savedColumns;
   return (
     <div>
       <div className="flex justify-end px-4 py-3 sm:px-5"><PlayersColumnPicker columns={columns} onToggle={toggle} /></div>
@@ -43,7 +43,7 @@ export function PlayersTable({ currentParams, direction, rows, sort }: {
         <Table className="table-fixed" style={{ minWidth: 340 + columns.length * 110 }}>
           <TableHeader><TableRow>
             <TableHead className="w-24" title="Rank by average round index among qualified players, regardless of the table sort.">Adjusted rank</TableHead>
-            <SortableTableHead activeDirection={direction} activeSort={sort} className="w-[20%]" defaultDirection="asc" params={currentParams} path="/players" sortKey="name">Player</SortableTableHead>
+            <SortableTableHead activeDirection={direction} activeSort={sort} className="w-52" defaultDirection="asc" params={currentParams} path="/players" sortKey="name">Player</SortableTableHead>
             <SortableTableHead activeDirection={direction} activeSort={sort} align="right" defaultDirection="desc" params={currentParams} path="/players" sortKey="points">Points</SortableTableHead>
             {columns.map(column => (
               <SortableTableHead key={column} activeDirection={direction} activeSort={sort} align="right" defaultDirection={defaultPlayerSortDirection(column)} params={currentParams} path="/players" sortKey={column} title={titles[column]}>
@@ -69,11 +69,7 @@ export function PlayersTable({ currentParams, direction, rows, sort }: {
                       {player.name}
                     </TruncatedCell>
                   </PendingLink>
-                {player.provisional ? (
-                  <Badge className="shrink-0" variant="muted">
-                    Provisional
-                  </Badge>
-                ) : null}
+
                 </div>
               </TableCell>
 

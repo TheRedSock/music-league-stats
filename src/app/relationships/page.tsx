@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
-import { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
-import { Network, Search } from "lucide-react";
+import { qualificationRoundFloor } from "@/lib/participation";
+import Form from "next/form";
+import { buttonStyles } from "@/components/ui/button";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -29,6 +30,8 @@ import {
   defaultRelationshipSortDirection,
   encodeScopeIds,
   getCachedFilterOptions,
+  getCachedPlayersData,
+  parsePositiveInteger,
   getCachedRelationshipsTableData,
   getRelationshipsTableData,
   loadAnalytics,
@@ -65,7 +68,7 @@ const tabs: Array<{ tab: RelationshipTab; label: string; description: string }> 
   },
   {
     tab: "alignment",
-    label: "Alignment",
+    label: "Voting similarity",
     description: "Agreement on shared songs after removing each voter's round average.",
   },
   {
@@ -84,7 +87,7 @@ function metric(value: number | null | undefined, digits = 2): string {
 }
 
 function valueFor(tab: RelationshipTab, row: RelationshipTableRow): string {
-  if (tab === "alignment") return percent(row.alignment);
+  if (tab === "alignment") return row.alignment == null ? "—" : `${(row.alignment * 100).toFixed(0)} / 100`;
   if (tab === "timing") return percent(row.averageTiming);
   if (tab === "mutual") return percent(row.ballotPointShare, 1);
   return metric(row.pointsPerOpportunity);
@@ -183,7 +186,7 @@ async function RelationshipsPageContent({
       "@/components/analytics/analytics-building"
     );
     return (
-      <Container className="py-10 sm:py-14">
+      <Container className="py-6 sm:py-10">
         <div className="mb-8">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
@@ -195,6 +198,11 @@ async function RelationshipsPageContent({
     );
   }
 
+  const playerOptions = await getCachedPlayersData(encodeScopeIds(filter.leagueIds), encodeScopeIds(filter.roundIds), "", "name", "asc");
+  const pageSize = 25;
+  const pageCount = Math.max(1, Math.ceil(data.rows.length / pageSize));
+  const page = Math.min(parsePositiveInteger(params.page, 1, 100000), pageCount);
+  const visibleRows = data.rows.slice((page - 1) * pageSize, page * pageSize);
   const currentParams: Record<string, QueryValue> = {
     ...scopeQueryParams(filter),
     dir: direction,
@@ -208,14 +216,14 @@ async function RelationshipsPageContent({
     (!filter.roundIds.length || filter.roundIds.includes(round.id)),
   ).length;
   const minimumRounds = qualificationRoundFloor(scopeRounds, options.rounds.length);
-  const valueLabel = tab === "alignment" ? "Alignment" : tab === "timing" ? "Ballot position" : tab === "mutual" ? "Ballot share" : "Pts / opportunity";
-  const sampleLabel = tab === "alignment" ? "Vote features" : tab === "timing" ? "Ballots cast" : "Opportunities";
+  const valueLabel = tab === "alignment" ? "Similarity" : tab === "timing" ? "Ballot position" : tab === "mutual" ? "Ballot share" : "Pts / opportunity";
+  const sampleLabel = tab === "alignment" ? "Song comparisons" : tab === "timing" ? "Ballots cast" : "Opportunities";
   const contextLabel = tab === "timing" ? "Missed ballots" : tab === "alignment" ? "Scope covered" : "Awarded ≥1 pt";
   const contextHelp = tab === "timing" ? "Entered rounds where the player did not cast a ballot." : tab === "alignment" ? "Shared voted rounds with variation in both voters' scores on shared songs, divided by all rounds in the selected scope." : "Percentage and count of eligible song-voter opportunities awarded at least one point; the rest received zero points. Mutual support combines both directions.";
 
   return (
-    <Container className="py-10 sm:py-14">
-      <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+    <Container className="py-6 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">
             Compare
@@ -226,31 +234,36 @@ async function RelationshipsPageContent({
               : "All qualifying player comparisons"}
           </p>
         </div>
-        <div className="w-full lg:max-w-3xl">
+        <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>
 
-      <Card className="mt-9">
+      <Card className="mt-5">
         <CardHeader>
-          <Network aria-hidden="true" className="mb-2 size-5 text-lime-300" />
           <CardTitle>{activeTab.label} comparisons</CardTitle>
           <CardDescription>{activeTab.description}</CardDescription>
-          <p className="text-xs leading-5 text-zinc-500">
-            {tab === "timing"
-              ? "Lower ballot position means earlier voting. Missed ballots are excluded from the average."
-              : `Requires ${minimumRounds} of ${scopeRounds} scope rounds${tab === "alignment" ? ` and ${qualificationFeatureFloor(scopeRounds, options.rounds.length)} comparable vote features` : ""}. The participation floor rises toward half for small scopes and eases to one third at full scope.`}
-            {tab === "alignment" ? " Shared songs exclude both players’ submissions. Votes are budget-normalized and centered within each round; flat ballots do not contribute. Positive scores mean agreement, zero means no linear agreement, and negative scores mean opposing preferences. Mutual support is shown separately." : ""}
-          </p>
+          <p className="text-xs text-zinc-400">{tab === "timing" ? "Lower means earlier voting." : `Based on at least ${minimumRounds} shared rounds.`} <Link href="/faq#voting-similarity" className="underline underline-offset-4">About these measures</Link></p>
         </CardHeader>
         <CardContent>
+          <Form action="/relationships" className="mb-4 flex flex-wrap items-end gap-2">
+            {filter.leagueIds.map(id => <input type="hidden" key={id} name="league" value={id} />)}
+            <input type="hidden" name="tab" value={tab} /><input type="hidden" name="sort" value={sort} /><input type="hidden" name="dir" value={direction} />
+            <label className="min-w-0 flex-1 sm:max-w-sm"><span className="mb-1 block text-xs text-zinc-400">Focus on a player</span>
+              <select name="focus" defaultValue={focus ?? ""} className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm">
+                <option value="">All players</option>
+                {playerOptions.rows.map(player => <option key={player.id} value={player.id}>{player.name}</option>)}
+              </select>
+            </label>
+            <button type="submit" className={buttonStyles({variant:"secondary"})}>Compare</button>
+          </Form>
           <div className="flex flex-wrap items-center gap-2">
             {tabs.map((item) => (
               <Link
                 className={
                   item.tab === tab
-                    ? "rounded-full border border-lime-300/30 bg-lime-300/10 px-3 py-1.5 text-xs font-medium text-lime-100"
-                    : "rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:border-white/20 hover:text-white"
+                    ? "rounded-md border border-lime-300/30 bg-lime-300/10 px-3 py-1.5 text-xs font-medium text-lime-100"
+                    : "rounded-md border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:border-white/20 hover:text-white"
                 }
                 href={buildAnalyticsHref("/relationships", currentParams, {
                   dir: defaultRelationshipSortDirection(
@@ -346,7 +359,7 @@ async function RelationshipsPageContent({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.rows.map((row) => {
+                  {visibleRows.map((row) => {
                     return (
                       <TableRow key={`${row.leftId}-${row.rightId ?? "timing"}`}>
                         <TableCell className="max-w-0">
@@ -392,14 +405,11 @@ async function RelationshipsPageContent({
         </CardContent>
       </Card>
 
-      <Card className="mt-6 border-dashed">
-        <CardContent className="flex items-start gap-3 p-5 text-sm leading-6 text-zinc-400">
-          <Search aria-hidden="true" className="mt-1 size-4 shrink-0 text-zinc-600" />
-          These tables use the same inferred-zero, scope-aware metrics as the
-          player profile summaries. Focused links from a profile preselect that
-          player and sort by the clicked section&apos;s metric.
-        </CardContent>
-      </Card>
+      <nav aria-label="Comparison pages" className="mt-4 flex items-center justify-between gap-3 text-sm">
+        {page > 1 ? <Link className={buttonStyles({variant:"secondary"})} href={buildAnalyticsHref("/relationships",currentParams,{page:page-1})}>Previous</Link> : <span />}
+        <span className="text-zinc-400">{data.rows.length} results · Page {page} of {pageCount}</span>
+        {page < pageCount ? <Link className={buttonStyles({variant:"secondary"})} href={buildAnalyticsHref("/relationships",currentParams,{page:page+1})}>Next</Link> : <span />}
+      </nav>
     </Container>
   );
 }

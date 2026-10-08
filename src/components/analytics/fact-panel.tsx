@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-export const FACT_PREVIEW_LIMIT = 5;
+export const FACT_PREVIEW_LIMIT = 3;
 
 /** Server-friendly panel: preview stays on the server; only the dialog is client. */
 export function FactPanel({
@@ -36,7 +36,7 @@ export function FactPanel({
     <Card className={cn(className)}>
       <CardHeader>
         <CardTitle className="text-sm">{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <details className="text-xs text-zinc-400"><summary className="cursor-pointer">About this stat</summary><CardDescription className="mt-2">{description}</CardDescription></details>
       </CardHeader>
       <CardContent className="space-y-4">
         {itemCount > 0 ? (

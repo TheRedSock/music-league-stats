@@ -106,13 +106,12 @@ database cannot be queried. URL parameters keep analytics views shareable:
   split the displayed rounds in half (the middle round belongs to the early
   half) and include missed rounds; they use raw, not normalized, points.
 - `/facts` — submission patterns and voting quirks (appeal shape, round
-  races/landslides, submission-order bias), with top-5 previews and full tables
+  races/landslides, submission-order bias), with three-row previews and detailed tables
 - `/faq` — plain-language metric explanations
-- Repeated `league=<uuid>` and `round=<uuid>` parameters scope every route. With
-  no scope parameters, pages default to the latest league. Use `league=all` for
-  the full cross-league view. Selected rounds are an optional subset of the
-  selected leagues; with no rounds selected, all rounds in the selected leagues
-  are included.
+- Repeated `league=<uuid>` parameters select leagues. With no selection, pages
+  show all leagues; `league=all` is also supported. The selector offers Latest
+  league. Public `round` parameters are retired and ignored. Progression has its
+  own displayed-round subset.
 - Admins can optionally store the Music League app league ID. When present,
   league and round labels link to `app.musicleague.com` using the imported round
   IDs from `rounds.csv`.
@@ -138,8 +137,8 @@ database cannot be queried. URL parameters keep analytics views shareable:
   within the complete round before search and pagination.
 - Player round index uses the same expected-points model, summing expected
   points for all of the player's submitted songs in each round, then averaging
-  those round-local values. The default non-provisional threshold is three
-  entered rounds. These are league outcomes, not objective measures of musical
+  those round-local values. The qualification threshold adapts from roughly half of the selected
+  rounds in small scopes to one third at full scope. These are league outcomes, not objective measures of musical
   quality.
 - Vote-pattern alignment compares only songs both voters could vote on, excluding
   both players' submissions and including inferred zeroes for active voters.

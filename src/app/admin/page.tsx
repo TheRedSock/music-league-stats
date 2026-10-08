@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { asc, desc, eq, sql } from "drizzle-orm";
 import { TriangleAlert } from "lucide-react";
 import type { Metadata } from "next";
@@ -33,7 +35,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function AdminPage() {
+async function AdminPageContent() {
   const config = getAdminConfig();
   if (!config.configured) {
     return (
@@ -182,3 +184,5 @@ export default async function AdminPage() {
     </Container>
   );
 }
+
+export default function AdminPage() { return <Suspense fallback={<AnalyticsLoadingShell />}><AdminPageContent /></Suspense>; }

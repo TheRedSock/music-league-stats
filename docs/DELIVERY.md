@@ -9,7 +9,7 @@ The baseline and detailed acceptance criteria are in [the audit](audit-2026-10-0
 | 0 | Patched dependencies, bounded sign-in attempts and scope generation | Complete |
 | 1 | Responsive navigation, accessible dialogs/popovers, accurate ranks and formatting | Complete |
 | 2 | Homepage and Songs visual and editorial reference | Complete |
-| 3 | Players, profiles, Facts, Compare, methodology, admin hierarchy | Pending |
+| 3 | Players, profiles, Facts, Compare, methodology, admin hierarchy | Complete |
 | 4 | Graph defaults, legends, keyboard/touch details and URL state | Pending |
 | 5 | Profile query grouping, import preparation, readiness reuse and retry behavior | Pending |
 | 6 | On-demand details, maintained benchmarks, refresh instrumentation and measured optimization | Pending |
@@ -35,3 +35,11 @@ Validation: lint, type checking, production build and 94 unit tests passed (16 d
 Home now leads with standings, a compact totals strip and five players. The shared surfaces use flat backgrounds, restrained borders and square-ended bars. One league selector carries the full current name; draft selections and Apply stay inside its popover. Song identities have wrapping titles and a separate artist line. The default table has points and voters reached; sorting by an advanced measure reveals that column, while saved custom selections survive migration. Search uses Next Form navigation. Repeated methodology paragraphs were replaced with contextual links; similarity is explicitly a score out of 100, not a shared-likes percentage.
 
 Validation: lint, type checking, production build and 94 tests passed. Real-data browser checks exercised all-league selection, latest-league long titles and adjusted-support sorting. At 390×844, the first Home player starts at y=520 and the first Songs result at approximately y=520. Width checks passed at 360/390/768/1440 px. Desktop and mobile screenshots in delivery-evidence/stage-2-*.jpg show the reference treatment. Advanced controls remain available; deeper methodology targets are completed in Stage 3.
+
+## Stage 3
+
+Players starts with rounds, average round index and wins; advanced sorts reveal their measure. Profiles use one summary strip and three-item comparisons. Vote distributions use the same bar geometry for counts and shares, with the displayed-range denominator and total points stated explicitly. Facts leads with three observations and four URL-backed categories; previews contain three rows and definitions are expandable. Round outcomes can be opened by keyboard or touch. Compare adds a player selector and 25-row pagination. Methodology is organized around questions with stable anchors and expandable details; README now agrees with all-league defaults and retired public round filtering.
+
+Admin starts with CSV import and analytics status, followed by compact league rows with expandable edit forms. Secondary workflows remain available. Inspection found and fixed intrinsic grid-width overflow in both the import form and profile submission lists. No imports, refreshes, edits or enrichment were executed against the configured database.
+
+Validation: lint, type checking, production build and 94 tests passed. Browser checks followed player search into TheRedSock's profile, focused Compare on that player, verified 25 rows plus the header, changed Facts categories, checked methodology anchors and signed into local Admin for read-only inspection. At 390 px, Players, profile, Facts, Compare, Admin and methodology all fit the document width; wide tables scroll internally. Screenshots are in delivery-evidence/stage-3-*.jpg. Closed profile/Facts detail payloads are addressed separately in Stage 6.

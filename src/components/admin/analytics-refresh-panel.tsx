@@ -105,12 +105,10 @@ export function AnalyticsRefreshPanel({
           <div>
             <CardTitle className="flex items-center gap-2">
               <RefreshCw aria-hidden="true" className="size-4 text-lime-300" />
-              All-leagues analytics cache
+              Analytics
             </CardTitle>
             <CardDescription className="mt-1">
-              Rebuild the cached stats used by the dashboard,
-              songs, players, compare, and profiles. Run this after imports or
-              name/slug edits. Completed steps are saved; you can resume after a timeout or closing this page.
+              Update results after imports or player edits. Interrupted refreshes resume from the last completed step.
             </CardDescription>
           </div>
           <Badge variant={badge.variant}>{badge.label}</Badge>
@@ -124,12 +122,10 @@ export function AnalyticsRefreshPanel({
             ) : (
               <RefreshCw aria-hidden="true" className="size-4" />
             )}
-            {pending ? "Refreshing…" : status?.progress ? "Resume analytics refresh" : "Refresh all-leagues stats"}
+            {pending ? "Refreshing…" : status?.progress ? "Resume analytics refresh" : "Refresh analytics"}
           </Button>
           {status?.analyticsRevision ? (
-            <p className="font-mono text-xs text-zinc-500">
-              revision {status.analyticsRevision}
-            </p>
+            <details className="text-xs text-zinc-500"><summary className="cursor-pointer">Revision</summary><p className="mt-2 font-mono">{status.analyticsRevision}</p></details>
           ) : null}
         </div>
 
@@ -149,7 +145,7 @@ export function AnalyticsRefreshPanel({
           </p>
         ) : status?.status === "completed" && status.job?.summary ? (
           <p className="text-sm text-zinc-400">
-            Cached analytics are up to date.
+            Results are up to date.
           </p>
         ) : (
           <p className="text-sm text-zinc-500">

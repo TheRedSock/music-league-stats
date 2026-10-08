@@ -3,7 +3,7 @@
 import { formatPoints } from "@/lib/format";
 
 
-import { useId, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -23,32 +23,10 @@ export function RoundOutcomeHover({
   className?: string;
   songs: RoundTopSong[];
 }) {
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
-
-  if (!songs.length) {
-    return <div className={className}>{children}</div>;
-  }
-
   return (
-    <div
-      className={cn("relative", className)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-          setOpen(false);
-        }
-      }}
-      onFocus={() => setOpen(true)}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <div aria-describedby={open ? panelId : undefined}>{children}</div>
-      {open ? (
-        <div
-          className="absolute left-0 top-full z-30 mt-2 w-[min(100%,20rem)] rounded-xl border border-white/10 bg-zinc-950 p-3 shadow-xl"
-          id={panelId}
-          role="tooltip"
-        >
+    <div className={cn(className)}>
+      {children}
+      {songs.length ? <details className="mt-2 text-xs text-zinc-400"><summary className="cursor-pointer">Top three songs</summary><div className="mt-2 border-l border-white/15 pl-3">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
             Top songs
           </p>
@@ -70,8 +48,7 @@ export function RoundOutcomeHover({
               </li>
             ))}
           </ol>
-        </div>
-      ) : null}
+        </div></details> : null}
     </div>
   );
 }
