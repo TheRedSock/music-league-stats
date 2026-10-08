@@ -97,3 +97,10 @@ Implemented the 21 follow-up notes as one acceptance checkpoint on the delivery 
 Acceptance checks: production build and TypeScript pass; repository lint passes without warnings; 101 tests pass, with 19 database tests skipped because the disposable database is not running (this stage changes no SQL, imports or refresh calculations; Stage 6 ran all 120). Browser checks use real rendered data at 1920×1080 and 390×844, with an additional 1440 px Admin check. Verified five Home rows and scoped submitter URLs; Songs page two starts at 26; Players alphabetical sorting starts with row 1; mobile Columns opens within the viewport; all Facts categories change highlights; densest rounds reads “54 songs from 27 submitters”; the profile timing list has 80 rows over four pages, search for fall-2026 returns six, and Escape closes it and restores focus. Compare and Graphs controls fit mobile without document overflow. The FAQ timing link highlights the correct question near the bottom of the page. Admin's all-tracks explanation was inspected without submitting a job.
 
 Screenshots: `delivery-evidence/followup-*.png`. Main is unchanged; no push, deployment, configured-database write, import or refresh was performed.
+
+
+### Songs width and footer refinement
+
+Removed the Songs-only 1,500 px maximum width: the page now uses the same 1,280 px container as the header and other pages. The measures note and FAQ link share a footer row with pagination; controls wrap when both Previous and Next need more room on mobile. Statistical surprise remains opt-in, with adjusted support as the default optional column.
+
+Validation: type checking, targeted ESLint and diff checks passed. Browser measurements at 1920×1080 confirm identical header/page bounds and aligned note/Next centres. At 390×844, the note and Next also share a row with no document overflow; pagination remains usable on page two. Evidence: `delivery-evidence/songs-shared-width-footer-*.png`.

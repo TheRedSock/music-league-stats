@@ -106,7 +106,7 @@ async function SongsPageContent({
   }
 
   return (
-    <Container className="max-w-[1500px] py-6 sm:py-10">
+    <Container className="py-6 sm:py-10">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">
@@ -201,39 +201,43 @@ async function SongsPageContent({
         </div>
       )}
 
-      {data.total > data.pageSize ? (
-        <nav
-          aria-label="Song pages"
-          className="mt-4 flex items-center justify-between gap-3"
-        >
-          {page > 1 ? (
-            <Link
-              className={buttonStyles({ variant: "secondary" })}
-              href={buildAnalyticsHref("/songs", currentParams, {
-                page: page - 1,
-              })}
-            >
-              <ArrowLeft aria-hidden="true" className="size-4" />
-              Previous
-            </Link>
-          ) : (
-            <span />
-          )}
-          {page < totalPages ? (
-            <Link
-              className={buttonStyles({ variant: "secondary" })}
-              href={buildAnalyticsHref("/songs", currentParams, {
-                page: page + 1,
-              })}
-            >
-              Next
-              <ArrowRight aria-hidden="true" className="size-4" />
-            </Link>
-          ) : null}
-        </nav>
-      ) : null}
-
-      <p className="mt-6 text-xs text-zinc-400">More measures are available in Columns. <Link className="underline underline-offset-4" href="/faq#song-measures">How song measures work</Link></p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <p className="min-w-48 flex-1 text-xs leading-5 text-zinc-400">
+          More measures are available in Columns.{" "}
+          <Link className="underline underline-offset-4" href="/faq#song-measures">
+            How song measures work
+          </Link>
+        </p>
+        {data.total > data.pageSize ? (
+          <nav
+            aria-label="Song pages"
+            className="ml-auto flex shrink-0 items-center gap-3"
+          >
+            {page > 1 ? (
+              <Link
+                className={buttonStyles({ variant: "secondary" })}
+                href={buildAnalyticsHref("/songs", currentParams, {
+                  page: page - 1,
+                })}
+              >
+                <ArrowLeft aria-hidden="true" className="size-4" />
+                Previous
+              </Link>
+            ) : null}
+            {page < totalPages ? (
+              <Link
+                className={buttonStyles({ variant: "secondary" })}
+                href={buildAnalyticsHref("/songs", currentParams, {
+                  page: page + 1,
+                })}
+              >
+                Next
+                <ArrowRight aria-hidden="true" className="size-4" />
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
+      </div>
     </Container>
   );
 }
