@@ -3,7 +3,8 @@
 import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 import { connectedComponents } from "graphology-components";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useGraphSetting, graphBoolean } from "./use-graph-setting";
 
 import {
   GraphEmptyState,
@@ -43,8 +44,8 @@ const PALETTE = [
 ];
 
 export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
-  const [mode, setMode] = useState<"louvain" | "components">("louvain");
-  const [keepEveryone, setKeepEveryone] = useState(true);
+  const [mode, setMode] = useGraphSetting<"louvain" | "components">("algorithm", "louvain", raw => raw === "louvain" || raw === "components" ? raw : undefined);
+  const [keepEveryone, setKeepEveryone] = useGraphSetting("fallback", true, graphBoolean);
   const scale = useMemo(
     () => bubbleWeightScale(graph.undirectedEdges),
     [graph.undirectedEdges],
@@ -202,7 +203,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
         source: edge.source,
         target: edge.target,
         weight: edgeWeight(edge, "alignment") ?? 0,
-        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)}% alignment`,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)} / 100 similarity`,
       })),
       ...fallback.links.map(edge => ({
         source: edge.source,
@@ -210,7 +211,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
         weight: edge.alignment ?? 0,
         fallback: true,
         color: "rgba(161, 161, 170, 0.55)",
-        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)}% alignment (below cutoff)`,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)} / 100 similarity (below cutoff)`,
       })),
     ];
 
@@ -243,7 +244,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
         threshold={normalized}
         thresholdLabel="Bubble sensitivity"
       >
-        <label className="space-y-1.5 text-xs text-zinc-400">
+        <details className="text-xs text-zinc-400"><summary className="cursor-pointer">Grouping method</summary><label className="mt-3 block space-y-1.5">
           <span className="block">Detection</span>
           <select
             className="h-9 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100"
@@ -255,16 +256,9 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
             <option value="louvain">Louvain communities</option>
             <option value="components">Connected components</option>
           </select>
-        </label>
+        </label></details>
       </LabsControls>
-      <p className="text-xs text-zinc-500">
-        Only links meeting the cutoff define bubbles. At 50%, the connection budget targets 1.25 qualifying links per player on average; equal scores stay together.
-        {keepEveryone
-          ? " Smaller nodes follow their strongest available path to a bubble and share its color; gray fallback links do not affect the core groups."
-          : " Players without qualifying links are hidden."}
-        {` ${summary.length} groups · ${primaryCount} above cutoff · ${fallbackCount} fallback · ${nodes.length} players.`}
-        {ungroupedCount > 0 ? ` ${ungroupedCount} players have no path to a core bubble and stay gray.` : ""}
-      </p>
+      <p className="text-xs text-zinc-400">{summary.length} groups · {nodes.length} players · {primaryCount} connections. {fallbackCount ? `${fallbackCount} gray connections fall below the cutoff.` : ""} {ungroupedCount ? `${ungroupedCount} ungrouped players appear gray.` : ""}</p>
       {nodes.length === 0 ? (
         <GraphEmptyState message="No alignment structure at this sensitivity." />
       ) : (

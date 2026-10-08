@@ -42,74 +42,23 @@ export function LabsControls({
   unfiltered?: boolean;
   onUnfilteredChange?: (value: boolean) => void;
 }) {
-  return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-4 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-      <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
-        {showMetric && metric && onMetricChange ? (
-          <label className="space-y-1.5 text-xs text-zinc-400">
-            <span className="block">Metric</span>
-            <select
-              className="h-9 rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100"
-              onChange={(event) =>
-                onMetricChange(event.target.value as UndirectedMetric)
-              }
-              value={metric}
-            >
-              <option value="alignment">Vote-pattern alignment</option>
-              <option value="mutual">Mutual ballot share</option>
-            </select>
-          </label>
-        ) : null}
-        <div className="min-w-[240px] flex-1 space-y-2">
-          <label className="block space-y-1.5 text-xs text-zinc-400">
-            <span className="flex justify-between gap-3">
-              <span>{thresholdLabel}</span>
-              <span className="tabular-nums text-zinc-200">
-                {unfiltered ? "Unfiltered" : `${(threshold * 100).toFixed(0)}%${densityScale && threshold === 0.5 ? " · balanced" : " filtering"}`}
-              </span>
-            </span>
-            <input
-              title={densityScale
-                ? "Controls the number of strongest links per player: 0% is dense, 50% is balanced, and 100% has no qualifying links. Equal strengths stay together; fallback links are separate."
-                : "Filters by the rank of link strengths in this scope: 0% shows all links; 100% leaves no qualifying links. Equal strengths are filtered together."}
-              disabled={unfiltered}
-              className="w-full accent-lime-300"
-              max={1}
-              min={0}
-              onChange={(event) => onThresholdChange(Number(event.target.value))}
-              step={0.01}
-              type="range"
-              value={threshold}
-            />
-            {rawThreshold != null || scaleCaption ? (
-              <span className="block text-[11px] leading-4 text-zinc-500">
-                {rawThreshold != null
-                  ? !unfiltered && threshold >= 1 ? "Cutoff above strongest link" : `Cutoff ${formatWeightValue(rawThreshold, rawFormat)}${rawUnit ? ` ${rawUnit}` : ""}`
-                  : null}
-                {rawThreshold != null && scaleCaption ? " · " : null}
-                {scaleCaption}
-                {densityScale ? " · 0% dense; 50% balanced; 100% no qualifying links" : " · 0% all links; 100% no qualifying links"}
-              </span>
-            ) : null}
-          </label>
-          {onUnfilteredChange || belowThreshold ? (
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              {onUnfilteredChange ? (
-                <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
-                  <input checked={unfiltered} className="size-3.5 accent-lime-300" onChange={event => onUnfilteredChange(event.target.checked)} type="checkbox" />
-                  <span>Show all links (unfiltered)</span>
-                </label>
-              ) : null}
-              {belowThreshold}
-            </div>
-          ) : null}
-        </div>
-      </div>
-      {children ? (
-        <div className="flex flex-wrap items-center gap-3">{children}</div>
-      ) : null}
+  return <div className="flex min-w-0 flex-wrap items-start gap-4 rounded-lg border border-white/10 p-4">
+    {showMetric && metric && onMetricChange ? <label className="text-xs text-zinc-400"><span className="mb-2 block">Measure</span>
+      <select className="h-9 max-w-full rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100" value={metric} onChange={event => onMetricChange(event.target.value as UndirectedMetric)}><option value="alignment">Voting similarity</option><option value="mutual">Mutual ballot share</option></select>
+    </label> : null}
+    <div className="min-w-0 flex-1 basis-64">
+      <label className="block text-xs text-zinc-400"><span className="mb-2 block">Connections</span>
+        <input aria-label={thresholdLabel} aria-valuetext={unfiltered ? "All connections" : `${Math.round((1-threshold)*100)}% connection density`} type="range" min={0} max={1} step={0.01} disabled={unfiltered} value={threshold} onChange={event => onThresholdChange(Number(event.target.value))} className="w-full accent-lime-300" />
+      </label>
+      <div className="mt-1 flex justify-between text-xs text-zinc-400"><span>More</span><span>Fewer</span></div>
+      <details className="mt-3 text-xs text-zinc-400"><summary className="cursor-pointer">Advanced options</summary>
+        <p className="my-3 leading-5">{rawThreshold != null ? `${!unfiltered && threshold >= 1 ? "Above strongest connection" : `Cutoff ${formatWeightValue(rawThreshold, rawFormat)}${rawUnit ? ` ${rawUnit}` : ""}`}. ` : ""}{scaleCaption}{densityScale ? " · density follows the strongest connections per player" : " · filtered by connection rank"}</p>
+        {onUnfilteredChange ? <label className="mb-2 flex items-center gap-2"><input type="checkbox" className="accent-lime-300" checked={unfiltered} onChange={event => onUnfilteredChange(event.target.checked)} />Show all connections</label> : null}
+        {belowThreshold}
+      </details>
     </div>
-  );
+    {children}
+  </div>;
 }
 
 export function FocusPlayerSelect({
@@ -125,7 +74,7 @@ export function FocusPlayerSelect({
     <label className="space-y-1.5 text-xs text-zinc-400">
       <span className="block">Focus player</span>
       <select
-        className="h-9 min-w-[180px] rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100"
+        className="h-9 w-full max-w-full rounded-lg border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100"
         onChange={(event) => onChange(event.target.value)}
         value={value}
       >
@@ -141,7 +90,7 @@ export function FocusPlayerSelect({
 
 export function GraphEmptyState({ message }: { message: string }) {
   return (
-    <div className="flex h-[420px] items-center justify-center rounded-2xl border border-dashed border-white/10 bg-zinc-950/40 px-6 text-center text-sm text-zinc-500">
+    <div className="flex h-[420px] items-center justify-center rounded-lg border border-dashed border-white/10 bg-zinc-950/40 px-6 text-center text-sm text-zinc-500">
       {message}
     </div>
   );

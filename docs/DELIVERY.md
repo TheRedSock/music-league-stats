@@ -10,7 +10,7 @@ The baseline and detailed acceptance criteria are in [the audit](audit-2026-10-0
 | 1 | Responsive navigation, accessible dialogs/popovers, accurate ranks and formatting | Complete |
 | 2 | Homepage and Songs visual and editorial reference | Complete |
 | 3 | Players, profiles, Facts, Compare, methodology, admin hierarchy | Complete |
-| 4 | Graph defaults, legends, keyboard/touch details and URL state | Pending |
+| 4 | Graph defaults, legends, keyboard/touch details and URL state | Complete |
 | 5 | Profile query grouping, import preparation, readiness reuse and retry behavior | Pending |
 | 6 | On-demand details, maintained benchmarks, refresh instrumentation and measured optimization | Pending |
 
@@ -43,3 +43,11 @@ Players starts with rounds, average round index and wins; advanced sorts reveal 
 Admin starts with CSV import and analytics status, followed by compact league rows with expandable edit forms. Secondary workflows remain available. Inspection found and fixed intrinsic grid-width overflow in both the import form and profile submission lists. No imports, refreshes, edits or enrichment were executed against the configured database.
 
 Validation: lint, type checking, production build and 94 tests passed. Browser checks followed player search into TheRedSock's profile, focused Compare on that player, verified 25 rows plus the header, changed Facts categories, checked methodology anchors and signed into local Admin for read-only inspection. At 390 px, Players, profile, Facts, Compare, Admin and methodology all fit the document width; wide tables scroll internally. Screenshots are in delivery-evidence/stage-3-*.jpg. Closed profile/Facts detail payloads are addressed separately in Stage 6.
+
+## Stage 4
+
+Graphs opens on League race, showing the top five standings with distinct colors and endpoint names. Any player can be added; all-player mode remains available. League, measure, additions, focused player, inspected round, graph thresholds and Matrix selections persist in URLs. Native history handles graph-only controls without refetching the page. Mobile uses a compact view selector. Statistical cutoffs, fallback links and grouping methods are secondary controls.
+
+Matrix has a fixed numerical color legend, distinct missing-data cells, persistent pair details, a player subset picker, arrow-key navigation and a searchable/sortable paginated table. Canvas views have a native player selector and equivalent connection tables. Flow shows incoming/outgoing point totals for qualifying connections; profiles link directly to Player connections. Canvas data is cloned before the force library mutates positions/endpoints. Decorative flow particles were removed.
+
+Validation: production build, type checking, lint and 94 unit tests passed. Browser checks confirmed the top-five default, adding TheRedSock, switching measure and reloading with both choices restored. Matrix ArrowRight selected a negative comparison and restored it after reload; the mobile click selected the same pair. Flow selected TheRedSock and showed 1,559 received / 1,576 given points with six visible table connections. All five graph views fit at 390 px; Flow's canvas measured 333 px. Desktop/mobile evidence is in delivery-evidence/stage-4-*.jpg.

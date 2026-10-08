@@ -1,6 +1,8 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useGraphSetting, graphText } from "./use-graph-setting";
+import { ConnectionTable } from "./connection-table";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const ForceGraph2D = dynamic(() => import("react-force-graph-2d"), {
@@ -55,12 +57,16 @@ export function RelationshipForceGraph({
   layout = {},
   links,
   nodes,
+  pointTotals,
+  weightLabel = directed ? "Points / opportunity" : "Similarity / 100",
 }: {
   directed?: boolean;
   highlightId?: string | null;
   layout?: ForceGraphLayout;
   links: ForceLink[];
   nodes: ForceNode[];
+  weightLabel?: string;
+  pointTotals?: Record<string, { incoming: number; outgoing: number }>;
 }) {
   const {
     chargeStrength = -180,
@@ -76,6 +82,9 @@ export function RelationshipForceGraph({
     useDarkLinks = true,
   } = layout;
 
+  const [selectedId, setSelectedId] = useGraphSetting("focus", "", graphText);
+  const selected = nodes.find(node => node.id === (selectedId || highlightId));
+  const focusedId = selected?.id ?? highlightId;
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const graphRef = useRef<any>(null);
@@ -92,7 +101,7 @@ export function RelationshipForceGraph({
     fitPaddingRef.current = fitPadding;
     fitScaleRef.current = fitScale;
   }, [fitPadding, fitScale]);
-  const graphData = useMemo(() => ({ links, nodes }), [links, nodes]);
+  const graphData = useMemo(() => ({ links: links.map(link => ({...link})), nodes: nodes.map(node => ({...node})) }), [links, nodes]);
   const graphKey = useMemo(
     () =>
       `${nodes.map((n) => n.id).join(",")}|${links
@@ -103,7 +112,7 @@ export function RelationshipForceGraph({
 
   function fitCamera(force = false) {
     const graph = graphRef.current;
-    if (!graph || !forcesReadyRef.current || width < 320) return;
+    if (!graph || !forcesReadyRef.current || width < 240) return;
     const fitKey = `${graphKey}@${width}x${height}`;
     if (!force && fittedForRef.current === fitKey) return;
     fittedForRef.current = fitKey;
@@ -134,7 +143,7 @@ export function RelationshipForceGraph({
   }, [width, height]);
 
   useEffect(() => {
-    if (width < 320) return;
+    if (width < 240) return;
 
     let cancelled = false;
     let retryTimer: number | undefined;
@@ -197,17 +206,20 @@ export function RelationshipForceGraph({
   const maxWeight = Math.max(...links.filter(link => !link.fallback).map((link) => Math.abs(link.weight)), 0.0001);
 
   function nodeRadius(node: ForceNode): number {
-    const isFocus = highlightId != null && node.id === highlightId;
+    const isFocus = focusedId != null && node.id === focusedId;
     return nodeBaseRadius * (node.val ?? 1) * (isFocus ? 1.25 : 1);
   }
 
   return (
+    <>
+    <label className="block text-xs text-zinc-400">Inspect a player<select className="mt-2 block h-10 w-full max-w-sm rounded-md border border-white/10 bg-zinc-950 px-3 text-sm" value={selected?.id ?? ""} onChange={event => setSelectedId(event.target.value)}><option value="">Choose a player…</option>{nodes.map(node => <option key={node.id} value={node.id}>{node.name}</option>)}</select></label>
+    {selected && pointTotals?.[selected.id] ? <p role="status" className="text-sm text-zinc-300">{selected.name}: {pointTotals[selected.id].incoming.toLocaleString()} points received · {pointTotals[selected.id].outgoing.toLocaleString()} points given across qualifying connections.</p> : null}
     <div
       className="overflow-hidden rounded-2xl border border-white/[0.08] bg-zinc-950/60"
       ref={containerRef}
       style={{ height }}
     >
-      {width < 320 ? null : (
+      {width < 240 ? null : (
       <ForceGraph2D
         backgroundColor="rgba(0,0,0,0)"
         graphData={graphData}
@@ -241,9 +253,8 @@ export function RelationshipForceGraph({
             : 0
         }
         linkDirectionalArrowRelPos={1}
-        // One slow particle per directed edge — a subtle motion cue for
-        // giver → receiver without a dashed arrow pattern.
-        linkDirectionalParticles={directed ? link => (link as ForceLink).fallback ? 0 : 1 : 0}
+        // Arrowheads communicate direction without continuous decorative motion.
+        linkDirectionalParticles={0}
         linkDirectionalParticleSpeed={0.004}
         linkDirectionalParticleWidth={(link) => {
           const typed = link as ForceLink;
@@ -266,7 +277,7 @@ export function RelationshipForceGraph({
           const typed = node as ForceNode & { x?: number; y?: number };
           const x = typed.x ?? 0;
           const y = typed.y ?? 0;
-          const isFocus = highlightId != null && typed.id === highlightId;
+          const isFocus = focusedId != null && typed.id === focusedId;
           const radius = nodeRadius(typed);
           ctx.beginPath();
           ctx.arc(x, y, radius, 0, 2 * Math.PI, false);
@@ -297,11 +308,14 @@ export function RelationshipForceGraph({
           ctx.fillStyle = color;
           ctx.fill();
         }}
+        onNodeClick={node => setSelectedId((node as ForceNode).id)}
         nodeLabel={(node) => (node as ForceNode).name}
         ref={graphRef}
         width={width}
       />
       )}
     </div>
+    <ConnectionTable unit={weightLabel} rows={links.filter(link => !selected || link.source === selected.id || link.target === selected.id).map(link => ({id:`${link.source}:${link.target}`,left:nodes.find(node=>node.id===link.source)?.name ?? link.source,right:nodes.find(node=>node.id===link.target)?.name ?? link.target,value:directed ? link.weight : link.weight*100,context:link.fallback ? "Below cutoff" : directed ? "Giver → receiver" : link.weight < 0 ? "Opposing preferences" : ""}))} />
+    </>
   );
 }

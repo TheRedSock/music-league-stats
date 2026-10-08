@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useGraphSetting, graphMetric, graphText } from "./use-graph-setting";
 
 import {
   FocusPlayerSelect,
@@ -22,8 +23,8 @@ import {
 } from "@/lib/relationship-graph-shared";
 
 export function EgoView({ graph }: { graph: RelationshipGraphData }) {
-  const [metric, setMetric] = useState<UndirectedMetric>("alignment");
-  const [focusId, setFocusId] = useState(graph.nodes[0]?.id ?? "");
+  const [metric, setMetric] = useGraphSetting<UndirectedMetric>("metric", "alignment", graphMetric);
+  const [focusId, setFocusId] = useGraphSetting("focus", graph.nodes[0]?.id ?? "", graphText);
   // Derive a valid focus when the graph changes — avoid syncing via effect.
   const resolvedFocusId = graph.nodes.some((node) => node.id === focusId)
     ? focusId
@@ -111,14 +112,14 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         source: edge.source,
         target: edge.target,
         weight,
-        label: `${edge.sourceName} ↔ ${edge.targetName}: ${(weight * 100).toFixed(1)}% ${metric}`,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${(weight * 100).toFixed(1)}${metric === "alignment" ? " / 100 similarity" : "% mutual share"}`,
       })),
     [neighborEdges, metric],
   );
 
   if (graph.nodes.length === 0) {
     return (
-      <GraphEmptyState message="No players in this scope for an ego network." />
+      <GraphEmptyState message="No players in these leagues." />
     );
   }
 
@@ -139,16 +140,12 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
           value={resolvedFocusId}
         />
       </LabsControls>
-      <p className="text-xs text-zinc-500">
-        The automatic default targets 3–8 neighbors based on the number available. Ego stays at the center (large). All neighbors above the strength cutoff are
-        shown; node size scales strongly with {metric} (
-        {links.length} connection{links.length === 1 ? "" : "s"}).
-        {metric === "alignment" ? " Red links indicate opposing preferences; green links indicate agreement." : ""}
-      </p>
+      <p className="text-xs text-zinc-400">{links.length} connections. {metric === "alignment" ? "Red means opposing preferences; green means agreement." : "Larger nodes have a greater mutual ballot share."}</p>
       {links.length === 0 ? (
         <GraphEmptyState message="No neighbors above this threshold for the focused player." />
       ) : (
         <RelationshipForceGraph
+          weightLabel={metric === "alignment" ? "Similarity / 100" : "Mutual share (%)"}
           highlightId={resolvedFocusId}
           layout={{
             chargeStrength: -200,

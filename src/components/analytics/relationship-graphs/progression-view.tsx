@@ -1,9 +1,11 @@
 "use client";
 
+import { useGraphSetting, graphText } from "./use-graph-setting";
+import Link from "next/link";
 import { tableColumnHelp } from "@/lib/table-help";
 
-import { useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, usePlotArea } from "recharts";
+import { useMemo } from "react";
+import { CartesianGrid, Line, LineChart, LabelList, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis, usePlotArea } from "recharts";
 import { Button } from "@/components/ui/button";
 import { buildProgression, progressionPointTicks, progressionTopPlayerIds, type ProgressionRow } from "@/lib/score-progression";
 import type { LeagueOption } from "@/lib/analytics";
@@ -16,10 +18,10 @@ type Mode = keyof typeof modes;
 export function ProgressionView({ rows, leagues, subset }: { rows: ProgressionRow[]; leagues: LeagueOption[]; subset: boolean }) {
   const availableLeagues = leagues.filter((league) => rows.some((row) => row.leagueId === league.id))
     .sort((a, b) => (a.chronologicalOrder ?? Infinity) - (b.chronologicalOrder ?? Infinity));
-  const [selected, setSelected] = useState("");
-  const [mode, setMode] = useState<Mode>("total");
-  const [focus, setFocus] = useState("");
-  const [topLimit, setTopLimit] = useState<number | null>(null);
+  const [selected, setSelected] = useGraphSetting("raceLeague", "", graphText);
+  const [mode, setMode] = useGraphSetting<Mode>("measure", "rank", raw => raw === "rank" || raw === "total" || raw === "points" ? raw : undefined);
+  const [focus, setFocus] = useGraphSetting("focus", "", graphText);
+  const [topLimit, setTopLimit] = useGraphSetting<number | null>("top", 5, raw => raw === "null" || raw === "all" ? null : /^\d+$/.test(raw) && Number(raw) >= 1 && Number(raw) <= 100 ? Number(raw) : undefined);
   const leagueId = availableLeagues.some(({ id }) => id === selected) ? selected : availableLeagues[0]?.id;
   const leagueRows = rows.filter((row) => row.leagueId === leagueId);
   if (!rows.length) return <GraphEmptyState message="No scored rounds in this scope yet. Progression appears once votes have been imported." />;
@@ -47,12 +49,15 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
 }) {
   const { players, timeline } = useMemo(() => buildProgression(rows), [rows]);
   const visibleIds = progressionTopPlayerIds(timeline[timeline.length - 1].standings, topLimit);
+  const [extraPlayers, setExtraPlayers] = useGraphSetting("players", "", graphText);
+  for (const id of extraPlayers.split(",")) if (players.some(player => player.id === id)) visibleIds.add(id);
   const visiblePlayers = players.filter((player) => visibleIds.has(player.id));
   const focus = visibleIds.has(selectedFocus) ? selectedFocus : "";
-  const playerColor = (id: string) => colors[players.findIndex((player) => player.id === id) % colors.length];
+  const playerColor = (id: string) => colors[visiblePlayers.findIndex((player) => player.id === id) % colors.length];
   const maximum = timeline.reduce((max, round) => round.values.reduce((value, player) => visibleIds.has(player.id) ? Math.max(value, player[mode]) : value, max), 0);
   const pointTicks = progressionPointTicks(maximum);
-  const [roundIndex, setRoundIndex] = useState(timeline.length - 1);
+  const [selectedRound, setSelectedRound] = useGraphSetting("raceRound", "", graphText);
+  const roundIndex = Math.max(0, timeline.findIndex(round => round.id === selectedRound) < 0 ? timeline.length - 1 : timeline.findIndex(round => round.id === selectedRound));
   const current = timeline[roundIndex];
   const chartRows = timeline.map((round) => ({
     label: `R${round.ordinal}`,
@@ -63,7 +68,7 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
     const rounds = timeline.slice(start, end);
     return rounds.length ? (rounds.reduce((sum, round) => sum + round.values.find((p) => p.id === id)!.points, 0) / rounds.length).toFixed(1) : "—";
   };
-  return <section className="rounded-2xl border border-white/10 bg-zinc-950/40 p-4 sm:p-6">
+  return <section className="rounded-lg border border-white/10 bg-zinc-950/40 p-4 sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><h2 className="text-lg font-semibold text-white">{rows[0].leagueName}</h2>
         <p className="mt-1 text-sm text-zinc-400">{timeline.length} scored rounds · {players.length} players</p></div>
@@ -76,19 +81,20 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
         <option value="all">All players</option>
         {Array.from({ length: Math.max(players.length, topLimit ?? 0) }, (_, index) => index + 1).map((limit) => <option key={limit} value={limit}>Top {limit}</option>)}
       </select>
-      <span className="text-xs">By final standing in this timeline · includes ties · showing {visiblePlayers.length}</span>
+      <span className="text-xs">Includes ties · {visiblePlayers.length} shown</span>
+      <select aria-label="Add a player" className="max-w-full rounded-md border border-white/10 bg-zinc-950 p-2" value="" onChange={event => { if (event.target.value) setExtraPlayers([...new Set([...extraPlayers.split(",").filter(Boolean), event.target.value])].join(",")); }}>
+        <option value="">Add a player…</option>{players.filter(player => !visibleIds.has(player.id)).map(player => <option key={player.id} value={player.id}>{player.name}</option>)}
+      </select>
+      {extraPlayers ? <Button size="sm" variant="ghost" onClick={() => setExtraPlayers("")}>Reset added players</Button> : null}
     </label>
-    <p className="mt-4 text-xs leading-5 text-zinc-500">
-      {subset ? "Totals restart at zero for the selected rounds. " : "Totals accumulate in league round order. "}
-      Only rounds with exported votes are shown; imported results may be partial. Missed rounds add zero, and tied totals share a standing. Highlight a player to follow their line.
-    </p>
+    <p className="mt-3 text-xs text-zinc-400">{subset ? "Totals restart for the selected rounds. " : ""}Scored rounds only. Select a player to highlight their line.</p>
     <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Highlight player">
       <Button size="sm" variant={focus === "" ? "primary" : "ghost"} aria-pressed={!focus} onClick={() => setFocus("")}>All players</Button>
       {visiblePlayers.map((player) => <button key={player.id} type="button" aria-pressed={focus === player.id} onClick={() => setFocus(focus === player.id ? "" : player.id)} className="rounded-lg border border-white/10 px-2 py-1 text-xs focus-visible:outline-2 focus-visible:outline-lime-300" style={{ color: playerColor(player.id), opacity: focus && focus !== player.id ? 0.5 : 1 }}>{player.name}</button>)}
     </div>
     <div className="mt-6 h-[380px] w-full" role="group" aria-label={`${modes[mode]} by round. Use the round selector below for exact standings and scores.`}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartRows} margin={{ top: 12, right: 18, bottom: 12, left: 0 }} accessibilityLayer>
+        <LineChart data={chartRows} margin={{ top: 12, right: visiblePlayers.length <= 8 ? 95 : 18, bottom: 12, left: 0 }} accessibilityLayer>
           <CartesianGrid stroke="#27272a" strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="label" stroke="#a1a1aa" tick={{ fontSize: 12 }} minTickGap={24} />
           <YAxis width={45} stroke="#a1a1aa" tick={{ fontSize: 12 }} allowDecimals={false} reversed={mode === "rank"} domain={mode === "rank" ? [1, Math.max(2, maximum)] : [0, pointTicks[4]]} ticks={mode === "rank" ? undefined : pointTicks} />
@@ -98,12 +104,14 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
             if (!active || !round) return null;
             return <ProgressionTooltip round={round} mode={mode} mouseY={coordinate?.y} maximum={mode === "rank" ? Math.max(2, maximum) : pointTicks[4]} visibleIds={visibleIds} playerColor={playerColor} />;
           }} />
-          {players.map((player, index) => visibleIds.has(player.id) && <Line key={player.id} dataKey={player.id} name={player.name} type="linear" stroke={playerColor(player.id)} strokeWidth={focus === player.id ? 3.5 : 2} strokeOpacity={focus && focus !== player.id ? 0.15 : 1} strokeDasharray={index >= colors.length ? `${3 + Math.floor(index / colors.length) * 2} 3` : undefined} dot={timeline.length === 1 || focus === player.id ? { r: 3 } : false} activeDot={{ r: 5 }} isAnimationActive={false} />)}
+          {players.map((player, index) => visibleIds.has(player.id) && <Line key={player.id} dataKey={player.id} name={player.name} type="linear" stroke={playerColor(player.id)} strokeWidth={focus === player.id ? 3.5 : 2} strokeOpacity={focus && focus !== player.id ? 0.15 : 1} strokeDasharray={visiblePlayers.length > colors.length && index >= colors.length ? `${3 + Math.floor(index / colors.length) * 2} 3` : undefined} dot={timeline.length === 1 || focus === player.id ? { r: 3 } : false} activeDot={{ r: 5 }} isAnimationActive={false}>
+            {visiblePlayers.length <= 8 ? <LabelList position="right" offset={8} fill={playerColor(player.id)} fontSize={11} valueAccessor={(_entry, pointIndex) => pointIndex === chartRows.length - 1 ? player.name : ""} /> : null}
+          </Line>)}
         </LineChart>
       </ResponsiveContainer>
     </div>
     <label className="mt-4 block text-sm text-zinc-300">Standings after
-      <select className="mt-2 block w-full max-w-xl rounded-lg border border-white/10 bg-zinc-950 p-2" value={roundIndex} onChange={(event) => setRoundIndex(Number(event.target.value))}>
+      <select className="mt-2 block w-full max-w-xl rounded-lg border border-white/10 bg-zinc-950 p-2" value={roundIndex} onChange={(event) => setSelectedRound(timeline[Number(event.target.value)].id)}>
         {timeline.map((round, index) => <option key={round.id} value={index}>R{round.ordinal} · {round.name}</option>)}
       </select>
     </label>
@@ -116,7 +124,7 @@ function LeagueProgression({ rows, subset, mode, setMode, selectedFocus, setFocu
         </tr>)}</tbody>
       </table>
     </div>
-    <p className="mt-3 text-xs leading-5 text-zinc-500">Early / late averages are points per round across the first {split} and last {timeline.length - split} displayed rounds, including missed rounds as zero. For odd round counts, the middle round belongs to the early half. Raw points reflect each round’s voting budget; these are not normalized performance scores.</p>
+    <p className="mt-3 text-xs text-zinc-400">Early / late averages include missed rounds. <Link href="/faq#graphs" className="underline underline-offset-4">Calculation details</Link></p>
   </section>;
 }
 

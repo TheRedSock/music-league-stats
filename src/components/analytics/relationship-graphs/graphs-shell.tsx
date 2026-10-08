@@ -1,3 +1,4 @@
+import { GraphViewSelect } from "./graph-view-select";
 import type { ReactNode } from "react";
 
 import Link from "next/link";
@@ -28,32 +29,32 @@ import { cn } from "@/lib/utils";
 export const GRAPH_VIEWS = [
   {
     id: "progression",
-    label: "Progression",
+    label: "League race",
     description: "Follow the race across rounds: cumulative points, standings, and early versus late scoring.",
   },
   {
     id: "bubbles",
-    label: "Bubbles",
+    label: "Voting similarity",
     description:
-      "Voting-pattern communities from positive centered alignment. Only positive links meeting the chosen cutoff define groups; zero and negative scores do not connect communities.",
+      "Who votes alike. Colors group similar voting patterns.",
   },
   {
     id: "flow",
-    label: "Flow",
+    label: "Support flow",
     description:
-      "Directed points-given support. Orange is one-way; blue is reciprocal; optional soft edges keep everyone on the map.",
+      "Who backs whom. Arrows point from the voter to the recipient.",
   },
   {
     id: "matrix",
     label: "Matrix",
     description:
-      "Cluster-ordered affinity heatmap for alignment or mutual ballot share across every pair.",
+      "Compare any pair of players. Select a cell for its value.",
   },
   {
     id: "ego",
-    label: "Ego",
+    label: "Player connections",
     description:
-      "One player at the center with neighbors above the strength cutoff; size scales with relationship strength.",
+      "Explore one player’s voting connections.",
   },
 ] as const;
 
@@ -74,7 +75,7 @@ export function parseGraphView(
   if (raw === "progression" || raw === "flow" || raw === "matrix" || raw === "ego" || raw === "bubbles") {
     return raw;
   }
-  return "bubbles";
+  return "progression";
 }
 
 export async function loadRelationshipGraphs(
@@ -153,24 +154,22 @@ export function GraphsShell({
   const active = GRAPH_VIEWS.find((view) => view.id === activeView) ?? GRAPH_VIEWS[0];
 
   return (
-    <Container className="py-10 sm:py-14">
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <Container className="py-6 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl">
           <h1 className="text-3xl font-semibold tracking-tight text-white">
             Graphs
           </h1>
-          <p className="mt-2 text-sm leading-6 text-zinc-400">
-            Explore the league race and voting relationships across players and rounds.
-          </p>
         </div>
-        <div className="w-full lg:max-w-3xl">
+        <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>
 
+      <GraphViewSelect value={activeView} views={GRAPH_VIEWS.map(view=>({...view,href:buildAnalyticsHref("/relationships/graphs",scopeQueryParams(filter),{view:view.id})}))} />
       <nav
         aria-label="Graph views"
-        className="mt-8 flex flex-wrap gap-2"
+        className="mt-5 hidden flex-wrap gap-2 md:flex"
       >
         {GRAPH_VIEWS.map((view) => (
           <Link
@@ -192,7 +191,7 @@ export function GraphsShell({
         ))}
       </nav>
 
-      <p className="mt-4 text-sm text-zinc-500">{active.description}</p>
+      {activeView !== "progression" ? <p className="mt-4 text-sm text-zinc-400">{active.description}</p> : null}
 
       <div className="mt-6">{children}</div>
     </Container>

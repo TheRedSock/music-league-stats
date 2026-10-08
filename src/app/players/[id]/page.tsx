@@ -368,6 +368,7 @@ async function PlayerProfilePageContent({
           <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-4xl">
             {player.name}
           </h1>
+          <Link className="mt-2 inline-block text-sm text-lime-300" href={buildAnalyticsHref("/relationships/graphs",filterParams,{view:"ego",focus:player.id})}>Player connections →</Link>
         </div>
         <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />

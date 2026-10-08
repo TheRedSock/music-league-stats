@@ -17,7 +17,6 @@ import { ProgressionView } from "@/components/analytics/relationship-graphs/prog
 import { encodeScopeIds, getCachedFilterOptions, getCachedScoreProgression, loadAnalytics, parseAnalyticsFilters, resolveAnalyticsFilter } from "@/lib/analytics";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -70,17 +69,12 @@ async function RelationshipGraphsPageContent({
       ) : graph.needsScopeMaterialization ? (
         <Card className="border-dashed">
           <CardHeader>
-            <CardTitle>Scope still preparing</CardTitle>
+            <CardTitle>Results are updating</CardTitle>
             <CardDescription>
-              Multi-league relationship data is not ready for this combination
-              yet. Stay on this page or open Compare while it finishes.
+              Results for these leagues are being prepared. This page will update when they are ready.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-zinc-500">
-              Scope key: {graph.scopeKey ?? "—"}
-            </p>
-          </CardContent>
+
         </Card>
       ) : view === "flow" ? (
         <FlowView graph={graph} />

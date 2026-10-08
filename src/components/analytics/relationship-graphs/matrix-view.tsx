@@ -1,9 +1,12 @@
 "use client";
 
+import { useGraphSetting, graphMetric, graphText } from "./use-graph-setting";
+import { ConnectionTable } from "./connection-table";
+import { Popover } from "@/components/ui/popover";
 import { hierarchy } from "d3-hierarchy";
 import { scaleDiverging, scaleSequential } from "d3-scale";
 import { interpolateRdBu, interpolateYlGnBu } from "d3-scale-chromatic";
-import { useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
 
 import {
   GraphEmptyState,
@@ -11,9 +14,7 @@ import {
 } from "@/components/analytics/relationship-graphs/graphs-controls";
 import { useNormalizedThreshold } from "@/components/analytics/relationship-graphs/use-normalized-threshold";
 import {
-  colorDomainFromVisibleWeights,
   edgeWeight,
-  formatScaleCaption,
   LAB_DEFAULT_NORMALIZED,
   undirectedWeightScale,
   type RelationshipGraphData,
@@ -98,198 +99,51 @@ function clusteredOrder(
 }
 
 export function MatrixView({ graph }: { graph: RelationshipGraphData }) {
-  const [metric, setMetric] = useState<UndirectedMetric>("alignment");
-  const [hover, setHover] = useState<{
-    col: number;
-    row: number;
-    value: number | null;
-    diagonal: boolean;
-    x: number;
-    y: number;
-  } | null>(null);
-
-  const scale = useMemo(
-    () => undirectedWeightScale(graph.undirectedEdges, metric),
-    [graph.undirectedEdges, metric],
-  );
-  const scaleKey = `matrix:${graph.scopeKey}:${metric}:${scale.sorted.join(",")}`;
-  const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(
-    scale,
-    scaleKey,
-    LAB_DEFAULT_NORMALIZED.matrix,
-  );
-
-  const { color, labels, matrix, order, visibleCount, domain } = useMemo(() => {
-    const sim = similarityMap(graph.undirectedEdges, metric);
-    const orderIds = clusteredOrder(
-      graph.nodes.map((node) => node.id),
-      sim,
-    );
-    const nameById = new Map(graph.nodes.map((node) => [node.id, node.name]));
-    const labels = orderIds.map((id) => nameById.get(id) ?? id);
-    const allWeights: number[] = [];
-    const visibleWeights: number[] = [];
-    const matrix = orderIds.map((rowId) =>
-      orderIds.map((colId) => {
-        if (rowId === colId) return { diagonal: true as const, value: null };
-        const value = pairSim(sim, rowId, colId);
-        if (value == null) {
-          return { diagonal: false as const, value: null };
-        }
-        allWeights.push(value);
-        if (value < rawThreshold) {
-          return { diagonal: false as const, value: null };
-        }
-        visibleWeights.push(value);
-        return { diagonal: false as const, value };
-      }),
-    );
-    // Rescale: cutoff is the cool end; high end reaches strong observed values.
-    const domain = colorDomainFromVisibleWeights(
-      visibleWeights,
-      rawThreshold,
-      allWeights,
-    );
-    // Keep zero neutral for signed alignment, regardless of the hide cutoff.
-    const extent = Math.max(Math.abs(domain[0]), Math.abs(domain[1]), ...allWeights.map(Math.abs), 1e-6);
-    const color = metric === "alignment"
-      ? scaleDiverging(interpolateRdBu).domain([-extent, 0, extent])
-      : scaleSequential(interpolateYlGnBu).domain(domain);
-    return {
-      color,
-      domain,
-      labels,
-      matrix,
-      order: orderIds,
-      visibleCount: visibleWeights.length,
-    };
-  }, [graph.nodes, graph.undirectedEdges, metric, rawThreshold]);
-
-  if (graph.nodes.length === 0) {
-    return <GraphEmptyState message="No players to build an affinity matrix." />;
-  }
-
-  const cell = Math.max(18, Math.min(34, Math.floor(640 / order.length)));
-  const hoverLabel =
-    hover == null
-      ? null
-      : hover.diagonal
-        ? `${labels[hover.row]} (self)`
-        : hover.value == null
-          ? `${labels[hover.row]} × ${labels[hover.col]}: no value`
-          : `${labels[hover.row]} × ${labels[hover.col]}: ${(hover.value * 100).toFixed(1)}%`;
-
-  return (
-    <div className="space-y-4">
-      <LabsControls
-        metric={metric}
-        onMetricChange={setMetric}
-        onThresholdChange={setNormalized}
-        rawThreshold={rawThreshold}
-        scaleCaption={formatScaleCaption(scale)}
-        threshold={normalized}
-        thresholdLabel="Hide below strength"
-      />
-      <p className="text-xs text-zinc-500">
-        {metric === "alignment"
-          ? "Red means opposing preferences, neutral means zero linear agreement, and blue means agreement."
-          : `Color domain rescales with the hide cutoff: coolest = cutoff (${(domain[0] * 100).toFixed(1)}%), hottest ≈ strong pairs (${(domain[1] * 100).toFixed(1)}%).`}
-        {" "}{visibleCount} visible cells. Hover a cell for pair details.
-      </p>
-      <div className="relative overflow-auto rounded-2xl border border-white/[0.08] bg-zinc-950/50 p-4">
-        {hoverLabel && hover ? (
-          <div
-            className="pointer-events-none fixed z-50 max-w-xs rounded-md border border-white/15 bg-zinc-950/75 px-2.5 py-1.5 text-xs text-zinc-100 shadow-lg backdrop-blur-sm"
-            style={{
-              left: hover.x + 12,
-              top: hover.y + 12,
-            }}
-          >
-            {hoverLabel}
-          </div>
-        ) : null}
-        <div
-          className="inline-grid gap-px"
-          style={{
-            gridTemplateColumns: `${Math.max(84, cell * 3)}px repeat(${order.length}, ${cell}px)`,
-          }}
-        >
-          <div />
-          {labels.map((label) => (
-            <div
-              className="truncate px-0.5 text-[10px] text-zinc-400"
-              key={`col-${label}`}
-              style={{
-                writingMode: "vertical-rl",
-                transform: "rotate(180deg)",
-                height: Math.max(84, cell * 3),
-              }}
-              title={label}
-            >
-              {label}
-            </div>
-          ))}
-          {matrix.map((row, rowIndex) => (
-            <div className="contents" key={order[rowIndex]}>
-              <div
-                className="truncate pr-2 text-right text-[10px] text-zinc-400"
-                style={{ lineHeight: `${cell}px` }}
-                title={labels[rowIndex]}
-              >
-                {labels[rowIndex]}
-              </div>
-              {row.map((cellValue, colIndex) => {
-                const isDiagonal = cellValue.diagonal;
-                const value = cellValue.value;
-                return (
-                  <div
-                    className="rounded-[3px] transition-[outline] duration-75"
-                    key={`${order[rowIndex]}-${order[colIndex]}`}
-                    onMouseEnter={(event) =>
-                      setHover({
-                        col: colIndex,
-                        diagonal: isDiagonal,
-                        row: rowIndex,
-                        value,
-                        x: event.clientX,
-                        y: event.clientY,
-                      })
-                    }
-                    onMouseLeave={() => setHover(null)}
-                    onMouseMove={(event) =>
-                      setHover((current) =>
-                        current &&
-                        current.row === rowIndex &&
-                        current.col === colIndex
-                          ? {
-                              ...current,
-                              x: event.clientX,
-                              y: event.clientY,
-                            }
-                          : current,
-                      )
-                    }
-                    style={{
-                      width: cell,
-                      height: cell,
-                      outline:
-                        hover?.row === rowIndex && hover?.col === colIndex
-                          ? "1px solid rgba(250,250,250,0.7)"
-                          : undefined,
-                      outlineOffset: 0,
-                      backgroundColor: isDiagonal
-                        ? "rgba(113, 113, 122, 0.55)"
-                        : value == null
-                          ? "rgba(255,255,255,0.025)"
-                          : color(value),
-                    }}
-                  />
-                );
-              })}
-            </div>
-          ))}
-        </div>
+  const [metric, setMetric] = useGraphSetting<UndirectedMetric>("metric", "alignment", graphMetric);
+  const [subset, setSubset] = useGraphSetting("matrixPlayers", "", graphText);
+  const [pair, setPair] = useGraphSetting("pair", "", graphText);
+  const grid = useRef<HTMLDivElement>(null);
+  const scale = useMemo(() => undirectedWeightScale(graph.undirectedEdges, metric), [graph.undirectedEdges,metric]);
+  const { normalized, rawThreshold, setNormalized } = useNormalizedThreshold(scale, `matrix:${graph.scopeKey}:${metric}`, LAB_DEFAULT_NORMALIZED.matrix);
+  const { order, values } = useMemo(() => {
+    const values = similarityMap(graph.undirectedEdges, metric);
+    const ids = subset.split(",");
+    const nodes = graph.nodes.filter(node => !subset || ids.includes(node.id));
+    return {values, order:clusteredOrder(nodes.map(node=>node.id),values)};
+  },[graph.nodes,graph.undirectedEdges,metric,subset]);
+  const names = new Map(graph.nodes.map(node=>[node.id,node.name]));
+  const [left,right] = pair.split(":");
+  const selectedValue = left && right ? pairSim(values,left,right) : null;
+  const color = metric === "alignment" ? scaleDiverging(interpolateRdBu).domain([-1,0,1]) : scaleSequential(interpolateYlGnBu).domain([0,1]);
+  const label = (leftId:string,rightId:string) => {
+    const value = pairSim(values,leftId,rightId);
+    return `${names.get(leftId)} × ${names.get(rightId)}: ${leftId===rightId ? "same player" : value==null ? "no qualifying data" : `${(value*100).toFixed(1)}${metric==="alignment" ? " / 100 similarity" : "% mutual ballot share"}${value<rawThreshold ? " (below cutoff)" : ""}`}`;
+  };
+  if (!graph.nodes.length) return <GraphEmptyState message="No players to compare yet." />;
+  const cell = Math.max(26,Math.min(40,Math.floor(850 / Math.max(1,order.length))));
+  const selectedInGrid = order.includes(left) && order.includes(right);
+  return <div className="space-y-4 min-w-0">
+    <LabsControls metric={metric} onMetricChange={setMetric} onThresholdChange={setNormalized} rawThreshold={rawThreshold} threshold={normalized} thresholdLabel="Matrix connections">
+      <Popover label="Players in matrix" trigger={<>Choose players ({order.length})</>}>
+        <button type="button" className="mb-3 text-sm text-lime-300" onClick={()=>setSubset("")}>Show all players</button>
+        {graph.nodes.map(node=><label key={node.id} className="flex items-center gap-2 py-2 text-sm"><input type="checkbox" className="accent-lime-300" checked={order.includes(node.id)} onChange={()=>{const current=subset ? subset.split(",") : graph.nodes.map(node=>node.id);const next=current.includes(node.id) ? current.filter(id=>id!==node.id) : [...current,node.id];if(next.length)setSubset(next.join(","));}} />{node.name}</label>)}
+      </Popover>
+    </LabsControls>
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-300" aria-label="Matrix color scale">
+      {(metric === "alignment" ? [-1,0,1] : [0,0.5,1]).map(value=><span key={value} className="flex items-center gap-2"><i className="size-4 rounded-sm border border-white/20" style={{background:color(value)}} />{(value*100).toFixed(0)}{metric==="alignment" ? value<0 ? " opposing" : value>0 ? " agreement" : " neutral" : "%"}</span>)}
+      <span className="flex items-center gap-2"><i className="grid size-4 place-items-center border border-white/20">—</i>No data</span><span>Faded: below cutoff</span>
+    </div>
+    <p role="status" aria-live="polite" className="min-h-12 rounded-md border border-white/10 px-4 py-3 text-sm text-zinc-200">{selectedInGrid ? label(left,right) : "Select a cell, or use Tab and the arrow keys to compare players."}{selectedInGrid && selectedValue!=null ? ` · ${graph.undirectedEdges.find(edge=>(edge.source===left && edge.target===right)||(edge.target===left && edge.source===right))?.sharedRounds ?? 0} shared rounds` : ""}</p>
+    <div ref={grid} role="group" aria-label="Player comparison matrix" className="overflow-auto rounded-lg border border-white/10 bg-zinc-950 p-3">
+      <div className="inline-grid gap-px" style={{gridTemplateColumns:`120px repeat(${order.length}, ${cell}px)`}}>
+        <span />{order.map(id=><span key={id} className="truncate py-1 text-xs text-zinc-400" style={{writingMode:"vertical-rl",transform:"rotate(180deg)",height:120}} title={names.get(id)}>{names.get(id)}</span>)}
+        {order.map((rowId,row)=><div key={rowId} className="contents"><span className="truncate pr-2 text-right text-xs text-zinc-400" style={{lineHeight:`${cell}px`}}>{names.get(rowId)}</span>
+          {order.map((colId,col)=>{const value=pairSim(values,rowId,colId);const diagonal=rowId===colId;const active=left===rowId && right===colId;return <button key={colId} type="button" data-row={row} data-col={col} aria-label={label(rowId,colId)} aria-pressed={active} tabIndex={selectedInGrid ? active ? 0 : -1 : row===0 && col===Math.min(1,order.length-1) ? 0 : -1} onFocus={()=>setPair(`${rowId}:${colId}`)} onClick={()=>setPair(`${rowId}:${colId}`)} onKeyDown={event=>{
+            const moves:Record<string,[number,number]>={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};const move=moves[event.key];if(!move)return;event.preventDefault();const nextRow=Math.max(0,Math.min(order.length-1,row+move[0]));const nextCol=Math.max(0,Math.min(order.length-1,col+move[1]));grid.current?.querySelector<HTMLElement>(`[data-row="${nextRow}"][data-col="${nextCol}"]`)?.focus();
+          }} className="rounded-sm text-xs text-zinc-400 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-lime-300" style={{width:cell,height:cell,background:diagonal ? "#27272a" : value==null ? "transparent" : color(value),opacity:value!=null && value<rawThreshold ? 0.2 : 1,outline:active ? "2px solid #bef264" : undefined}}>{value==null ? "—" : ""}</button>;})}
+        </div>)}
       </div>
     </div>
-  );
+    <ConnectionTable unit={metric==="alignment" ? "Similarity / 100" : "Mutual share (%)"} onSelect={setPair} rows={graph.undirectedEdges.filter(edge=>order.includes(edge.source)&&order.includes(edge.target)).map(edge=>({id:`${edge.source}:${edge.target}`,left:edge.sourceName,right:edge.targetName,value:edgeWeight(edge,metric)==null ? null : edgeWeight(edge,metric)!*100,context:`${edge.sharedRounds ?? 0} shared rounds${edgeWeight(edge,metric)!=null && edgeWeight(edge,metric)!<rawThreshold ? " · below cutoff" : ""}`}))} />
+  </div>;
 }

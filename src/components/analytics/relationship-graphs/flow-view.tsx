@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useGraphSetting, graphBoolean } from "./use-graph-setting";
 
 import {
   GraphEmptyState,
@@ -45,7 +46,7 @@ function bestBelowCutoff(
 }
 
 export function FlowView({ graph }: { graph: RelationshipGraphData }) {
-  const [keepEveryone, setKeepEveryone] = useState(true);
+  const [keepEveryone, setKeepEveryone] = useGraphSetting("fallback", true, graphBoolean);
   const scale = useMemo(
     () => directedWeightScale(graph.directedEdges),
     [graph.directedEdges],
@@ -173,35 +174,18 @@ export function FlowView({ graph }: { graph: RelationshipGraphData }) {
         threshold={normalized}
         thresholdLabel="Flow sensitivity"
       />
-      <p className="text-xs text-zinc-500">
-        Arrows point giver → receiver (points given per opportunity). At 50%, the connection budget targets 1.5 qualifying arrows per player on average; equal scores stay together.{" "}
-        <span className="text-orange-300">Orange</span>
-        {" is one-way above cutoff; "}
-        <span className="text-sky-300">blue</span>
-        {" is reciprocal."}
-        {keepEveryone ? (
-          <>
-            {" "}
-            <span className="text-zinc-400">Gray</span>
-            {
-              " soft arrows are each missing player's strongest edge below the cutoff (thinner)."
-            }
-          </>
-        ) : null}
-        {` ${primary.length} above cutoff`}
-        {soft.length > 0 ? ` · ${soft.length} soft` : ""}
-        {` · ${pairKeys.size} unique pairs · ${nodes.length} players.`}
-      </p>
+      <p className="text-xs text-zinc-400"><span className="text-orange-300">Orange: one-way</span> · <span className="text-sky-300">Blue: reciprocal</span> · Gray: below cutoff. {pairKeys.size} pairs, {nodes.length} players.</p>
       {links.length === 0 ? (
         <GraphEmptyState message="No directed edges above this threshold." />
       ) : (
         <RelationshipForceGraph
           directed
+          pointTotals={Object.fromEntries(graph.nodes.map(node => [node.id, {incoming:graph.directedEdges.filter(edge=>edge.target===node.id).reduce((sum,edge)=>sum+edge.points,0),outgoing:graph.directedEdges.filter(edge=>edge.source===node.id).reduce((sum,edge)=>sum+edge.points,0)}]))}
           layout={{
             chargeStrength: -280,
             collideRadius: 26,
-            fitPadding: 96,
-            fitScale: 0.82,
+            fitPadding: 40,
+            fitScale: 0.95,
             height: 640,
             labelMinPx: 12,
             linkDistance: 150,
