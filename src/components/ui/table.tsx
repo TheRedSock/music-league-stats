@@ -15,7 +15,7 @@ export function Table({
   ...props
 }: TableHTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto lg:overflow-visible">
+    <div className="w-full overflow-x-auto">
       <table
         className={cn("w-full caption-bottom text-sm", className)}
         {...props}
@@ -85,7 +85,7 @@ export function TableHead({
       scope="col"
       title={title ?? tableColumnHelp(headerText(children))}
       className={cn(
-        "h-11 px-4 text-left text-xs font-medium uppercase tracking-[0.14em] text-zinc-500",
+        "h-11 px-4 text-left text-xs font-medium text-zinc-400",
         className,
       )}
       {...props}

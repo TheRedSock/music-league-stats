@@ -22,10 +22,10 @@ export function AnalyticsLoadingShell() {
               className="text-xl font-semibold tracking-tight text-white"
               id="loading-heading"
             >
-              Loading data
+              Loading results
             </h1>
             <p className="mt-0.5 text-sm text-zinc-500">
-              Fetching the selected scope from the database...
+              Loading results…
             </p>
           </div>
         </div>

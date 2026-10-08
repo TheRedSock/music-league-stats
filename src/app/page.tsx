@@ -1,15 +1,6 @@
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { formatPoints } from "@/lib/format";
-import {
-  BarChart3,
-  Gauge,
-  Layers3,
-  Music2,
-  Sparkles,
-  Trophy,
-  UsersRound,
-} from "lucide-react";
 import Link from "next/link";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
@@ -39,7 +30,6 @@ import {
   leagueTableLabel,
   parseAnalyticsFilters,
   resolveAnalyticsFilter,
-  selectedFilterLabel,
   scopeQueryParams,
   truncateRoundName,
   type SearchParams,
@@ -47,11 +37,9 @@ import {
 import { musicLeagueUrl } from "@/lib/music-league-urls";
 
 const summaryMetadata = [
-  { key: "leagues", label: "Leagues", icon: Layers3 },
-  { key: "rounds", label: "Imported rounds", icon: BarChart3 },
-  { key: "players", label: "Players", icon: UsersRound },
-  { key: "songs", label: "Songs", icon: Music2 },
-  { key: "points", label: "Eligible points", icon: Sparkles },
+  { key: "leagues", label: "leagues" }, { key: "rounds", label: "rounds" },
+  { key: "players", label: "players" }, { key: "songs", label: "songs" },
+  { key: "points", label: "points" },
 ] as const;
 
 function AlignmentPanel({
@@ -63,131 +51,27 @@ function AlignmentPanel({
   filterParams: ReturnType<typeof scopeQueryParams>;
   pendingScopeMaterialization?: boolean;
 }) {
-  return (
-    <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
-      <CardContent className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center">
-        <span className="grid size-12 place-items-center rounded-2xl border border-violet-300/20 bg-violet-300/10 text-violet-200">
-          <Gauge aria-hidden="true" className="size-6" />
-        </span>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-200">
-            Vote-pattern alignment
-          </p>
-          {alignments.length ? (
-            <>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Top aligned ballot patterns
-              </h2>
-              <ol className="mt-4 grid gap-3 lg:grid-cols-3">
-                {alignments.map((alignment, index) => (
-                  <li
-                    className="rounded-2xl border border-white/[0.08] bg-black/15 p-4"
-                    key={`${alignment.leftId}-${alignment.rightId}`}
-                  >
-                    <p className="font-mono text-xs text-zinc-600">
-                      {String(index + 1).padStart(2, "0")}
-                    </p>
-                    <h3 className="mt-2 truncate text-sm font-semibold text-white">
-                      <Link
-                        className="hover:text-lime-200"
-                        href={buildAnalyticsHref(
-                          `/players/${alignment.leftId}`,
-                          filterParams,
-                          {},
-                        )}
-                      >
-                        {alignment.leftName}
-                      </Link>{" "}
-                      &amp;{" "}
-                      <Link
-                        className="hover:text-lime-200"
-                        href={buildAnalyticsHref(
-                          `/players/${alignment.rightId}`,
-                          filterParams,
-                          {},
-                        )}
-                      >
-                        {alignment.rightName}
-                      </Link>
-                    </h3>
-                    <p className="mt-2 font-mono text-2xl text-violet-100">
-                      {(alignment.alignment * 100).toFixed(0)}%
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-zinc-500">
-                      {alignment.comparableFeatures} features ·{" "}
-                      {alignment.sharedRounds}/{alignment.scopeRounds} rounds
-                    </p>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-4 max-w-3xl text-sm leading-6 text-zinc-400">
-                Centered alignment compares shared-song preferences. Zero
-                means no linear agreement; negative scores mean opposing
-                preferences. Mutual support is shown separately.
-              </p>
-            </>
-          ) : pendingScopeMaterialization ? (
-            <>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                Multi-league alignment not computed yet
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-                Leaderboard and songs for this combination come from existing
-                caches. Vote-pattern alignment is built when you open Compare
-                with the same leagues selected.
-              </p>
-              <Link
-                className="mt-4 inline-flex text-sm font-medium text-lime-300 hover:text-lime-200"
-                href={buildAnalyticsHref("/relationships", filterParams, {
-                  tab: "alignment",
-                })}
-              >
-                Open Compare to compute alignment
-              </Link>
-            </>
-          ) : (
-            <>
-              <h2 className="mt-2 text-xl font-semibold text-white">
-                More shared ratings needed
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">
-                Alignment appears after two voters have enough comparable ballot
-                features and enough shared voted rounds to meet the adaptive
-                participation minimum for the selected scope.
-              </p>
-            </>
-          )}
-        </div>
-        <Trophy
-          aria-hidden="true"
-          className="hidden size-10 text-lime-300/60 lg:block"
-        />
-      </CardContent>
-    </Card>
-  );
+  return <section className="border-t border-white/10 pt-6" aria-labelledby="similarity-heading">
+    <div className="flex items-baseline justify-between gap-4">
+      <h2 id="similarity-heading" className="text-xl font-semibold">Most similar voting</h2>
+      <Link className="text-sm text-lime-300" href={buildAnalyticsHref("/relationships", filterParams, { tab: "alignment" })}>Compare players →</Link>
+    </div>
+    {alignments.length ? <ol className="mt-4 grid gap-4 md:grid-cols-3">
+      {alignments.map(alignment => <li key={`${alignment.leftId}-${alignment.rightId}`} className="border-l-2 border-lime-300/50 pl-4">
+        <p className="text-sm font-medium">
+          <Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${alignment.leftId}`, filterParams, {})}>{alignment.leftName}</Link>
+          {" & "}<Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${alignment.rightId}`, filterParams, {})}>{alignment.rightName}</Link>
+        </p>
+        <p className="mt-2 text-2xl tabular-nums">{(alignment.alignment * 100).toFixed(0)}<span className="ml-1 text-xs text-zinc-400">/ 100 similarity</span></p>
+        <p className="mt-1 text-xs text-zinc-400">{alignment.sharedRounds} shared rounds · {alignment.comparableFeatures} song comparisons</p>
+      </li>)}
+    </ol> : <p className="mt-3 text-sm text-zinc-400">{pendingScopeMaterialization ? "Open Compare to prepare results for these leagues." : "More shared votes are needed to compare these players."}</p>}
+    <Link href="/faq#voting-similarity" className="mt-4 inline-block text-xs text-zinc-400 underline underline-offset-4">How similarity is measured</Link>
+  </section>;
 }
 
 function AlignmentFallback() {
-  return (
-    <Card className="overflow-hidden border-violet-300/15 bg-gradient-to-br from-violet-400/[0.07] to-lime-300/[0.025]">
-      <CardContent className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[auto_1fr_auto] lg:items-center">
-        <span className="grid size-12 animate-pulse place-items-center rounded-2xl border border-violet-300/20 bg-violet-300/10 text-violet-200">
-          <Gauge aria-hidden="true" className="size-6" />
-        </span>
-        <div>
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-violet-200">
-            Vote-pattern alignment
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-white">
-            Calculating alignment
-          </h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
-            Comparing scoped ballot patterns separately from the main dashboard.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <p role="status" className="py-6 text-sm text-zinc-400">Loading voting similarity…</p>;
 }
 
 async function DashboardAlignmentCard({
@@ -262,62 +146,38 @@ async function HomePageContent({
       : summaryMetadata;
 
   return (
-    <Container className="py-10 sm:py-14">
-      <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+    <Container className="py-6 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">
-            Dashboard
+            The standings
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {selectedFilterLabel(options, filter)}
-          </p>
         </div>
-        <div className="w-full lg:max-w-5xl">
+        <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>
 
-      <div className="mt-9 space-y-8 sm:space-y-10">
-        <section aria-labelledby="summary-heading">
-          <h2 className="sr-only" id="summary-heading">
-            Scope summary
-          </h2>
-          <div
-            className={
-              summaryCards.length === 5
-                ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-5"
-                : "grid gap-3 sm:grid-cols-2 lg:grid-cols-4"
-            }
-          >
-            {summaryCards.map(({ icon: Icon, key, label }) => (
-              <Card className="overflow-hidden" key={key}>
-                <CardContent className="relative p-5">
-                  <Icon
-                    aria-hidden="true"
-                    className="absolute right-4 top-4 size-5 text-zinc-700"
-                  />
-                  <p className="font-mono text-2xl font-semibold text-white">
-                    {data.summary[key].toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">{label}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
+      <div className="mt-5 space-y-7 sm:space-y-10">
+        <dl aria-label="League totals" className="flex flex-wrap gap-x-6 gap-y-2 border-y border-white/10 py-3 text-sm">
+          {summaryCards.map(({ key, label }) => <div key={key} className="flex items-baseline gap-1.5">
+            <dd className="font-semibold tabular-nums text-zinc-100">{data.summary[key].toLocaleString()}</dd>
+            <dt className="text-zinc-400">{label}</dt>
+          </div>)}
+        </dl>
 
         {data.summary.songs === 0 ? (
           <AnalyticsEmpty
             description={
               options.leagues.length
-                ? "This scope has no imported submissions and votes yet. Choose another league or round, or import a complete export."
+                ? "This scope has no imported submissions and votes yet. Choose another league, or import a complete export."
                 : "Create a league and import its four Music League CSV exports to populate public analytics."
             }
           />
         ) : (
           <>
             <Card>
-              <CardContent className="p-5 sm:p-7">
+              <CardContent className="p-4 sm:p-6">
                 <LeaderboardPanel
                   filterParams={filterParams}
                   rows={data.leaderboard}
@@ -335,12 +195,10 @@ async function HomePageContent({
                 <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                   <div>
                     <CardTitle id="songs-heading">
-                      Top round-adjusted songs
+                      Standout songs
                     </CardTitle>
                     <CardDescription className="mt-1">
-                      Ranked by empirical-Bayes support index (SI_eb), which
-                      shrinks noisy small-sample extremes toward expected
-                      support (1.0×) using corpus-estimated variance.
+                      Ranked by adjusted support. <Link href="/faq#adjusted-support" className="underline underline-offset-4">About this measure</Link>
                     </CardDescription>
                   </div>
                   <Link
@@ -363,7 +221,7 @@ async function HomePageContent({
                           {String(index + 1).padStart(2, "0")}
                         </span>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-zinc-100">
+                          <p className="text-sm font-medium leading-5 text-zinc-100">
                             {song.spotifyUrl ? (
                               <a
                                 className="hover:text-lime-200"
@@ -376,8 +234,8 @@ async function HomePageContent({
                             ) : (
                               song.title
                             )}{" "}
-                            <span className="font-normal text-zinc-500">
-                              - {song.artist}
+                            <span className="mt-1 block font-normal text-zinc-400">
+                              {song.artist}
                             </span>
                           </p>
                           <p className="mt-0.5 truncate text-xs text-zinc-500">
@@ -408,9 +266,6 @@ async function HomePageContent({
                           </p>
                           <p className="text-[11px] text-zinc-600">
                             {formatPoints(song.points)}
-                            {song.supportZ !== null
-                              ? ` · z ${song.supportZ.toFixed(1)}`
-                              : ""}
                           </p>
                         </div>
                       </li>
@@ -421,11 +276,9 @@ async function HomePageContent({
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Eligible vote points</CardTitle>
+                  <CardTitle>Points per vote</CardTitle>
                   <CardDescription>
-                    Active voters create eligible opportunities for every
-                    visible song they did not submit. Omitted opportunities are
-                    counted as zero.
+                    How often each score was given, including eligible zeroes.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>

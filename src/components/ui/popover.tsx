@@ -5,8 +5,8 @@ import { buttonStyles } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /** Native top-layer placement escapes table overflow and supports light dismiss/Escape. */
-export function Popover({ label, trigger, children, className }: {
-  label: string; trigger: ReactNode; children: ReactNode; className?: string;
+export function Popover({ label, trigger, children, className, triggerClassName }: {
+  label: string; trigger: ReactNode; children: ReactNode; className?: string; triggerClassName?: string;
 }) {
   const id = useId();
   const button = useRef<HTMLButtonElement>(null);
@@ -27,7 +27,7 @@ export function Popover({ label, trigger, children, className }: {
   }, [open]);
   return (
     <>
-      <button ref={button} popoverTarget={id} aria-controls={id} aria-expanded={open} aria-haspopup="dialog" type="button" className={buttonStyles({ variant: "secondary" })}>
+      <button ref={button} popoverTarget={id} aria-controls={id} aria-expanded={open} aria-haspopup="dialog" type="button" className={buttonStyles({ variant: "secondary", className: triggerClassName })}>
         {trigger}
       </button>
       <div ref={panel} id={id} popover="auto" role="dialog" aria-label={label}

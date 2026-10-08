@@ -5,7 +5,6 @@ import { qualificationRoundFloor } from "@/lib/participation";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { playerPath } from "@/lib/player-slug";
 import { buildAnalyticsHref, type QueryValue } from "@/lib/analytics-url";
@@ -21,7 +20,7 @@ type LeaderboardRow = {
 
 type Mode = "points" | "normalized";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 
 export function LeaderboardPanel({
   filterParams = {},
@@ -61,7 +60,7 @@ export function LeaderboardPanel({
   }, 0);
 
   const metricLabel =
-    mode === "points" ? "Exported points" : "Average round index";
+    mode === "points" ? "Points" : "Average round index";
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -73,19 +72,13 @@ export function LeaderboardPanel({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-semibold tracking-tight text-white">
-            Player leaderboard
+            Players
           </h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-400">
-            Raw points reward volume. The round index compares each
-            player&apos;s points with the expected points for their submitted songs
-            from that round&apos;s eligible ballot budgets. Round-adjusted rankings
-            use the adaptive participation minimum (
-            {normalizedMinimum}+ of {scopeRounds || "—"}).
-          </p>
+          <p className="mt-1 text-xs text-zinc-400">{mode === "points" ? "Total points across the selected leagues" : `Average round index · at least ${normalizedMinimum} of ${scopeRounds} rounds`}</p>
         </div>
         <div
           aria-label="Leaderboard metric"
-          className="flex rounded-full border border-white/10 bg-black/20 p-1"
+          className="flex rounded-md border border-white/10 p-1"
           role="group"
         >
           <Button
@@ -94,7 +87,7 @@ export function LeaderboardPanel({
             onClick={() => switchMode("points")}
             variant={mode === "points" ? "primary" : "ghost"}
           >
-            Total
+            Points
           </Button>
           <Button
             aria-pressed={mode === "normalized"}
@@ -107,9 +100,10 @@ export function LeaderboardPanel({
         </div>
       </div>
 
+      {mode === "normalized" ? <p className="mt-3 text-xs text-zinc-400">1.0 is the expected score for the round. <Link href="/faq#rankings" className="underline underline-offset-4">How rankings work</Link></p> : null}
       <ol
         aria-label={`${metricLabel} leaderboard`}
-        className="mt-7 divide-y divide-white/[0.06]"
+        className="mt-4 divide-y divide-white/[0.06]"
       >
         {visible.map((row, index) => {
           const value =
@@ -118,7 +112,7 @@ export function LeaderboardPanel({
             scaleMax > 0 ? Math.max(2, (value / scaleMax) * 100) : 0;
           return (
             <li
-              className="grid grid-cols-[2rem_minmax(6.5rem,10.5rem)_minmax(0,1fr)_4.5rem] items-center gap-3 py-3 sm:grid-cols-[2rem_minmax(8rem,12rem)_minmax(0,1fr)_5rem] sm:gap-4"
+              className="grid grid-cols-[1.25rem_7rem_minmax(0,1fr)_3.5rem] items-center gap-2 py-3 sm:grid-cols-[2rem_minmax(8rem,12rem)_minmax(0,1fr)_5rem] sm:gap-4"
               key={row.id}
             >
               <span className="font-mono text-xs text-zinc-600">
@@ -138,13 +132,13 @@ export function LeaderboardPanel({
                   </Link>
                 </p>
                 <p className="mt-0.5 text-xs text-zinc-500">
-                  {row.enteredRounds} entered{" "}
+                  {row.enteredRounds}{" "}
                   {row.enteredRounds === 1 ? "round" : "rounds"}
                 </p>
               </div>
               <div
                 aria-hidden="true"
-                className="h-2.5 overflow-hidden rounded-full bg-white/[0.06] sm:h-3"
+                className="h-1.5 overflow-hidden rounded-sm bg-white/[0.06] sm:h-2"
                 title={`${row.name}: ${
                   mode === "points"
                     ? row.totalPoints.toLocaleString()
@@ -152,7 +146,7 @@ export function LeaderboardPanel({
                 }`}
               >
                 <div
-                  className="h-full rounded-full bg-lime-300/85 transition-[width] duration-300"
+                  className="h-full rounded-sm bg-lime-300/85 transition-[width] duration-300"
                   style={{ width: `${widthPercent}%` }}
                 />
               </div>
@@ -162,11 +156,7 @@ export function LeaderboardPanel({
                     ? row.totalPoints.toLocaleString()
                     : row.normalizedIndex?.toFixed(2) ?? "—"}
                 </p>
-                {mode === "normalized" && row.normalizedIndex !== null ? (
-                  <Badge className="mt-1" variant="muted">
-                    1.0 avg
-                  </Badge>
-                ) : null}
+
               </div>
             </li>
           );

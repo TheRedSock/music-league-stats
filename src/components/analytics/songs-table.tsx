@@ -17,7 +17,6 @@ import {
   TableCell,
   TableHeader,
   TableRow,
-  TruncatedCell,
 } from "@/components/ui/table";
 import type { SongAnalyticsRow } from "@/lib/analytics";
 import {
@@ -49,21 +48,24 @@ export function SongsTable({
   rows: SongAnalyticsRow[];
   sort: SongSort;
 }) {
-  const { columns, isVisible, toggle } = useSongTableColumns();
+  const { columns, isVisible: savedVisible, toggle } = useSongTableColumns();
+
+  const isVisible = (column: Parameters<typeof savedVisible>[0]) => savedVisible(column) || sort === column;
 
   return (
     <div>
-      <div className="flex justify-end px-4 py-3 sm:px-5">
+      <div className="flex items-center justify-between gap-4 px-4 py-3 sm:px-5">
+        <span className="text-xs text-zinc-400">Scroll for more columns →</span>
         <SongsColumnPicker columns={columns} onToggle={toggle} />
       </div>
       <div className="overflow-x-auto border-t border-white/[0.06]">
-        <Table className="table-fixed" style={{ minWidth: 640 + columns.length * 100 }}>
+        <Table className="table-fixed" style={{ minWidth: 720 + columns.length * 100 }}>
           <TableHeader>
             <TableRow>
               <SortableTableHead
                 activeDirection={direction}
                 activeSort={sort}
-                className="w-[22%]"
+                className="w-72"
                 defaultDirection={defaultSongSortDirection("title")}
                 params={currentParams}
                 path="/songs"
@@ -74,7 +76,7 @@ export function SongsTable({
               <SortableTableHead
                 activeDirection={direction}
                 activeSort={sort}
-                className="w-[11%]"
+                className="w-32"
                 defaultDirection={defaultSongSortDirection("submitter")}
                 params={currentParams}
                 path="/songs"
@@ -85,7 +87,7 @@ export function SongsTable({
               <SortableTableHead
                 activeDirection={direction}
                 activeSort={sort}
-                className="w-[13%]"
+                className="w-44"
                 defaultDirection={defaultSongSortDirection("scope")}
                 params={currentParams}
                 path="/songs"
@@ -97,7 +99,7 @@ export function SongsTable({
                 activeDirection={direction}
                 activeSort={sort}
                 align="right"
-                className="w-[7%]"
+                className="w-20"
                 defaultDirection={defaultSongSortDirection("points")}
                 params={currentParams}
                 path="/songs"
@@ -117,7 +119,7 @@ export function SongsTable({
                   sortKey="positive-reach"
                   title="Share of eligible song-voter opportunities awarded at least one point; includes zeroes in the denominator."
                 >
-                  Positive reach
+                  Voters reached
                 </SortableTableHead>
               ) : null}
               {isVisible("points-per-voter") ? (
@@ -167,7 +169,7 @@ export function SongsTable({
                   sortKey="support-eb"
                   title="Empirical-Bayes shrunk support index. Shrinks noisy small-sample extremes toward 1.0 using Var(SI)=τ²+φ/E estimated from the corpus."
                 >
-                  Support (EB)
+                  Adjusted support
                 </SortableTableHead>
               ) : null}
               {isVisible("appeal-spread") ? (
@@ -187,7 +189,7 @@ export function SongsTable({
                   sortKey="support-z"
                   title="Standardized surplus vs expected points: (points − expected) / sqrt(φ · expected)."
                 >
-                  Support z
+                  Statistical surprise
                 </SortableTableHead>
               ) : null}
               {isVisible("normalized-index") ? (
@@ -226,7 +228,7 @@ export function SongsTable({
               <TableRow key={song.id}>
                 <TableCell>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-zinc-100">
+                    <p className="font-medium leading-5 text-zinc-100">
                       {song.spotifyUrl ? (
                         <a
                           className="inline-flex max-w-full items-center gap-1.5 hover:text-lime-200"
@@ -234,7 +236,7 @@ export function SongsTable({
                           rel="noreferrer"
                           target="_blank"
                         >
-                          <span className="truncate" title={song.title}>
+                          <span className="whitespace-normal" title={song.title}>
                             {song.title}
                           </span>
                           <ExternalLink
@@ -243,14 +245,14 @@ export function SongsTable({
                           />
                         </a>
                       ) : (
-                        <TruncatedCell title={song.title}>
+                        <span>
                           {song.title}
-                        </TruncatedCell>
+                        </span>
                       )}
                     </p>
-                    <p className="mt-0.5 truncate text-xs text-zinc-500">
+                    <p className="mt-1 text-sm leading-5 text-zinc-400">
                       {song.artist}
-                      {song.album ? ` · ${song.album}` : ""}
+                      
                     </p>
                   </div>
                 </TableCell>
@@ -306,7 +308,7 @@ export function SongsTable({
                   <TableCell className="text-right font-mono">
                     {percent(song.positiveReach)}
                     <p className="mt-0.5 text-[10px] text-zinc-600">
-                      {song.positiveRows}/{song.eligibleRows} rows
+                      {song.positiveRows} of {song.eligibleRows}
                     </p>
                   </TableCell>
                 ) : null}

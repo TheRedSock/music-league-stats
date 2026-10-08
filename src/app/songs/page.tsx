@@ -3,6 +3,7 @@ import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-
 import { ArrowLeft, ArrowRight, Search } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import Form from "next/form";
 import { redirect } from "next/navigation";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
@@ -16,9 +17,6 @@ import { buttonStyles } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import {
   buildAnalyticsHref,
@@ -32,7 +30,6 @@ import {
   parseSongSort,
   parseSongSortDirection,
   resolveAnalyticsFilter,
-  selectedFilterLabel,
   scopeQueryParams,
   type SearchParams,
 } from "@/lib/analytics";
@@ -48,12 +45,12 @@ const sortLabels = {
   scope: "League / round",
   points: "Total points",
   "points-per-voter": "Points per eligible voter",
-  "positive-reach": "Positive vote reach",
+  "positive-reach": "Voters reached",
   "round-share": "Round share",
-  "support-eb": "Support index (EB)",
+  "support-eb": "Adjusted support",
   "points-per-actual-voter": "Average points per actual voter",
   "appeal-spread": "Reach vs share spread",
-  "support-z": "Support z",
+  "support-z": "Statistical surprise",
   "normalized-index": "Support index (raw)",
   percentile: "Round percentile",
   newest: "Newest",
@@ -108,27 +105,22 @@ async function SongsPageContent({
   }
 
   return (
-    <Container className="py-10 sm:py-14">
-      <div className="flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+    <Container className="py-6 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-white">
             Songs
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {selectedFilterLabel(options, filter)}
-          </p>
         </div>
-        <div className="w-full lg:max-w-3xl">
+        <div className="min-w-0 sm:max-w-xl">
           <AnalyticsFilterBar filter={filter} options={options} />
         </div>
       </div>
 
-      <Card className="mt-9">
-        <CardContent className="p-4 sm:p-5">
-          <form
+      <div className="mt-5">
+          <Form
             action="/songs"
-            className="grid gap-3 sm:grid-cols-[1fr_15rem_auto]"
-            method="get"
+            className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_15rem_auto]"
           >
             {filter.leagueIds.length ? (
               filter.leagueIds.map((leagueId) => (
@@ -137,14 +129,14 @@ async function SongsPageContent({
             ) : (
               <input name="league" type="hidden" value="all" />
             )}
-            <label className="relative">
+            <label className="relative col-span-2 sm:col-span-1">
               <span className="sr-only">Search songs</span>
               <Search
                 aria-hidden="true"
                 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
               />
               <input
-                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 pl-10 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
+                className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 pl-10 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
                 defaultValue={search}
                 maxLength={100}
                 name="q"
@@ -155,7 +147,7 @@ async function SongsPageContent({
             <label>
               <span className="sr-only">Sort songs</span>
               <select
-                className="h-11 w-full rounded-xl border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
+                className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
                 key={sort}
                 defaultValue={sort}
                 name="sort"
@@ -168,13 +160,12 @@ async function SongsPageContent({
               </select>
             </label>
             <button className={buttonStyles()} type="submit">
-              Apply
+              Search
             </button>
-          </form>
-        </CardContent>
-      </Card>
+          </Form>
+      </div>
 
-      <div className="mt-6 flex items-center justify-between gap-4">
+      <div className="mt-4 flex items-center justify-between gap-4">
         <p className="text-sm text-zinc-400">
           <span className="font-mono text-zinc-100">
             {data.total.toLocaleString()}
@@ -204,7 +195,7 @@ async function SongsPageContent({
             description={
               search
                 ? "Try a broader song, artist, album, or player name."
-                : "Choose another league or round, or import submissions and votes."
+                : "Choose another league, or import submissions and votes."
             }
           />
         </div>
@@ -213,7 +204,7 @@ async function SongsPageContent({
       {data.total > data.pageSize ? (
         <nav
           aria-label="Song pages"
-          className="mt-6 flex items-center justify-between gap-3"
+          className="mt-4 flex items-center justify-between gap-3"
         >
           {page > 1 ? (
             <Link
@@ -242,25 +233,7 @@ async function SongsPageContent({
         </nav>
       ) : null}
 
-      <Card className="mt-10 border-dashed">
-        <CardHeader>
-          <CardTitle className="text-sm">How comparison works</CardTitle>
-          <CardDescription>
-            Active voters create eligible opportunities for visible songs they
-            did not submit. Omitted eligible opportunities count as zero; rounds
-            where a submitter did not vote do not create zeroes for that player.
-            Raw support index compares actual points with expected points from
-            eligible ballot budgets. Support index (EB) shrinks that ratio toward
-            1.0 using sample-size variance estimated from the corpus, so
-            small-room extremes are not overweighted in cross-round rankings.
-            Support z is the standardized surplus under the same variance model.
-            Reach vs share spread compares their scope percentiles in percentage points.
-            Positive means broader reach relative to point share; negative means
-            more concentrated support. Use Columns to show average points per
-            actual voter, Support z, raw support index or round percentile.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <p className="mt-6 text-xs text-zinc-400">More measures are available in Columns. <Link className="underline underline-offset-4" href="/faq#song-measures">How song measures work</Link></p>
     </Container>
   );
 }

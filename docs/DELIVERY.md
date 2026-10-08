@@ -8,7 +8,7 @@ The baseline and detailed acceptance criteria are in [the audit](audit-2026-10-0
 | --- | --- | --- |
 | 0 | Patched dependencies, bounded sign-in attempts and scope generation | Complete |
 | 1 | Responsive navigation, accessible dialogs/popovers, accurate ranks and formatting | Complete |
-| 2 | Homepage and Songs visual and editorial reference | Pending |
+| 2 | Homepage and Songs visual and editorial reference | Complete |
 | 3 | Players, profiles, Facts, Compare, methodology, admin hierarchy | Pending |
 | 4 | Graph defaults, legends, keyboard/touch details and URL state | Pending |
 | 5 | Profile query grouping, import preparation, readiness reuse and retry behavior | Pending |
@@ -29,3 +29,9 @@ Validation: lint, type checking, production build, and 93 tests passed; 16 pre-e
 The header wraps into a five-link row on narrow screens. Scope is part of each actual navigation URL, including modified clicks and copied links. Table menus use native top-layer popovers; dialogs use native modal behavior with initial focus, explicit boundary wrapping, Escape, scroll containment and trigger restoration. Adjusted rank is named explicitly, and ordinal/point formatting is shared. Route-level Suspense boundaries keep filtered navigation compatible with the patched Next release.
 
 Validation: lint, type checking, production build and 94 unit tests passed (16 database tests still opt-in). Browser checks at 360, 390, 768 and 1440 px found no document overflow, including the latest league's long name. The one-row Columns menu remains fully visible on desktop and mobile; zero and many-row states were also checked. Tab and Shift+Tab wrap inside the profile dialog after a clean reload, Escape restores its trigger, and the background is inert. Wide detail tables scroll within the modal. Screenshots are in delivery-evidence/stage-1-*.jpg.
+
+## Stage 2
+
+Home now leads with standings, a compact totals strip and five players. The shared surfaces use flat backgrounds, restrained borders and square-ended bars. One league selector carries the full current name; draft selections and Apply stay inside its popover. Song identities have wrapping titles and a separate artist line. The default table has points and voters reached; sorting by an advanced measure reveals that column, while saved custom selections survive migration. Search uses Next Form navigation. Repeated methodology paragraphs were replaced with contextual links; similarity is explicitly a score out of 100, not a shared-likes percentage.
+
+Validation: lint, type checking, production build and 94 tests passed. Real-data browser checks exercised all-league selection, latest-league long titles and adjusted-support sorting. At 390×844, the first Home player starts at y=520 and the first Songs result at approximately y=520. Width checks passed at 360/390/768/1440 px. Desktop and mobile screenshots in delivery-evidence/stage-2-*.jpg show the reference treatment. Advanced controls remain available; deeper methodology targets are completed in Stage 3.
