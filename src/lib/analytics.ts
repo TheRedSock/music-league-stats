@@ -344,6 +344,7 @@ export type ActualVoterSongFact = SongSubmissionFact & {
 };
 
 export type SubmissionFactsData = {
+  playerSlugs: Record<string, string>;
   highestAverageVoteSongs: ActualVoterSongFact[];
   lowestAverageVoteSongs: ActualVoterSongFact[];
   mostSubmittedArtists: Array<{
@@ -508,6 +509,7 @@ export type SubmissionFactsData = {
 };
 
 type SubmissionFactsPackedQueryRow = {
+  playerSlugs: unknown;
   highestAverageVoteSongs: unknown;
   lowestAverageVoteSongs: unknown;
   mostSubmittedArtists: unknown;
@@ -2387,7 +2389,7 @@ async function getMaterializedPlayerProfileData(
         }
       group by ev.round_id, ev.voter_id
     ),
-    ${profileVoteCountCtes("analytics_effective_votes", player.id)},
+    ${profileVoteCountCtes("analytics_effective_votes", player.id, leagueIds)},
     highest_voted_song_rows as (
       select
         s.id as "submissionId",
@@ -4181,6 +4183,7 @@ export async function getSubmissionFactsData(
         where position_percentile is not null
       )
       select
+        (select jsonb_object_agg(id, slug) from competitors) as "playerSlugs",
         (
           select coalesce(json_agg(to_jsonb(most_submitted_artists) order by submissions desc, submitters desc, artist asc), '[]'::json)
           from most_submitted_artists
@@ -4260,6 +4263,7 @@ export async function getSubmissionFactsData(
   >(playlistBias.buckets);
 
   return {
+    playerSlugs: jsonObject<Record<string, string>>(row?.playerSlugs) ?? {},
     highestAverageVoteSongs: jsonRows<ActualVoterSongFact>(
       row?.highestAverageVoteSongs,
     ),

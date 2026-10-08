@@ -439,7 +439,10 @@ async function PlayerProfilePageContent({
       <HighestVotedSongsPanel
         filterParams={filterParams}
         playerName={player.name}
-        rows={profile.highestVotedSongs}
+        rows={profile.highestVotedSongs.slice(0, 5)}
+        total={profile.highestVotedSongs.length}
+        playerId={player.id}
+        key={`${player.id}-${JSON.stringify(filterParams)}`}
       />
 
       <section className="mt-6 grid min-w-0 grid-cols-1 gap-6 xl:grid-cols-2" aria-label="Directional relationships">
@@ -684,7 +687,7 @@ async function PlayerProfilePageContent({
                             </p>
                           </div>
                           <p className="font-mono text-sm text-lime-200">
-                            {(alignment.alignment * 100).toFixed(0)}%
+                            {(alignment.alignment * 100).toFixed(1)}/100
                           </p>
                         </li>
                       ))}
@@ -701,7 +704,7 @@ async function PlayerProfilePageContent({
             <p className="mt-4 text-xs leading-5 text-zinc-600">
               Positive alignment means agreement, zero means no linear
               agreement, and negative alignment means opposing preferences.
-              It does not infer friendship, listening behavior, or causality.
+
             </p>
           </CardContent>
         </Card>

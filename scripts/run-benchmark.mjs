@@ -1,0 +1,11 @@
+import { build } from "esbuild";
+import { spawnSync } from "node:child_process";
+const selected = process.argv[2];
+const sources = { queries: "scripts/db-bench.ts", "profile-votes": "scripts/bench-profile-votes.mjs", "import-chunks": "scripts/bench-import-chunks.mjs" };
+if (!Object.hasOwn(sources, selected)) throw new Error("Choose queries, profile-votes or import-chunks.");
+const format = selected === "queries" ? "cjs" : "esm";
+const outfile = `node_modules/.cache/benchmark-${selected}.${format === "cjs" ? "cjs" : "mjs"}`;
+await build({ entryPoints: [sources[selected]], outfile, bundle: true, platform: "node", packages: "external", format });
+const result = spawnSync(process.execPath, [outfile], { stdio: "inherit", env: process.env });
+if (result.error) throw result.error;
+process.exitCode = result.status ?? 1;

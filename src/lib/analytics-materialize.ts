@@ -16,6 +16,7 @@ import {
 import {
   alignmentComparisonCtes,
   analyticsScopeKey,
+  canonicalIds,
   competitorDisplayName,
   playerAggregateCtes,
   songSelect,
@@ -327,6 +328,12 @@ export async function advanceMaterializationJob(
       }
       const executor = budgetedAnalyticsExecutor(tx, startedAt);
       const step = MATERIALIZATION_STEPS[stepIndex];
+      const stepStarted = Date.now();
+      const stepTimings = () => [...(checkpoint?.steps ?? []), {
+        step: step.id === "league-scopes" ? LEAGUE_CALCULATIONS[checkpoint!.leagueStepIndex ?? 0].id : step.id,
+        ...(step.id === "league-scopes" ? { leagueId: checkpoint?.leagueIds?.[checkpoint.leagueIndex ?? 0] } : {}),
+        elapsedMs: Date.now() - stepStarted,
+      }];
       let next = progressSummary(Math.min(stepIndex + 1, MATERIALIZATION_STEPS.length - 1));
       if (step.id === "league-scopes") {
         const leagueIds = checkpoint.leagueIds ?? (await tx.select({ id: leagues.id }).from(leagues).orderBy(leagues.id)).map((row) => row.id);
@@ -353,7 +360,7 @@ export async function advanceMaterializationJob(
           leagueScopes: await countRows(executor, "leagues"),
         };
         return materializationStatus(await markMaterializationJob(tx as unknown as Database, jobId, {
-          status: "completed", summary: { ...summary, kind: "completed" },
+          status: "completed", summary: { ...summary, kind: "completed", steps: stepTimings() },
         }));
       } else {
         await runMaterializationStep(executor, step.id);
@@ -363,7 +370,7 @@ export async function advanceMaterializationJob(
         next = progressSummary(next.stepIndex, 0, ids.length, 0, ids);
       }
       const [updated] = await tx.update(analyticsMaterializationJobs).set({
-        summary: next, errorMessage: null, updatedAt: new Date(),
+        summary: { ...next, steps: stepTimings() }, errorMessage: null, updatedAt: new Date(),
       }).where(eq(analyticsMaterializationJobs.id, jobId)).returning();
       return materializationStatus(updated);
     });
@@ -920,7 +927,7 @@ export async function startScopeMaterializationJob(
   leagueIds: string[],
   database: Database = db,
 ): Promise<ScopeMaterializationStatus> {
-  const ids = [...new Set(leagueIds)].filter(Boolean).sort();
+  const ids = canonicalIds(leagueIds);
   if (ids.length < 2) {
     throw new Error("Scope materialization requires at least two leagues.");
   }
@@ -992,7 +999,7 @@ export async function progressScopeMaterialization(
   leagueIds: string[],
   database: Database = db,
 ): Promise<ScopeMaterializationStatus> {
-  const ids = [...new Set(leagueIds)].filter(Boolean).sort();
+  const ids = canonicalIds(leagueIds);
   const scopeKey = analyticsScopeKey(ids);
   if (ids.length < 2) {
     return {
@@ -1038,6 +1045,7 @@ export async function advanceScopeMaterializationJob(
       if (!step || step.id !== current?.stepId) throw new Error("Invalid scope checkpoint.");
       const executor = budgetedAnalyticsExecutor(tx, startedAt);
       const filter: AnalyticsFilter = { leagueIds: job.scopeKey.split(","), roundIds: [] };
+      const stepStarted = Date.now();
       if (step.id === "clear-scope") {
         await executor.execute(sql`delete from analytics_relationship_pairs where scope_key = ${job.scopeKey}`);
         await executor.execute(sql`delete from analytics_relationship_mutual where scope_key = ${job.scopeKey}`);
@@ -1050,10 +1058,11 @@ export async function advanceScopeMaterializationJob(
         await insertRelationshipAlignment(executor, job.scopeKey, filter);
       }
       const completed = step.id === "finalize";
+      const steps = [...(current?.steps ?? []), { step: step.id, elapsedMs: Date.now() - stepStarted }];
       const [updated] = await tx.update(analyticsScopeJobs).set({
         status: completed ? "completed" : "processing", errorMessage: null,
         completedAt: completed ? new Date() : null, updatedAt: new Date(),
-        summary: completed ? null : scopeProgressSummary(current!.stepIndex + 1),
+        summary: completed ? { kind: "scope-completed", steps } : { ...scopeProgressSummary(current!.stepIndex + 1), steps },
       }).where(eq(analyticsScopeJobs.id, jobId)).returning();
       return { analyticsRevision: ANALYTICS_REVISION, job: updated, progress: progressFromSummary(updated.summary), scopeKey: job.scopeKey, status: updated.status };
     });

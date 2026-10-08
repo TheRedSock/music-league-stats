@@ -387,7 +387,10 @@ export const importStagingRows = pgTable(
   ],
 );
 
+export type AnalyticsStepTiming = { step: string; elapsedMs: number; leagueId?: string };
+
 export type AnalyticsMaterializationSummary = {
+  steps?: AnalyticsStepTiming[];
   songStats: number;
   playerStats: number;
   pointDistribution: number;
@@ -401,6 +404,7 @@ export type AnalyticsMaterializationSummary = {
 };
 
 export type AnalyticsMaterializationProgress = {
+  steps?: AnalyticsStepTiming[];
   kind: "progress";
   stepId: string;
   stepLabel: string;
@@ -414,6 +418,7 @@ export type AnalyticsMaterializationProgress = {
 
 export type AnalyticsMaterializationJobSummary =
   | (AnalyticsMaterializationSummary & { kind?: "completed" })
+  | { kind: "scope-completed"; steps: AnalyticsStepTiming[] }
   | AnalyticsMaterializationProgress;
 
 export const analyticsMaterializationJobs = pgTable(

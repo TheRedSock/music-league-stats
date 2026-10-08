@@ -199,6 +199,7 @@ async function RelationshipsPageContent({
   }
 
   const playerOptions = await getCachedPlayersData(encodeScopeIds(filter.leagueIds), encodeScopeIds(filter.roundIds), "", "name", "asc");
+  const playerSlugs = new Map(playerOptions.rows.map(player => [player.id, player.slug]));
   const pageSize = 25;
   const pageCount = Math.max(1, Math.ceil(data.rows.length / pageSize));
   const page = Math.min(parsePositiveInteger(params.page, 1, 100000), pageCount);
@@ -302,7 +303,7 @@ async function RelationshipsPageContent({
                       activeSort={sort}
                       align="right"
                       className="w-[14%]"
-                      title={tab === "alignment" ? "Cosine similarity of budget-normalized votes after subtracting each voter's shared-song mean per round. Range −100% to +100%; zero means no linear agreement, negative means opposing preferences." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "Combined points exchanged divided by the eligible ballot budgets of both players." : "Points awarded divided by eligible opportunities, including zero-point votes."}
+                      title={tab === "alignment" ? "Cosine similarity of budget-normalized votes after subtracting each voter's shared-song mean per round. Range −100 to +100; zero means no linear agreement, negative means opposing preferences." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "Combined points exchanged divided by the eligible ballot budgets of both players." : "Points awarded divided by eligible opportunities, including zero-point votes."}
                       defaultDirection={defaultRelationshipSortDirection(
                         tab === "alignment"
                           ? "alignment"
@@ -364,10 +365,10 @@ async function RelationshipsPageContent({
                       <TableRow key={`${row.leftId}-${row.rightId ?? "timing"}`}>
                         <TableCell className="max-w-0">
                           <div className="flex items-center gap-1.5 font-medium text-zinc-100">
-                            <Link className="min-w-0 truncate hover:text-lime-200" title={row.leftName} href={buildAnalyticsHref(`/players/${row.leftId}`, scopeQueryParams(filter), {})}>{row.leftName}</Link>
+                            <Link className="min-w-0 truncate hover:text-lime-200" title={row.leftName} href={buildAnalyticsHref(`/players/${playerSlugs.get(row.leftId) ?? row.leftId}`, scopeQueryParams(filter), {})}>{row.leftName}</Link>
                             {row.rightId ? <>
                               <span aria-label={tab === "given" ? "gives points to" : "compared with"} className="shrink-0 text-lime-300">{tab === "given" ? "→" : "↔"}</span>
-                              <Link className="min-w-0 truncate hover:text-lime-200" title={row.rightName ?? "Player"} href={buildAnalyticsHref(`/players/${row.rightId}`, scopeQueryParams(filter), {})}>{row.rightName}</Link>
+                              <Link className="min-w-0 truncate hover:text-lime-200" title={row.rightName ?? "Player"} href={buildAnalyticsHref(`/players/${playerSlugs.get(row.rightId ?? "") ?? row.rightId}`, scopeQueryParams(filter), {})}>{row.rightName}</Link>
                             </> : null}
                           </div>
                         </TableCell>

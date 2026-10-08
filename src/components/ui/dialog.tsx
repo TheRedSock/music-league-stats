@@ -1,12 +1,13 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 import { cn } from "@/lib/utils";
 
-export function Dialog({ children, className, description, onClose, open, title }: {
+export function Dialog({ children, className, description, onClose, open, title, returnFocusRef }: {
   children: ReactNode; className?: string; description?: string;
   onClose: () => void; open: boolean; title: string;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -16,15 +17,16 @@ export function Dialog({ children, className, description, onClose, open, title 
     const element = dialog.current;
     if (!open || !element) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const restore = returnFocusRef?.current ?? trigger;
     const overflow = document.body.style.overflow;
     element.showModal();
     document.body.style.overflow = "hidden";
     return () => {
       element.close();
       document.body.style.overflow = overflow;
-      if (trigger?.isConnected) trigger.focus();
+      if (restore?.isConnected) restore.focus();
     };
-  }, [open]);
+  }, [open, returnFocusRef]);
 
   return (
     <dialog ref={dialog} aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}

@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 const url = new URL(process.env.ANALYTICS_TEST_DATABASE_URL ?? "");
 if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) || !url.pathname.endsWith("_test")) throw new Error("Use a local disposable database whose name ends in _test.");
 const db = postgres(url.toString(), { max: 1, onnotice: () => {} });
-const id = value => { const hex = createHash("md5").update(value).digest("hex"); return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`; };
+const id = value => { const hex = createHash("md5").update(value).digest("hex"); return `${hex.slice(0,8)}-${hex.slice(8,12)}-4${hex.slice(13,16)}-8${hex.slice(17,20)}-${hex.slice(20)}`; };
 try {
   if ((await db`select tablename from pg_tables where schemaname='public'`).length) throw new Error("Database must be empty; this command never deletes existing data.");
   for (const file of (await readdir("drizzle")).filter(f => f.endsWith(".sql")).sort()) await db.unsafe(await readFile(`drizzle/${file}`, "utf8"));

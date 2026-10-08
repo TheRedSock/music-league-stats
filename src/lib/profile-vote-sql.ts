@@ -1,13 +1,14 @@
 import { sql, type SQL } from "drizzle-orm";
 
 /** Shared by materialized and live profiles; tied point values share a cumulative count. */
-export function profileVoteCountCtes(source: "analytics_effective_votes" | "effective_votes", playerId: string): SQL {
+export function profileVoteCountCtes(source: "analytics_effective_votes" | "effective_votes", playerId: string, leagueIds: readonly string[] = []): SQL {
   const votes = sql.identifier(source);
+  const scope = leagueIds.length ? sql`league_id in (${sql.join(leagueIds.map(id => sql`${id}`), sql`, `)})` : sql`true`;
   return sql`
     profile_ballot_counts as (
       select round_id, points,
         sum(count(*)) over (partition by round_id order by points desc)::int as songs_at_least
-      from ${votes} where voter_id = ${playerId}
+      from ${votes} where voter_id = ${playerId} and ${scope}
       group by round_id, points
     ),
     profile_song_counts as (
@@ -15,7 +16,7 @@ export function profileVoteCountCtes(source: "analytics_effective_votes" | "effe
         sum(count(*)) over (partition by submission_id order by points desc)::int as voters_at_least,
         sum(sum(points)) over (partition by submission_id)::double precision as song_points,
         sum(count(*)) over (partition by submission_id)::int as song_eligible_voters
-      from ${votes}
+      from ${votes} where ${scope}
       group by submission_id, points
     )
   `;

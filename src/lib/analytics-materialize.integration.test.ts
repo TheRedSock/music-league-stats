@@ -113,6 +113,7 @@ describe.skipIf(!url)("analytics checkpoints (isolated PostgreSQL temporary tabl
         let combo = await startScopeMaterializationJob(leagueIds.slice(0, 2), database);
         for (let i = 0; combo.status === "processing" && i < 6; i++) combo = await advanceScopeMaterializationJob(combo.job!.id, database);
         expect(combo.status).toBe("completed");
+        expect(combo.scopeKey).toContain(",");
 
         // Make timestamp order explicit inside this single outer transaction.
         await connection`update analytics_materialization_jobs set created_at='2000-01-01'`;

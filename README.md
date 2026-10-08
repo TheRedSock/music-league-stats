@@ -145,7 +145,7 @@ database cannot be queried. URL parameters keep analytics views shareable:
   Votes are divided by each ballot's point total and centered by each voter's
   mean on the pair's shared songs within that round. Cosine similarity of the
   pooled deviations removes the positive baseline from broad allocations while
-  retaining vote intensity. Scores range from −100% to +100%; zero means no
+  retaining vote intensity. Scores range from −100 to +100 (displayed out of 100); zero means no
   linear agreement and negative values mean opposing preferences. Rounds where
   either shared-song ballot is flat contribute neither features nor coverage.
   The existing selected-scope sample and coverage thresholds still apply.
@@ -157,10 +157,9 @@ database cannot be queried. URL parameters keep analytics views shareable:
   uses each voter's latest exported `castAt` in a round and displays a
   tie-aware midpoint percentile among observed ballot timestamps. Submitted
   rounds with no exported vote row are shown as did not vote.
-- Point-distribution charts group vote rows by point bucket but scale bars by
-  represented points, so a two-point vote contributes twice the bar weight of a
-  one-point vote. Zero buckets remain visible in extended mode but add no point
-  weight.
+- Point-distribution charts show vote counts or vote shares with the same bar
+  geometry. Shares use the votes in the displayed score range as their denominator.
+  Total points are stated separately; extended mode includes zero and 5+ scores.
 - CSV exports do not include listening behavior or reliable deadline context.
   The app therefore does not claim friendship, causality, or early/late
   submission against a deadline.
@@ -175,3 +174,44 @@ database cannot be queried. URL parameters keep analytics views shareable:
 - `npm run db:generate` — generate migrations from the schema
 - `npm run db:migrate` — apply pending migrations
 - `npm run db:studio` — open Drizzle Studio
+
+## Verification and performance checks
+
+CI starts disposable PostgreSQL 17, applies the migrations to an empty database,
+seeds deterministic fixtures, and runs the integration tests alongside unit tests.
+Locally, point `ANALYTICS_TEST_DATABASE_URL` at an empty local database with a name
+ending in `_test`, run `npm run test:db:prepare`, then `npm test`. The setup command
+refuses non-local or non-empty databases and never deletes existing data. Tests
+use temporary tables and roll their changes back. Do not point this variable at
+an application database.
+
+- `npm run db:bench` calls current application query functions inside a read-only
+  transaction. `BENCH_PLAYER` selects a profile (default: theredsock), and
+  `BENCH_OUTPUT` selects the JSON report path. Request memoization is inactive in
+  this standalone runner, so query counts are not live-page request counts.
+- `npm run bench:profile` compares the actual grouped SQL builder with the previous
+  correlated calculation and requires identical results.
+- `npm run bench:chunks` compares actual import chunk preparation against the
+  previous implementation using synthetic rows and exact boundary/hash equality.
+- `npm run bench:http` measures a production server on `127.0.0.1:3001` (override
+  with `BENCH_BASE_URL`), one initial and three warm requests. It records complete
+  HTML stream time and decoded/gzip sizes, not LCP. `BENCH_OUTPUT` selects the report.
+- The refresh experiment is `src/lib/refresh-reuse.integration.test.ts`. It runs
+  actual checkpoints against isolated temporary tables and compares every output.
+  `REFRESH_BENCH_OUTPUT` optionally saves per-step timing results. The experiment's
+  stored-vote alternative is not used in production: measured savings were small.
+
+Profiles load five vote previews initially; the full list uses a validated,
+25-row, searchable endpoint. Facts loads an individual 25-row detail table only
+when its URL is opened, preserving category, search and pagination. Readiness is
+checked for every request. The existing server analytics cache still holds complete
+query results; this change reduces browser payloads without adding a second cache.
+Successful refresh-step timings are saved with their checkpoint and appear in the
+admin panel. No schema migration or immediate refresh is required for these changes.
+
+For a browser regression pass, use 360/390/768/1440 px widths: inspect navigation
+and long league names; search Songs to one row and open Columns; open each detail
+dialog, Tab/Shift+Tab, Escape and verify returned focus; search and paginate both
+profile votes and Facts; use Matrix arrows and selection; reload the League race
+with an added player. Screenshots and the completed delivery log are in
+`docs/delivery-evidence` and `docs/DELIVERY.md`.

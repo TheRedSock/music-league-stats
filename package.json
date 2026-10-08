@@ -10,11 +10,15 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:bench": "tsx scripts/db-bench.ts",
+    "db:bench": "node scripts/run-benchmark.mjs queries",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "bench:http": "node scripts/bench-http.mjs",
+    "bench:profile": "node scripts/run-benchmark.mjs profile-votes",
+    "bench:chunks": "node scripts/run-benchmark.mjs import-chunks",
+    "test:db:prepare": "node scripts/prepare-test-db.mjs"
   },
   "repository": {
     "type": "git",

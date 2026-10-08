@@ -1,0 +1,675 @@
+{
+  "measuredAt": "2026-10-08T09:53:22.517Z",
+  "note": "Isolated local PostgreSQL; actual application refresh steps, excluding HTTP pacing and remote DB latency. All tables compared, floating values to 10 significant digits.",
+  "results": [
+    {
+      "source": "live",
+      "elapsedMs": 4032,
+      "steps": [
+        {
+          "step": "clear",
+          "elapsedMs": 18
+        },
+        {
+          "step": "facts",
+          "elapsedMs": 164
+        },
+        {
+          "step": "songs",
+          "elapsedMs": 92
+        },
+        {
+          "step": "players",
+          "elapsedMs": 74
+        },
+        {
+          "step": "point-distribution",
+          "elapsedMs": 38
+        },
+        {
+          "step": "player-point-distribution",
+          "elapsedMs": 46
+        },
+        {
+          "step": "relationship-pairs",
+          "elapsedMs": 105
+        },
+        {
+          "step": "relationship-mutual",
+          "elapsedMs": 92
+        },
+        {
+          "step": "relationship-alignment",
+          "elapsedMs": 382
+        },
+        {
+          "step": "player-timing",
+          "elapsedMs": 18
+        },
+        {
+          "step": "players",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 24
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 14
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 16
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 24
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 23
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 76
+        },
+        {
+          "step": "players",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 18
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 12
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 13
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 24
+        },
+        {
+          "step": "players",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 16
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 11
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 12
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 18
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 50
+        },
+        {
+          "step": "players",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 16
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 10
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 11
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 14
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 15
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 25
+        },
+        {
+          "step": "players",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 23
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 16
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 18
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 31
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 29
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 105
+        },
+        {
+          "step": "players",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 19
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 13
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 13
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 22
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 20
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 64
+        },
+        {
+          "step": "players",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 15
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 9
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 10
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 16
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 34
+        },
+        {
+          "step": "players",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 13
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 9
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 10
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 14
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 12
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 23
+        },
+        {
+          "step": "players",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 18
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 11
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 12
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 41
+        },
+        {
+          "step": "finalize",
+          "elapsedMs": 27
+        }
+      ],
+      "counts": {
+        "analytics_effective_votes": 44298,
+        "analytics_song_stats": 2406,
+        "analytics_player_stats": 252,
+        "analytics_point_distribution": 60,
+        "analytics_player_point_distribution": 2848,
+        "analytics_relationship_pairs": 12882,
+        "analytics_relationship_mutual": 3287,
+        "analytics_relationship_alignment": 3123,
+        "analytics_player_timing": 1558
+      }
+    },
+    {
+      "source": "materialized",
+      "elapsedMs": 3695,
+      "steps": [
+        {
+          "step": "clear",
+          "elapsedMs": 13
+        },
+        {
+          "step": "facts",
+          "elapsedMs": 138
+        },
+        {
+          "step": "songs",
+          "elapsedMs": 83
+        },
+        {
+          "step": "players",
+          "elapsedMs": 62
+        },
+        {
+          "step": "point-distribution",
+          "elapsedMs": 23
+        },
+        {
+          "step": "player-point-distribution",
+          "elapsedMs": 30
+        },
+        {
+          "step": "relationship-pairs",
+          "elapsedMs": 81
+        },
+        {
+          "step": "relationship-mutual",
+          "elapsedMs": 74
+        },
+        {
+          "step": "relationship-alignment",
+          "elapsedMs": 369
+        },
+        {
+          "step": "player-timing",
+          "elapsedMs": 16
+        },
+        {
+          "step": "players",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 23
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 10
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 10
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 18
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 19
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "08382efa-f78a-4fc1-9d82-87b38b74c1fe",
+          "elapsedMs": 65
+        },
+        {
+          "step": "players",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 17
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 8
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 9
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 11
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 12
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "13102bb7-3cd0-4649-a764-172d3870e8d2",
+          "elapsedMs": 21
+        },
+        {
+          "step": "players",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 16
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 9
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 9
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 18
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 15
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "577723df-fdea-41f5-bdda-fd6c0aa7c71b",
+          "elapsedMs": 47
+        },
+        {
+          "step": "players",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 16
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 9
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 10
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 14
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 13
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "801feb66-2f09-45a5-a59d-5f86c22d9d20",
+          "elapsedMs": 24
+        },
+        {
+          "step": "players",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 23
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 12
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 12
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 22
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 23
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "883ea2ad-7b8a-4ea2-b2fd-a30a4edac0df",
+          "elapsedMs": 98
+        },
+        {
+          "step": "players",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 17
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 14
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 13
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 20
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "b336e334-95e4-491e-940b-20c772d1cfb1",
+          "elapsedMs": 61
+        },
+        {
+          "step": "players",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 15
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 10
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 11
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 15
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 15
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "e4610259-b519-49ca-8e05-afe572e2e58b",
+          "elapsedMs": 34
+        },
+        {
+          "step": "players",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 14
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 11
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 10
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 13
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 13
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "f85e975c-0848-4081-8e4d-c1b336a67f51",
+          "elapsedMs": 23
+        },
+        {
+          "step": "players",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 19
+        },
+        {
+          "step": "point-distribution",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 10
+        },
+        {
+          "step": "player-point-distribution",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 11
+        },
+        {
+          "step": "relationship-pairs",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-mutual",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 17
+        },
+        {
+          "step": "relationship-alignment",
+          "leagueId": "fedda56b-e7d7-422a-94dc-572cdbde012e",
+          "elapsedMs": 39
+        },
+        {
+          "step": "finalize",
+          "elapsedMs": 25
+        }
+      ],
+      "counts": {
+        "analytics_effective_votes": 44298,
+        "analytics_song_stats": 2406,
+        "analytics_player_stats": 252,
+        "analytics_point_distribution": 60,
+        "analytics_player_point_distribution": 2848,
+        "analytics_relationship_pairs": 12882,
+        "analytics_relationship_mutual": 3287,
+        "analytics_relationship_alignment": 3123,
+        "analytics_player_timing": 1558
+      }
+    }
+  ],
+  "decision": "Do not adopt. Narrow reuse saved about 2\u20138% of local elapsed time across two trials, with no remote-request pacing measured. An earlier broader song/player attempt changed floating-point tie ordering and was rejected.",
+  "earlierTrial": {
+    "liveElapsedMs": 3877,
+    "candidateElapsedMs": 3791,
+    "liveStepMs": 2158,
+    "candidateStepMs": 2024
+  }
+}

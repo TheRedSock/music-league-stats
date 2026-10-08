@@ -1,3 +1,4 @@
+import type { FactDetail } from "@/lib/detail-pagination";
 import type { ReactNode } from "react";
 
 import { FactPanelDialog } from "@/components/analytics/fact-panel-dialog";
@@ -18,6 +19,7 @@ export function FactPanel({
   className,
   description,
   dialog,
+  detail,
   dialogClassName,
   emptyMessage = "Nothing to show in this scope.",
   itemCount,
@@ -27,6 +29,7 @@ export function FactPanel({
   className?: string;
   description: string;
   dialog?: ReactNode;
+  detail?: FactDetail;
   dialogClassName?: string;
   emptyMessage?: string;
   itemCount: number;
@@ -44,15 +47,15 @@ export function FactPanel({
         ) : (
           <p className="text-sm text-zinc-500">{emptyMessage}</p>
         )}
-        {dialog ? (
+        {detail && itemCount > FACT_PREVIEW_LIMIT ? (
           <FactPanelDialog
+            detail={detail}
             description={description}
             dialogClassName={dialogClassName}
             itemCount={itemCount}
-            previewLimit={FACT_PREVIEW_LIMIT}
             title={title}
           >
-            {dialog}
+            {detail.open ? dialog : null}
           </FactPanelDialog>
         ) : null}
       </CardContent>

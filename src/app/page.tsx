@@ -44,10 +44,12 @@ const summaryMetadata = [
 
 function AlignmentPanel({
   alignments,
+  playerSlugs,
   filterParams,
   pendingScopeMaterialization = false,
 }: {
   alignments: Awaited<ReturnType<typeof getCachedDashboardAlignmentData>>;
+  playerSlugs: Record<string, string>;
   filterParams: ReturnType<typeof scopeQueryParams>;
   pendingScopeMaterialization?: boolean;
 }) {
@@ -59,8 +61,8 @@ function AlignmentPanel({
     {alignments.length ? <ol className="mt-4 grid gap-4 md:grid-cols-3">
       {alignments.map(alignment => <li key={`${alignment.leftId}-${alignment.rightId}`} className="border-l-2 border-lime-300/50 pl-4">
         <p className="text-sm font-medium">
-          <Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${alignment.leftId}`, filterParams, {})}>{alignment.leftName}</Link>
-          {" & "}<Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${alignment.rightId}`, filterParams, {})}>{alignment.rightName}</Link>
+          <Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${playerSlugs[alignment.leftId] ?? alignment.leftId}`, filterParams, {})}>{alignment.leftName}</Link>
+          {" & "}<Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${playerSlugs[alignment.rightId] ?? alignment.rightId}`, filterParams, {})}>{alignment.rightName}</Link>
         </p>
         <p className="mt-2 text-2xl tabular-nums">{(alignment.alignment * 100).toFixed(0)}<span className="ml-1 text-xs text-zinc-400">/ 100 similarity</span></p>
         <p className="mt-1 text-xs text-zinc-400">{alignment.sharedRounds} shared rounds · {alignment.comparableFeatures} song comparisons</p>
@@ -75,10 +77,12 @@ function AlignmentFallback() {
 }
 
 async function DashboardAlignmentCard({
+  playerSlugs,
   filter,
   filterParams,
 }: {
   filter: { leagueIds: string[]; roundIds: string[] };
+  playerSlugs: Record<string, string>;
   filterParams: ReturnType<typeof scopeQueryParams>;
 }) {
   const result = await loadAnalytics(async () => {
@@ -99,6 +103,7 @@ async function DashboardAlignmentCard({
   });
   return (
     <AlignmentPanel
+      playerSlugs={playerSlugs}
       alignments={result.status === "ready" ? result.data.alignments : []}
       filterParams={filterParams}
       pendingScopeMaterialization={
@@ -289,6 +294,7 @@ async function HomePageContent({
 
             <Suspense fallback={<AlignmentFallback />}>
               <DashboardAlignmentCard
+                playerSlugs={Object.fromEntries(data.leaderboard.map(player => [player.id, player.slug]))}
                 filter={filter}
                 filterParams={filterParams}
               />

@@ -19,6 +19,20 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: 1
+      ANALYTICS_TEST_DATABASE_URL: postgres://postgres:local-test-only@127.0.0.1:5432/music_league_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: music_league_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Check out repository
@@ -40,7 +54,9 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test
+        run: |
+          npm run test:db:prepare
+          npm test
 
       - name: Build
         run: npm run build

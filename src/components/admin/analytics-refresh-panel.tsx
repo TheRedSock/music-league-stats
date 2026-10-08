@@ -3,6 +3,7 @@
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import type { AnalyticsStepTiming } from "@/db/schema";
 
 import { LEAGUE_CALCULATIONS } from "@/lib/analytics-job-progress";
 import { Badge } from "@/components/ui/badge";
@@ -57,6 +58,12 @@ export function AnalyticsRefreshPanel({
     ? observedStatus : initialStatus;
   const savedProgress = progress ?? status?.progress;
   const badge = pending ? { label: "In progress", variant: "muted" as const } : formatStatus(status);
+  const timings = Array.isArray(status?.job?.summary?.steps) ? status.job.summary.steps as AnalyticsStepTiming[] : [];
+  const timingTotals = new Map<string, { count: number; ms: number }>();
+  for (const timing of timings) {
+    const previous = timingTotals.get(timing.step) ?? { count: 0, ms: 0 };
+    timingTotals.set(timing.step, { count: previous.count + 1, ms: previous.ms + timing.elapsedMs });
+  }
 
   async function handleRefresh() {
     setPending(true);
@@ -152,6 +159,11 @@ export function AnalyticsRefreshPanel({
             {savedProgress ? `Saved checkpoint: ${savedProgress.stepLabel}. Keep this page open while refreshing.` : "Progress is saved after each calculation."}
           </p>
         )}
+
+        {timings.length ? <details className="text-xs text-zinc-400"><summary className="cursor-pointer">Calculation timings</summary>
+          <p className="mt-2">Successful steps, excluding time between requests.</p>
+          <dl className="mt-2 space-y-1">{[...timingTotals].map(([step, total]) => <div key={step} className="flex justify-between gap-4"><dt>{step.replaceAll("-", " ")}{total.count > 1 ? ` (${total.count})` : ""}</dt><dd className="font-mono">{(total.ms / 1000).toFixed(2)} s</dd></div>)}</dl>
+        </details> : null}
 
         {!pending && (error || status?.job?.errorMessage) ? (
           <p aria-live="assertive" className="text-sm text-red-300">

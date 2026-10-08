@@ -5,7 +5,8 @@ import { formatPoints } from "@/lib/format";
 
 import { ExternalLink, ListMusic } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { type VoteSortKey, type VotedSongsPage } from "@/lib/voted-songs";
 
 import { MusicLeagueScopeLinks } from "@/components/analytics/music-league-link";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,6 @@ import {
 } from "@/components/ui/table";
 import { buildAnalyticsHref, type QueryValue } from "@/lib/analytics-url";
 import {
-  compareVotedSongsByPoints,
   leagueTableLabel,
   playerPath,
   truncateRoundName,
@@ -40,97 +40,8 @@ import { cn } from "@/lib/utils";
 
 const PREVIEW_LIMIT = 5;
 
-type SortKey =
-  | "points"
-  | "ballotBlowout"
-  | "crowdContrast"
-  | "title"
-  | "submitter"
-  | "round";
-
 function metric(value: number | null | undefined, digits = 2): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
-}
-
-function compareMetricDesc(
-  left: number | null,
-  right: number | null,
-  leftPoints: number,
-  rightPoints: number,
-  leftTitle: string,
-  rightTitle: string,
-): number {
-  return (
-    (right ?? Number.NEGATIVE_INFINITY) - (left ?? Number.NEGATIVE_INFINITY) ||
-    rightPoints - leftPoints ||
-    leftTitle.localeCompare(rightTitle)
-  );
-}
-
-function compareRows(
-  left: PlayerVotedSongRow,
-  right: PlayerVotedSongRow,
-  sort: SortKey,
-  direction: SortDirection,
-): number {
-  let primary = 0;
-  if (sort === "points") {
-    primary = compareVotedSongsByPoints(left, right);
-  } else if (sort === "ballotBlowout") {
-    primary = compareMetricDesc(
-      left.ballotBlowout,
-      right.ballotBlowout,
-      left.pointsGiven,
-      right.pointsGiven,
-      left.title,
-      right.title,
-    );
-  } else if (sort === "crowdContrast") {
-    primary = compareMetricDesc(
-      left.crowdContrast,
-      right.crowdContrast,
-      left.pointsGiven,
-      right.pointsGiven,
-      left.title,
-      right.title,
-    );
-  } else if (sort === "submitter") {
-    primary =
-      left.submitterName.localeCompare(right.submitterName) ||
-      compareVotedSongsByPoints(left, right);
-  } else if (sort === "round") {
-    const leftTime = Date.parse(left.roundSourceCreatedAt);
-    const rightTime = Date.parse(right.roundSourceCreatedAt);
-    const leftMs = Number.isFinite(leftTime) ? leftTime : Number.NEGATIVE_INFINITY;
-    const rightMs = Number.isFinite(rightTime)
-      ? rightTime
-      : Number.NEGATIVE_INFINITY;
-    const leftPlaylist = left.playlistIndex ?? Number.POSITIVE_INFINITY;
-    const rightPlaylist = right.playlistIndex ?? Number.POSITIVE_INFINITY;
-    // Date follows the active direction; playlist position stays earliest-first.
-    const dateCmp =
-      direction === "desc" ? rightMs - leftMs : leftMs - rightMs;
-    return (
-      dateCmp ||
-      leftPlaylist - rightPlaylist ||
-      left.roundOrdinal - right.roundOrdinal ||
-      left.leagueName.localeCompare(right.leagueName) ||
-      compareVotedSongsByPoints(left, right)
-    );
-  } else {
-    primary =
-      left.title.localeCompare(right.title) ||
-      compareVotedSongsByPoints(left, right);
-  }
-
-  const naturalDesc =
-    sort === "points" ||
-    sort === "ballotBlowout" ||
-    sort === "crowdContrast";
-  if (naturalDesc) {
-    return direction === "desc" ? primary : -primary;
-  }
-  return direction === "asc" ? primary : -primary;
 }
 
 function SortHeader({
@@ -240,35 +151,48 @@ export function HighestVotedSongsPanel({
   filterParams,
   playerName,
   rows,
+  playerId,
+  total,
 }: {
   filterParams: Record<string, QueryValue>;
   playerName: string;
+  playerId: string;
+  total: number;
   rows: PlayerVotedSongRow[];
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [minPoints, setMinPoints] = useState(0);
-  const [sort, setSort] = useState<SortKey>("points");
+  const [sort, setSort] = useState<VoteSortKey>("points");
   const [direction, setDirection] = useState<SortDirection>("desc");
 
+  const [page, setPage] = useState(1);
+  const [result, setResult] = useState<VotedSongsPage | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
   const preview = rows.slice(0, PREVIEW_LIMIT);
-  const query = search.trim().toLowerCase();
-  const filtered = rows.filter((row) => {
-    if (row.pointsGiven < minPoints) return false;
-    if (!query) return true;
-    return (
-      row.title.toLowerCase().includes(query) ||
-      row.artist.toLowerCase().includes(query) ||
-      row.submitterName.toLowerCase().includes(query) ||
-      row.roundName.toLowerCase().includes(query) ||
-      row.leagueName.toLowerCase().includes(query)
-    );
-  });
-  const sorted = [...filtered].sort((left, right) =>
-    compareRows(left, right, sort, direction),
-  );
+  const endpoint = buildAnalyticsHref(`/api/players/${playerId}/votes`, filterParams, { search, minPoints: String(minPoints), sort, direction, page: String(page) });
+  useEffect(() => {
+    if (!open) return;
+    const abort = new AbortController();
+    const timer = setTimeout(async () => {
+      setLoading(true); setError("");
+      try {
+        const response = await fetch(endpoint, { signal: abort.signal });
+        if (!response.ok) throw new Error(response.status === 503 ? "Analytics are being refreshed. Try again shortly." : "The songs could not be loaded.");
+        const data: VotedSongsPage = await response.json();
+        if (!abort.signal.aborted) setResult(data);
+      } catch (caught) {
+        if (!abort.signal.aborted) setError(caught instanceof Error ? caught.message : "The songs could not be loaded.");
+      } finally { if (!abort.signal.aborted) setLoading(false); }
+    }, 250);
+    return () => { clearTimeout(timer); abort.abort(); };
+  }, [endpoint, open, retry]);
+  const sorted = result?.rows ?? [];
 
-  function toggleSort(next: SortKey) {
+  function toggleSort(next: VoteSortKey) {
+    setPage(1);
     if (sort === next) {
       setDirection((current) => (current === "desc" ? "asc" : "desc"));
       return;
@@ -283,7 +207,7 @@ export function HighestVotedSongsPanel({
         <ListMusic aria-hidden="true" className="mb-2 size-5 text-lime-300" />
         <CardTitle>Highest votes given</CardTitle>
         <CardDescription>
-          {`Songs ${playerName} scored most highly. Ties on points break by ballot blowout — how far the vote sat above a fair share of that player's own ballot that round. Crowd contrast is the same idea versus other voters on the song.`}
+          {`Songs ${playerName} scored most highly.`} <Link className="underline underline-offset-4" href="/faq#vote-details">How ties are ranked</Link>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -320,7 +244,7 @@ export function HighestVotedSongsPanel({
           </p>
         )}
 
-        {rows.length ? (
+        {total ? (
           <>
             <Button
               className="w-full sm:w-auto"
@@ -328,11 +252,11 @@ export function HighestVotedSongsPanel({
               size="sm"
               variant="secondary"
             >
-              View all ({rows.length})
+              View all ({total})
             </Button>
             <Dialog
               className="max-w-6xl"
-              description="Filter and sort every song this player gave points to. Ballot blowout uses that player's round ballot; crowd contrast compares the same vote to other voters on the song."
+              description="Search by song, artist, submitter or round. Ballot and crowd compare the vote with each group’s fair share."
               onClose={() => setOpen(false)}
               open={open}
               title="Highest votes given"
@@ -345,8 +269,9 @@ export function HighestVotedSongsPanel({
                     </span>
                     <input
                       className="h-10 w-full rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/20"
-                      onChange={(event) => setSearch(event.target.value)}
+                      onChange={(event) => { setSearch(event.target.value); setPage(1); }}
                       placeholder="Song, artist, submitter, round…"
+                      maxLength={160}
                       value={search}
                     />
                   </label>
@@ -357,7 +282,7 @@ export function HighestVotedSongsPanel({
                     <select
                       className="h-10 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100 outline-none [color-scheme:dark] focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/20"
                       onChange={(event) =>
-                        setMinPoints(Number(event.target.value))
+                        { setMinPoints(Number(event.target.value)); setPage(1); }
                       }
                       value={minPoints}
                     >
@@ -374,17 +299,16 @@ export function HighestVotedSongsPanel({
                   </label>
                 </div>
 
-                <p className="text-xs text-zinc-500">
-                  {`Showing ${sorted.length} of ${rows.length}${
-                    sort === "points"
-                      ? " · sorted by points (ballot blowout tiebreak)"
-                      : sort === "round"
-                        ? " · sorted by round date (playlist position tiebreak)"
-                        : ` · sorted by ${sort}`
-                  }`}
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-3" aria-live="polite">
+                  <p className="text-xs text-zinc-400">{loading || !result ? "Loading songs…" : `${result.total} ${result.total === 1 ? "song" : "songs"} · Page ${result.page} of ${result.pageCount}`}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="secondary" disabled={loading || !result || result.page <= 1} onClick={() => setPage(Math.max(1, (result?.page ?? 1)-1))}>Previous</Button>
+                    <Button size="sm" variant="secondary" disabled={loading || !result || result.page >= result.pageCount} onClick={() => setPage((result?.page ?? 1)+1)}>Next</Button>
+                  </div>
+                </div>
+                {error ? <div role="alert" className="text-sm text-red-300">{error} <button className="underline" onClick={() => setRetry(value => value+1)}>Retry</button></div> : null}
 
-                {sorted.length ? (
+                {!error && sorted.length ? (
                   <Table className="min-w-[48rem] table-fixed">
                     <TableHeader>
                       <TableRow>
@@ -516,7 +440,7 @@ export function HighestVotedSongsPanel({
                   </Table>
                 ) : (
                   <p className="text-sm text-zinc-500">
-                    No songs match these filters.
+                    {loading || !result || error ? "" : "No songs match these filters."}
                   </p>
                 )}
               </div>

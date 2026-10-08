@@ -1,3 +1,4 @@
+import { detailPage, type FactDetail } from "@/lib/detail-pagination";
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
 import { qualificationRoundFloor } from "@/lib/participation";
@@ -187,15 +188,17 @@ function PlayerLink({
   filterParams,
   id,
   name,
+  playerSlugs,
 }: {
   filterParams: Record<string, QueryValue>;
   id: string;
   name: string;
+  playerSlugs: Record<string, string>;
 }) {
   return (
     <Link
       className="hover:text-lime-200"
-      href={buildAnalyticsHref(`/players/${id}`, filterParams, {})}
+      href={buildAnalyticsHref(`/players/${playerSlugs[id] ?? id}`, filterParams, {})}
     >
       {name}
     </Link>
@@ -271,7 +274,8 @@ function SongFactHeading({ artist, spotifyUri, title }: {
   ) : <p className={className}>{content}</p>;
 }
 
-function SongFactPreview({ row, metrics, metricsTitle, filterParams }: {
+function SongFactPreview({ row, metrics, metricsTitle, filterParams, playerSlugs }: {
+  playerSlugs: Record<string, string>;
   row: SongSubmissionFact;
   metrics: string;
   metricsTitle?: string;
@@ -285,7 +289,7 @@ function SongFactPreview({ row, metrics, metricsTitle, filterParams }: {
       </p>
       <div className="mt-0.5 flex min-w-0 items-center gap-1 whitespace-nowrap text-xs text-zinc-500">
         <span className="min-w-0 flex-1 truncate" title={row.submitterName}>
-          <PlayerLink filterParams={filterParams} id={row.submitterId} name={row.submitterName} />
+          <PlayerLink playerSlugs={playerSlugs} filterParams={filterParams} id={row.submitterId} name={row.submitterName} />
         </span>
         <span className="shrink-0 text-zinc-600">·</span>
         <span className="shrink-0 font-mono text-xs" title={metricsTitle ?? metrics}>
@@ -331,6 +335,24 @@ async function FactsPageContent({
   ).length;
   const participationNote = `Requires ${qualificationRoundFloor(scopeRounds, options.rounds.length)} of ${scopeRounds} scope rounds entered (adaptive participation minimum).`;
   const filterParams = scopeQueryParams(filter);
+  const detailSearch = typeof params.detailSearch === "string" ? params.detailSearch.slice(0,160) : "";
+  const requestedPage = Number(params.detailPage ?? 1);
+  function detailRows<T>(key: string, rows: T[]) {
+    return params.fact === key ? detailPage(rows, detailSearch, requestedPage).rows : [];
+  }
+  function panelDetails<T>(key: string, rows: T[]): { detail: FactDetail } {
+    const selected = params.fact === key;
+    const pagination = detailPage(selected ? rows : [], detailSearch, requestedPage);
+    const base = { ...filterParams, category, fact: key, detailSearch };
+    return { detail: {
+      open: selected,
+      href: buildAnalyticsHref("/facts", filterParams, { category, fact: key }),
+      closeHref: buildAnalyticsHref("/facts", filterParams, { category }),
+      previousHref: buildAnalyticsHref("/facts", base, { detailPage: pagination.page-1 }),
+      nextHref: buildAnalyticsHref("/facts", base, { detailPage: pagination.page+1 }),
+      page: pagination.page, pageCount: pagination.pageCount, total: pagination.total, search: detailSearch,
+    } };
+  }
   const playlistBias = data.playlistPositionBias;
   const hasIndices = hasPlaylistIndices(playlistBias);
   const reliablePlaylistBias = hasReliablePlaylistBias(playlistBias);
@@ -362,6 +384,7 @@ async function FactsPageContent({
       {category === "artists" ? <>
       <section className="mt-4 grid gap-4 lg:grid-cols-3">
         <FactPanel
+          {...panelDetails("mostSubmittedArtists", data.mostSubmittedArtists)}
           description="Artists grouped by exact exported artist text, normalized for case."
           dialog={
             <FactTable
@@ -370,7 +393,7 @@ async function FactsPageContent({
                 { align: "right", label: "Submissions" },
                 { align: "right", label: "Submitters" },
               ]}
-              rows={data.mostSubmittedArtists.map((row) => [
+              rows={detailRows("mostSubmittedArtists", data.mostSubmittedArtists).map((row) => [
                 <span className="font-medium text-zinc-100" key="a">
                   {row.artist}
                 </span>,
@@ -398,6 +421,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("artistLoyalists", data.artistLoyalists)}
           description="The strongest one-player, one-artist repeats."
           dialog={
             <FactTable
@@ -406,8 +430,9 @@ async function FactsPageContent({
                 { label: "Artist", width: "w-[40%]" },
                 { align: "right", label: "Subs" },
               ]}
-              rows={data.artistLoyalists.map((row) => [
+              rows={detailRows("artistLoyalists", data.artistLoyalists).map((row) => [
                 <PlayerLink
+                  playerSlugs={data.playerSlugs}
                   filterParams={filterParams}
                   id={row.playerId}
                   key="p"
@@ -429,6 +454,7 @@ async function FactsPageContent({
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
                   <PlayerLink
+                  playerSlugs={data.playerSlugs}
                     filterParams={filterParams}
                     id={row.playerId}
                     name={row.playerName}
@@ -444,6 +470,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("diverseArtists", data.diverseArtists)}
           description="Artists that reached the most different submitters."
           dialog={
             <FactTable
@@ -452,7 +479,7 @@ async function FactsPageContent({
                 { align: "right", label: "Submitters" },
                 { align: "right", label: "Submissions" },
               ]}
-              rows={data.diverseArtists.map((row) => [
+              rows={detailRows("diverseArtists", data.diverseArtists).map((row) => [
                 <span className="font-medium text-zinc-100" key="a">
                   {row.artist}
                 </span>,
@@ -483,6 +510,7 @@ async function FactsPageContent({
       {category === "songs" ? <>
       <section className="mt-4 grid gap-4 lg:grid-cols-3">
         <FactPanel
+          {...panelDetails("repeatedSongs", data.repeatedSongs)}
           description="Tracks that were submitted more than once in the selected scope."
           dialog={
             <FactTable
@@ -493,7 +521,7 @@ async function FactsPageContent({
                 { align: "right", label: "Leagues" },
                 { align: "right", label: "Rounds" },
               ]}
-              rows={data.repeatedSongs.map((row) => [
+              rows={detailRows("repeatedSongs", data.repeatedSongs).map((row) => [
                 <div key="s">
                   <p className="truncate font-medium text-zinc-100">
                     <SpotifyTitle
@@ -533,6 +561,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("longestTitles", data.longestTitles)}
           description="Longest exported song titles."
           dialog={
             <FactTable
@@ -542,7 +571,7 @@ async function FactsPageContent({
                 { align: "right", label: "Chars" },
                 { label: "By" },
               ]}
-              rows={data.longestTitles.map((row) => [
+              rows={detailRows("longestTitles", data.longestTitles).map((row) => [
                 <TruncatedCell key="t" title={row.title}>
                   {row.title}
                 </TruncatedCell>,
@@ -562,12 +591,13 @@ async function FactsPageContent({
           {rankedFactList({
             rows: previewRows(data.longestTitles),
             render: (row) => (
-              <SongFactPreview filterParams={filterParams} row={row} metrics={`${row.length} chars`} />
+              <SongFactPreview playerSlugs={data.playerSlugs} filterParams={filterParams} row={row} metrics={`${row.length} chars`} />
             ),
           })}
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("shortestTitles", data.shortestTitles)}
           description="Shortest exported song titles."
           dialog={
             <FactTable
@@ -577,7 +607,7 @@ async function FactsPageContent({
                 { align: "right", label: "Chars" },
                 { label: "By" },
               ]}
-              rows={data.shortestTitles.map((row) => [
+              rows={detailRows("shortestTitles", data.shortestTitles).map((row) => [
                 <TruncatedCell key="t" title={row.title}>
                   {row.title}
                 </TruncatedCell>,
@@ -597,7 +627,7 @@ async function FactsPageContent({
           {rankedFactList({
             rows: previewRows(data.shortestTitles),
             render: (row) => (
-              <SongFactPreview filterParams={filterParams} row={row} metrics={`${row.length} chars`} />
+              <SongFactPreview playerSlugs={data.playerSlugs} filterParams={filterParams} row={row} metrics={`${row.length} chars`} />
             ),
           })}
         </FactPanel>
@@ -606,6 +636,7 @@ async function FactsPageContent({
       {category === "rounds" ? <>
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
+          {...panelDetails("closestRaces", data.closestRaces)}
           description="Rounds where the top song barely edged the runner-up on round point share. Select a row for the top three."
           dialog={
             <FactTable
@@ -615,7 +646,7 @@ async function FactsPageContent({
                 { align: "right", label: "Gap" },
                 { align: "right", label: "Top share" },
               ]}
-              rows={data.closestRaces.map((row) => [
+              rows={detailRows("closestRaces", data.closestRaces).map((row) => [
                 <TruncatedCell
                   key="l"
                   title={leagueTableLabel({
@@ -666,6 +697,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("biggestLandslides", data.biggestLandslides)}
           description="Rounds where 1st place’s point share most outpaces 2nd. Select a row for the top three."
           dialog={
             <FactTable
@@ -675,7 +707,7 @@ async function FactsPageContent({
                 { align: "right", label: "Gap" },
                 { align: "right", label: "Top share" },
               ]}
-              rows={data.biggestLandslides.map((row) => [
+              rows={detailRows("biggestLandslides", data.biggestLandslides).map((row) => [
                 <TruncatedCell
                   key="l"
                   title={leagueTableLabel({
@@ -790,6 +822,7 @@ async function FactsPageContent({
         </div>
       </FactPanel>      <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
+          {...panelDetails("prolificSubmitters", data.prolificSubmitters)}
           description="Players with the most submissions and distinct artists in this scope."
           dialog={
             <FactTable
@@ -798,8 +831,9 @@ async function FactsPageContent({
                 { align: "right", label: "Submissions" },
                 { align: "right", label: "Artists" },
               ]}
-              rows={data.prolificSubmitters.map((row) => [
+              rows={detailRows("prolificSubmitters", data.prolificSubmitters).map((row) => [
                 <PlayerLink
+                  playerSlugs={data.playerSlugs}
                   filterParams={filterParams}
                   id={row.playerId}
                   key="p"
@@ -819,6 +853,7 @@ async function FactsPageContent({
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
                   <PlayerLink
+                  playerSlugs={data.playerSlugs}
                     filterParams={filterParams}
                     id={row.playerId}
                     name={row.playerName}
@@ -833,6 +868,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("densestRounds", data.densestRounds)}
           description="Rounds with the largest submitted song slates."
           dialog={
             <FactTable
@@ -842,7 +878,7 @@ async function FactsPageContent({
                 { align: "right", label: "Songs" },
                 { align: "right", label: "Players" },
               ]}
-              rows={data.densestRounds.map((row) => [
+              rows={detailRows("densestRounds", data.densestRounds).map((row) => [
                 <MusicLeagueLink
                   className="text-zinc-100"
                   href={musicLeagueUrl(row.leagueMusicLeagueId)}
@@ -900,6 +936,7 @@ async function FactsPageContent({
       {category === "voting" ? <>
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
+          {...panelDetails("crowdPleaserPlayers", data.crowdPleaserPlayers)}
           description={`Average reach ranks higher than average round share among qualified players in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint. ${participationNote}`}
           dialog={
             <FactTable
@@ -912,8 +949,9 @@ async function FactsPageContent({
                 { align: "right", label: "S pctl" },
                 { align: "right", label: "Spread" },
               ]}
-              rows={data.crowdPleaserPlayers.map((row) => [
+              rows={detailRows("crowdPleaserPlayers", data.crowdPleaserPlayers).map((row) => [
                 <PlayerLink
+                  playerSlugs={data.playerSlugs}
                   filterParams={filterParams}
                   id={row.playerId}
                   key="p"
@@ -938,6 +976,7 @@ async function FactsPageContent({
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
                   <PlayerLink
+                  playerSlugs={data.playerSlugs}
                     filterParams={filterParams}
                     id={row.playerId}
                     name={row.playerName}
@@ -954,6 +993,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("nicheDevotionPlayers", data.nicheDevotionPlayers)}
           description={`Average round share ranks higher than average reach among qualified players in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint. ${participationNote}`}
           dialog={
             <FactTable
@@ -966,8 +1006,9 @@ async function FactsPageContent({
                 { align: "right", label: "S pctl" },
                 { align: "right", label: "Spread" },
               ]}
-              rows={data.nicheDevotionPlayers.map((row) => [
+              rows={detailRows("nicheDevotionPlayers", data.nicheDevotionPlayers).map((row) => [
                 <PlayerLink
+                  playerSlugs={data.playerSlugs}
                   filterParams={filterParams}
                   id={row.playerId}
                   key="p"
@@ -992,6 +1033,7 @@ async function FactsPageContent({
               <>
                 <p className="truncate text-sm font-medium text-zinc-100">
                   <PlayerLink
+                  playerSlugs={data.playerSlugs}
                     filterParams={filterParams}
                     id={row.playerId}
                     name={row.playerName}
@@ -1009,6 +1051,7 @@ async function FactsPageContent({
       </section>
       <section className="mt-4 grid gap-4 lg:grid-cols-2">
         <FactPanel
+          {...panelDetails("thinSpreadSongs", data.thinSpreadSongs)}
           description="Broad mild appeal: reach ranks higher than round share among qualifying songs in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint."
           dialog={
             <FactTable
@@ -1021,7 +1064,7 @@ async function FactsPageContent({
                 { align: "right", label: "Spread" },
                 { align: "right", label: "Pts" },
               ]}
-              rows={data.thinSpreadSongs.map((row) => [
+              rows={detailRows("thinSpreadSongs", data.thinSpreadSongs).map((row) => [
                 <div key="s">
                   <p className="truncate font-medium text-zinc-100">
                     {row.title}
@@ -1046,7 +1089,7 @@ async function FactsPageContent({
           {rankedFactList({
             rows: previewRows(data.thinSpreadSongs),
             render: (row) => (
-              <SongFactPreview
+              <SongFactPreview playerSlugs={data.playerSlugs}
                 filterParams={filterParams}
                 row={row}
                 metrics={`${percent(row.positiveReach)} reached · ${row.points} pts`}
@@ -1057,6 +1100,7 @@ async function FactsPageContent({
         </FactPanel>
 
         <FactPanel
+          {...panelDetails("cultClassicSongs", data.cultClassicSongs)}
           description="Concentrated devotees: round share ranks higher than reach among qualifying songs in this scope. Spread = reach percentile − share percentile, in percentile points (pp); ties use their midpoint."
           dialog={
             <FactTable
@@ -1069,7 +1113,7 @@ async function FactsPageContent({
                 { align: "right", label: "Spread" },
                 { align: "right", label: "Pts" },
               ]}
-              rows={data.cultClassicSongs.map((row) => [
+              rows={detailRows("cultClassicSongs", data.cultClassicSongs).map((row) => [
                 <div key="s">
                   <p className="truncate font-medium text-zinc-100">
                     {row.title}
@@ -1094,7 +1138,7 @@ async function FactsPageContent({
           {rankedFactList({
             rows: previewRows(data.cultClassicSongs),
             render: (row) => (
-              <SongFactPreview
+              <SongFactPreview playerSlugs={data.playerSlugs}
                 filterParams={filterParams}
                 row={row}
                 metrics={`${percent(row.positiveReach)} reached · ${row.points} pts`}
@@ -1110,6 +1154,7 @@ async function FactsPageContent({
           { title: "Lowest average votes per actual voter", rows: data.lowestAverageVoteSongs },
         ].map(({ title, rows }) => (
           <FactPanel
+            {...panelDetails(title, rows)}
             description={`Total points divided by positive voters; no minimum count. Unvoted songs count as 0. Equal averages share a rank, with ${title.startsWith("Highest") ? "fewer" : "more"} total points first.`}
             dialog={
               <FactTable
@@ -1120,7 +1165,7 @@ async function FactsPageContent({
                   { align: "right", label: "Voters" },
                   { align: "right", label: "Pts" },
                 ]}
-                rows={rows.map((row) => [
+                rows={detailRows(title, rows).map((row) => [
                   row.rank,
                   <div key="s">
                     <p className="truncate font-medium text-zinc-100">
@@ -1152,7 +1197,7 @@ async function FactsPageContent({
               rows: previewRows(rows),
               rank: (row) => row.rank,
               render: (row) => (
-                <SongFactPreview
+                <SongFactPreview playerSlugs={data.playerSlugs}
                   filterParams={filterParams}
                   row={row}
                   metrics={`${ratio(row.averageVotes)}/v ${row.points}p ${row.actualVoters}v`}
