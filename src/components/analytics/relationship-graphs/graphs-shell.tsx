@@ -94,7 +94,10 @@ export async function loadRelationshipGraphs(
         "@/lib/analytics-materialize"
       );
       const scopeStatus = await progressScopeMaterialization(filter.leagueIds);
-      if (scopeStatus.status === "failed") {
+      if (scopeStatus.status === "deferred") {
+        scopeError = scopeStatus.message;
+        scopeReady = false;
+      } else if (scopeStatus.status === "failed") {
         scopeError =
           scopeStatus.job?.errorMessage ?? "Scope materialization failed.";
         scopeReady = false;

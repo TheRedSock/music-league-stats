@@ -26,6 +26,7 @@ import {
 import { analyticsProgressKey, LEAGUE_CALCULATIONS } from "@/lib/analytics-job-progress";
 import { analyticsFailureMessage, budgetedAnalyticsExecutor, configureAnalyticsTransaction, databaseErrorCode, type AnalyticsExecutor } from "@/lib/analytics-job-runtime";
 import { ANALYTICS_REVISION } from "@/lib/analytics-revision";
+import { ScopeCapacityError, scopeCapacityMessage } from "@/lib/scope-budget";
 
 const ALL_LEAGUES_FILTER: AnalyticsFilter = { leagueIds: [], roundIds: [] };
 const MATERIALIZATION_LOCK_KEY = 73_730_001;
@@ -836,6 +837,14 @@ const SCOPE_COMBO_STEPS = [
 
 export type ScopeMaterializationStatus =
   | {
+      status: "deferred";
+      analyticsRevision: string;
+      scopeKey: string;
+      job: null;
+      progress: null;
+      message: string;
+    }
+  | {
       status: "missing";
       analyticsRevision: string;
       scopeKey: string;
@@ -943,6 +952,16 @@ export async function startScopeMaterializationJob(
       return resumed;
     }
 
+    // The advisory lock serializes admission across instances as well as duplicate scopes.
+    const [budget] = await tx.execute<{ recent: number; active: number }>(sql`
+      select
+        count(*) filter (where started_at > now() - interval '1 hour')::int as recent,
+        count(*) filter (where status = 'processing' and updated_at > now() - interval '5 minutes')::int as active
+      from analytics_scope_jobs where analytics_revision = ${ANALYTICS_REVISION}
+    `);
+    const capacityMessage = scopeCapacityMessage(budget?.recent ?? 0, budget?.active ?? 0);
+    if (capacityMessage) throw new ScopeCapacityError(capacityMessage);
+
     const [created] = await tx
       .insert(analyticsScopeJobs)
       .values({
@@ -988,7 +1007,12 @@ export async function progressScopeMaterialization(
     return getScopeMaterializationStatus(scopeKey, database);
   }
 
-  const started = await startScopeMaterializationJob(ids, database);
+  let started: ScopeMaterializationStatus;
+  try { started = await startScopeMaterializationJob(ids, database); }
+  catch (error) {
+    if (!(error instanceof ScopeCapacityError)) throw error;
+    return { analyticsRevision: ANALYTICS_REVISION, scopeKey, job: null, progress: null, status: "deferred", message: error.message };
+  }
   if (started.status !== "processing" || !started.job) {
     return started;
   }

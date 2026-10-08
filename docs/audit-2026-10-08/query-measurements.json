@@ -1,0 +1,419 @@
+{
+  "measuredAt": "2026-10-08T07:33:27.488Z",
+  "readOnly": true,
+  "note": "Three sequential samples per uncached application query function within one read-only transaction. Network latency included; queries share one connection and React request memoization is inactive. This is not deployed page latency.",
+  "results": [
+    {
+      "scope": "all",
+      "name": "status",
+      "samples": [
+        {
+          "ms": 69,
+          "queries": 1,
+          "statusQueries": 1,
+          "jsonBytes": 30
+        },
+        {
+          "ms": 65,
+          "queries": 1,
+          "statusQueries": 1,
+          "jsonBytes": 30
+        },
+        {
+          "ms": 66,
+          "queries": 1,
+          "statusQueries": 1,
+          "jsonBytes": 30
+        }
+      ]
+    },
+    {
+      "scope": "all",
+      "name": "dashboard",
+      "samples": [
+        {
+          "ms": 324,
+          "queries": 4,
+          "statusQueries": 1,
+          "jsonBytes": 19909
+        },
+        {
+          "ms": 288,
+          "queries": 4,
+          "statusQueries": 1,
+          "jsonBytes": 19909
+        },
+        {
+          "ms": 253,
+          "queries": 4,
+          "statusQueries": 1,
+          "jsonBytes": 19909
+        }
+      ]
+    },
+    {
+      "scope": "all",
+      "name": "songs",
+      "samples": [
+        {
+          "ms": 209,
+          "queries": 2,
+          "statusQueries": 1,
+          "jsonBytes": 28001
+        },
+        {
+          "ms": 181,
+          "queries": 2,
+          "statusQueries": 1,
+          "jsonBytes": 28001
+        },
+        {
+          "ms": 598,
+          "queries": 2,
+          "statusQueries": 1,
+          "jsonBytes": 28001
+        }
+      ]
+    },
+    {
+      "scope": "all",
+      "name": "players",
+      "samples": [
+        {
+          "ms": 408,
+          "queries": 5,
+          "statusQueries": 2,
+          "jsonBytes": 21819
+        },
+        {
+          "ms": 472,
+          "queries": 5,
+          "statusQueries": 2,
+          "jsonBytes": 21819
+        },
+        {
+          "ms": 409,
+          "queries": 5,
+          "statusQueries": 2,
+          "jsonBytes": 21819
+        }
+      ]
+    },
+    {
+      "scope": "all",
+      "name": "profile",
+      "samples": [
+        {
+          "ms": 1739,
+          "queries": 5,
+          "statusQueries": 1,
+          "jsonBytes": 1251469
+        },
+        {
+          "ms": 1674,
+          "queries": 5,
+          "statusQueries": 1,
+          "jsonBytes": 1251469
+        },
+        {
+          "ms": 1608,
+          "queries": 5,
+          "statusQueries": 1,
+          "jsonBytes": 1251469
+        }
+      ]
+    },
+    {
+      "scope": "all",
+      "name": "facts",
+      "samples": [
+        {
+          "ms": 272,
+          "queries": 2,
+          "statusQueries": 0,
+          "jsonBytes": 503863
+        },
+        {
+          "ms": 278,
+          "queries": 2,
+          "statusQueries": 0,
+          "jsonBytes": 503863
+        },
+        {
+          "ms": 268,
+          "queries": 2,
+          "statusQueries": 0,
+          "jsonBytes": 503863
+        }
+      ]
+    },
+    {
+      "scope": "all",
+      "name": "alignment",
+      "samples": [
+        {
+          "ms": 190,
+          "queries": 3,
+          "statusQueries": 1,
+          "jsonBytes": 63239
+        },
+        {
+          "ms": 187,
+          "queries": 3,
+          "statusQueries": 1,
+          "jsonBytes": 63239
+        },
+        {
+          "ms": 191,
+          "queries": 3,
+          "statusQueries": 1,
+          "jsonBytes": 63239
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "status",
+      "samples": [
+        {
+          "ms": 71,
+          "queries": 1,
+          "statusQueries": 1,
+          "jsonBytes": 30
+        },
+        {
+          "ms": 76,
+          "queries": 1,
+          "statusQueries": 1,
+          "jsonBytes": 30
+        },
+        {
+          "ms": 65,
+          "queries": 1,
+          "statusQueries": 1,
+          "jsonBytes": 30
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "dashboard",
+      "samples": [
+        {
+          "ms": 271,
+          "queries": 4,
+          "statusQueries": 1,
+          "jsonBytes": 16229
+        },
+        {
+          "ms": 253,
+          "queries": 4,
+          "statusQueries": 1,
+          "jsonBytes": 16229
+        },
+        {
+          "ms": 255,
+          "queries": 4,
+          "statusQueries": 1,
+          "jsonBytes": 16229
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "songs",
+      "samples": [
+        {
+          "ms": 143,
+          "queries": 2,
+          "statusQueries": 1,
+          "jsonBytes": 29506
+        },
+        {
+          "ms": 139,
+          "queries": 2,
+          "statusQueries": 1,
+          "jsonBytes": 29506
+        },
+        {
+          "ms": 150,
+          "queries": 2,
+          "statusQueries": 1,
+          "jsonBytes": 29506
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "players",
+      "samples": [
+        {
+          "ms": 346,
+          "queries": 5,
+          "statusQueries": 2,
+          "jsonBytes": 11069
+        },
+        {
+          "ms": 351,
+          "queries": 5,
+          "statusQueries": 2,
+          "jsonBytes": 11069
+        },
+        {
+          "ms": 342,
+          "queries": 5,
+          "statusQueries": 2,
+          "jsonBytes": 11069
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "profile",
+      "samples": [
+        {
+          "ms": 482,
+          "queries": 5,
+          "statusQueries": 1,
+          "jsonBytes": 136672
+        },
+        {
+          "ms": 424,
+          "queries": 5,
+          "statusQueries": 1,
+          "jsonBytes": 136672
+        },
+        {
+          "ms": 425,
+          "queries": 5,
+          "statusQueries": 1,
+          "jsonBytes": 136672
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "facts",
+      "samples": [
+        {
+          "ms": 207,
+          "queries": 2,
+          "statusQueries": 0,
+          "jsonBytes": 376280
+        },
+        {
+          "ms": 194,
+          "queries": 2,
+          "statusQueries": 0,
+          "jsonBytes": 376280
+        },
+        {
+          "ms": 184,
+          "queries": 2,
+          "statusQueries": 0,
+          "jsonBytes": 376280
+        }
+      ]
+    },
+    {
+      "scope": "latest",
+      "name": "alignment",
+      "samples": [
+        {
+          "ms": 188,
+          "queries": 3,
+          "statusQueries": 1,
+          "jsonBytes": 110198
+        },
+        {
+          "ms": 178,
+          "queries": 3,
+          "statusQueries": 1,
+          "jsonBytes": 110198
+        },
+        {
+          "ms": 180,
+          "queries": 3,
+          "statusQueries": 1,
+          "jsonBytes": 110198
+        }
+      ]
+    }
+  ],
+  "counts": [
+    {
+      "votes": 25105,
+      "staging_rows": 37513,
+      "import_batches": 15,
+      "effective_votes": 44298
+    }
+  ],
+  "jobs": [
+    {
+      "status": "completed",
+      "started_at": "2026-10-06 09:39:48.845+00",
+      "completed_at": "2026-10-06 09:42:41.453+00",
+      "summary": {
+        "kind": "completed",
+        "songStats": 2406,
+        "playerStats": 252,
+        "leagueScopes": 9,
+        "playerTiming": 1558,
+        "effectiveVotes": 44298,
+        "pointDistribution": 60,
+        "relationshipPairs": 12218,
+        "relationshipMutual": 3121,
+        "relationshipAlignment": 2957,
+        "playerPointDistribution": 2848
+      }
+    },
+    {
+      "status": "completed",
+      "started_at": "2026-10-05 12:35:43.058+00",
+      "completed_at": "2026-10-05 12:38:04.892+00",
+      "summary": {
+        "kind": "completed",
+        "songStats": 2406,
+        "playerStats": 252,
+        "leagueScopes": 9,
+        "playerTiming": 1558,
+        "effectiveVotes": 44298,
+        "pointDistribution": 60,
+        "relationshipPairs": 12218,
+        "relationshipMutual": 3121,
+        "relationshipAlignment": 2988,
+        "playerPointDistribution": 2848
+      }
+    },
+    {
+      "status": "pending",
+      "started_at": "2026-10-05 12:35:41.802+00",
+      "completed_at": null,
+      "summary": null
+    },
+    {
+      "status": "completed",
+      "started_at": "2026-09-29 06:35:04.524+00",
+      "completed_at": "2026-09-29 08:14:04.065+00",
+      "summary": {
+        "kind": "completed",
+        "songStats": 2383,
+        "playerStats": 252,
+        "leagueScopes": 9,
+        "playerTiming": 1535,
+        "effectiveVotes": 43858,
+        "pointDistribution": 60,
+        "relationshipPairs": 12218,
+        "relationshipMutual": 3121,
+        "relationshipAlignment": 2988,
+        "playerPointDistribution": 2848
+      }
+    },
+    {
+      "status": "pending",
+      "started_at": "2026-09-29 06:35:00.769+00",
+      "completed_at": null,
+      "summary": null
+    }
+  ]
+}

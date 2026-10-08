@@ -1,0 +1,339 @@
+{
+  "measuredAt": "2026-10-08T07:31:08.378Z",
+  "note": "Next production build, localhost, no network throttling. First request then three warm requests. Complete HTML stream time, not LCP; compressed sizes are calculated gzip, not a browser transfer measurement.",
+  "results": [
+    {
+      "path": "/",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 64,
+          "completeMs": 2009,
+          "bytes": 146018,
+          "gzipBytes": 25335,
+          "flightScripts": 23
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 158,
+          "bytes": 146018,
+          "gzipBytes": 25335,
+          "flightScripts": 23
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 157,
+          "bytes": 146018,
+          "gzipBytes": 25335,
+          "flightScripts": 23
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 148,
+          "bytes": 146018,
+          "gzipBytes": 25335,
+          "flightScripts": 23
+        }
+      ]
+    },
+    {
+      "path": "/songs",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 9,
+          "completeMs": 258,
+          "bytes": 176150,
+          "gzipBytes": 28194,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 80,
+          "bytes": 176150,
+          "gzipBytes": 28194,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 84,
+          "bytes": 176150,
+          "gzipBytes": 28194,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 76,
+          "bytes": 176150,
+          "gzipBytes": 28194,
+          "flightScripts": 12
+        }
+      ]
+    },
+    {
+      "path": "/players",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 8,
+          "completeMs": 400,
+          "bytes": 159284,
+          "gzipBytes": 23848,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 83,
+          "bytes": 159284,
+          "gzipBytes": 23848,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 84,
+          "bytes": 159284,
+          "gzipBytes": 23848,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 79,
+          "bytes": 159284,
+          "gzipBytes": 23848,
+          "flightScripts": 12
+        }
+      ]
+    },
+    {
+      "path": "/players/theredsock?league=all",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 9,
+          "completeMs": 1925,
+          "bytes": 1393248,
+          "gzipBytes": 197374,
+          "flightScripts": 42
+        },
+        {
+          "status": 200,
+          "headersMs": 4,
+          "completeMs": 190,
+          "bytes": 1393248,
+          "gzipBytes": 197374,
+          "flightScripts": 42
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 184,
+          "bytes": 1393248,
+          "gzipBytes": 197374,
+          "flightScripts": 42
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 199,
+          "bytes": 1393248,
+          "gzipBytes": 197374,
+          "flightScripts": 42
+        }
+      ]
+    },
+    {
+      "path": "/facts",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 10,
+          "completeMs": 523,
+          "bytes": 1936599,
+          "gzipBytes": 132357,
+          "flightScripts": 491
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 193,
+          "bytes": 1936599,
+          "gzipBytes": 132357,
+          "flightScripts": 491
+        },
+        {
+          "status": 200,
+          "headersMs": 3,
+          "completeMs": 161,
+          "bytes": 1936599,
+          "gzipBytes": 132357,
+          "flightScripts": 491
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 166,
+          "bytes": 1936599,
+          "gzipBytes": 132357,
+          "flightScripts": 491
+        }
+      ]
+    },
+    {
+      "path": "/relationships",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 7,
+          "completeMs": 371,
+          "bytes": 990923,
+          "gzipBytes": 44143,
+          "flightScripts": 329
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 131,
+          "bytes": 990923,
+          "gzipBytes": 44143,
+          "flightScripts": 329
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 120,
+          "bytes": 990923,
+          "gzipBytes": 44143,
+          "flightScripts": 329
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 126,
+          "bytes": 990923,
+          "gzipBytes": 44143,
+          "flightScripts": 329
+        }
+      ]
+    },
+    {
+      "path": "/relationships/graphs?view=bubbles",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 8,
+          "completeMs": 854,
+          "bytes": 208873,
+          "gzipBytes": 30621,
+          "flightScripts": 11
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 82,
+          "bytes": 208873,
+          "gzipBytes": 30621,
+          "flightScripts": 11
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 80,
+          "bytes": 208873,
+          "gzipBytes": 30621,
+          "flightScripts": 11
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 77,
+          "bytes": 208873,
+          "gzipBytes": 30621,
+          "flightScripts": 11
+        }
+      ]
+    },
+    {
+      "path": "/relationships/graphs?view=progression",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 547,
+          "bytes": 583503,
+          "gzipBytes": 34025,
+          "flightScripts": 11
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 92,
+          "bytes": 583503,
+          "gzipBytes": 34025,
+          "flightScripts": 11
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 81,
+          "bytes": 583503,
+          "gzipBytes": 34025,
+          "flightScripts": 11
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 86,
+          "bytes": 583503,
+          "gzipBytes": 34025,
+          "flightScripts": 11
+        }
+      ]
+    },
+    {
+      "path": "/faq",
+      "samples": [
+        {
+          "status": 200,
+          "headersMs": 9,
+          "completeMs": 10,
+          "bytes": 62154,
+          "gzipBytes": 12482,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 3,
+          "bytes": 62154,
+          "gzipBytes": 12482,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 2,
+          "bytes": 62154,
+          "gzipBytes": 12482,
+          "flightScripts": 12
+        },
+        {
+          "status": 200,
+          "headersMs": 2,
+          "completeMs": 3,
+          "bytes": 62154,
+          "gzipBytes": 12482,
+          "flightScripts": 12
+        }
+      ]
+    }
+  ]
+}

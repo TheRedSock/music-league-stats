@@ -23,6 +23,17 @@ automatically. The admin can edit the name, slug, rules, status, and dates.
 Authentication uses a short-lived, signed, HttpOnly cookie. All write endpoints
 also verify the session and same-origin request headers.
 
+Sign-in accepts at most 10 attempts per 15 minutes per client on Vercel, with a
+bounded in-process limiter and an 8 KiB request limit. Self-hosted instances use
+one shared bucket rather than trusting arbitrary forwarded IP headers. Multiple
+instances also need a hosting-edge rate limit; in-process limits reset on restart.
+Vercel client identity uses its [platform forwarding header](https://vercel.com/docs/headers/request-headers#x-vercel-forwarded-for).
+
+New multi-league comparison jobs are admitted under the database advisory lock:
+at most 12 starts per hour and two recently active jobs. Existing cached scopes
+and resumable checkpoints remain available. Capacity messages stop automatic
+polling and let the visitor choose an existing scope or try again later.
+
 For each sync, select a target league and the four Music League exports:
 
 - `competitors.csv`: `ID,Name`

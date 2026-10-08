@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Music League audit screenshots</title>
+<style>
+  :root { color-scheme: light; font-family: system-ui, sans-serif; color: #252525; background: #f5f4f0; }
+  body { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
+  h1 { font-size: clamp(28px, 4vw, 46px); letter-spacing: -.035em; margin-bottom: 12px; }
+  p { max-width: 80ch; line-height: 1.6; }
+  a { color: #245b74; text-underline-offset: .2em; }
+  nav { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 28px 0; }
+  section { border-top: 1px solid #c9c6be; padding-top: 20px; margin-top: 44px; scroll-margin-top: 20px; }
+  h2 { margin: 0 0 12px; font-size: 24px; }
+  h3 { font-size: 18px; margin-bottom: 6px; }
+  figure { margin: 24px 0; min-width: 0; }
+  figure > a { display: block; background: #101011; max-height: 560px; overflow: hidden; }
+  img { width: 100%; height: auto; display: block; }
+  figcaption { line-height: 1.55; margin-top: 10px; font-size: 15px; }
+  figcaption strong { display: block; margin-bottom: 3px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .pair figure > a { max-height: 460px; }
+  .mobile figure > a, figure.mobile > a { max-height: 670px; }
+  .mobile img { max-width: 390px; margin: 0 auto; }
+  .note { font-size: 14px; color: #57534d; }
+  @media (max-width: 720px) { .pair { grid-template-columns: 1fr; } body { padding: 20px 16px 48px; } }
+</style>
+<header>
+  <p class="note">Repository review · 8 October 2026</p>
+  <h1>Music League audit screenshots</h1>
+  <p>Twenty captures of the running application with real league data. Previews show the top of taller pages; select any image to inspect the complete full-resolution capture. These show the existing application; the changes described in the report have not been applied.</p>
+  <p><a href="REVIEW.md">Read the review and staged improvement plan</a></p>
+  <nav aria-label="Screenshot sections"><a href="#overview">Dashboard and tables</a><a href="#profiles">Profiles and Facts</a><a href="#graphs">Graph views</a><a href="#mobile">Mobile</a><a href="#defect">Clipped menu</a><a href="#admin">Admin and FAQ</a></nav>
+</header>
+<main>
+<section id="overview">
+  <h2>Dashboard and tables</h2>
+  <figure><a href="screenshots/01-dashboard-desktop.jpg"><img src="screenshots/01-dashboard-desktop.jpg" alt="Full dashboard with summary cards, standings, songs, and alignment" loading="lazy"></a><figcaption><strong>01 · Dashboard</strong>Repeated card treatments and explanatory text give secondary information similar prominence to the actual standings. This early capture uses a narrower desktop viewport than the later captures.</figcaption></figure>
+  <div class="pair">
+    <figure><a href="screenshots/02-songs-desktop.jpg"><img src="screenshots/02-songs-desktop.jpg" alt="Songs table with numerous metric columns" loading="lazy"></a><figcaption><strong>02 · Songs</strong>Song and round names compete with nine initial columns. A simpler initial metric set would give the music more room.</figcaption></figure>
+    <figure><a href="screenshots/03-players-desktop.jpg"><img src="screenshots/03-players-desktop.jpg" alt="Players table sorted by points with nonsequential adjusted rank labels" loading="lazy"></a><figcaption><strong>03 · Players</strong>The generic Rank column shows adjusted performance rank even when the list is ordered by total points.</figcaption></figure>
+  </div>
+  <figure><a href="screenshots/07-compare-desktop.jpg"><img src="screenshots/07-compare-desktop.jpg" alt="Compare table and metric tabs" loading="lazy"></a><figcaption><strong>07 · Compare</strong>Useful analytical depth, but the initial view needs a clearer player focus and a shorter, paginated result.</figcaption></figure>
+</section>
+<section id="profiles">
+  <h2>Profiles and Facts</h2>
+  <div class="pair">
+    <figure><a href="screenshots/04-player-profile-desktop.jpg"><img src="screenshots/04-player-profile-desktop.jpg" alt="TheRedSock profile with summary cards and detailed statistics" loading="lazy"></a><figcaption><strong>04 · Player profile</strong>Six summary cards precede many detailed sections. Best submissions and meaningful relationships could establish a clearer identity.</figcaption></figure>
+    <figure><a href="screenshots/05-profile-dialog.jpg"><img src="screenshots/05-profile-dialog.jpg" alt="Highest votes given dialog on the player profile" loading="lazy"></a><figcaption><strong>05 · Profile detail dialog</strong>The full list has 1,109 entries. Opening it left focus on the background trigger. Full histories need pagination and reliable keyboard behavior.</figcaption></figure>
+  </div>
+  <figure><a href="screenshots/06-facts-desktop.jpg"><img src="screenshots/06-facts-desktop.jpg" alt="Facts page showing repeated cards of statistical discoveries" loading="lazy"></a><figcaption><strong>06 · Facts</strong>Seventeen similarly treated panels obscure the most interesting discoveries. A small leading selection and grouped exploration would create hierarchy.</figcaption></figure>
+</section>
+<section id="graphs">
+  <h2>Graph views and better use of existing controls</h2>
+  <p>The following progression comparison changes both player count and measure. It demonstrates a more readable existing state, not a controlled test or a redesign.</p>
+  <div class="pair">
+    <figure><a href="screenshots/12-progression-all-players.jpg"><img src="screenshots/12-progression-all-players.jpg" alt="Progression chart with all 27 players" loading="lazy"></a><figcaption><strong>12 · All 27 players</strong>Repeated colors, dashes, and many selection chips make the initial view difficult to follow.</figcaption></figure>
+    <figure><a href="screenshots/13-progression-top-five.jpg"><img src="screenshots/13-progression-top-five.jpg" alt="Progression chart restricted to five players using standing" loading="lazy"></a><figcaption><strong>13 · Top five and Standing</strong>A useful league race emerges using the existing controls. Keep an explicit route back to all players.</figcaption></figure>
+  </div>
+  <div class="pair">
+    <figure><a href="screenshots/08-bubbles-desktop.jpg"><img src="screenshots/08-bubbles-desktop.jpg" alt="Bubbles graph with community and link controls" loading="lazy"></a><figcaption><strong>08 · Bubbles</strong>Preserve voting communities; simplify the exposed algorithm and connection-budget controls.</figcaption></figure>
+    <figure><a href="screenshots/09-flow-desktop.jpg"><img src="screenshots/09-flow-desktop.jpg" alt="Flow graph showing directional support" loading="lazy"></a><figcaption><strong>09 · Flow</strong>Use a concise legend and focused player details to explain the arrows.</figcaption></figure>
+    <figure><a href="screenshots/10-matrix-desktop.jpg"><img src="screenshots/10-matrix-desktop.jpg" alt="Matrix of player alignment with small labels" loading="lazy"></a><figcaption><strong>10 · Matrix</strong>The grid needs larger labels, a numerical color legend, and tap/keyboard selection.</figcaption></figure>
+    <figure><a href="screenshots/11-ego-desktop.jpg"><img src="screenshots/11-ego-desktop.jpg" alt="Ego graph focused on TheRedSock" loading="lazy"></a><figcaption><strong>11 · One player</strong>A focused view is already manageable. Give it a plain label and linkable player state.</figcaption></figure>
+  </div>
+</section>
+<section id="mobile">
+  <h2>Mobile layout</h2>
+  <p>At a 390 px viewport, the document measured 531 px wide. Header links cause page-level overflow. The dashboard leaderboard heading begins at y=882, below the 844 px first viewport.</p>
+  <div class="pair mobile">
+    <figure><a href="screenshots/15-dashboard-mobile.jpg"><img src="screenshots/15-dashboard-mobile.jpg" alt="Mobile dashboard with cropped horizontal navigation and tall summary cards" loading="lazy"></a><figcaption><strong>15 · Dashboard at 390 px</strong>The first screen is mostly framing and summary cards rather than standings.</figcaption></figure>
+    <figure><a href="screenshots/16-songs-mobile.jpg"><img src="screenshots/16-songs-mobile.jpg" alt="Mobile Songs view shifted horizontally after following an off-screen navigation link" loading="lazy"></a><figcaption><strong>16 · Songs after navigation</strong>Following the off-screen Songs link can leave the page horizontally shifted, clipping content on the left. This is an observed overflow effect, not an intentional crop.</figcaption></figure>
+  </div>
+  <figure class="mobile"><a href="screenshots/14-progression-mobile.jpg"><img src="screenshots/14-progression-mobile.jpg" alt="Full mobile progression page with dense graph controls" loading="lazy"></a><figcaption><strong>14 · Progression on mobile</strong>The full-page capture includes overflow beyond the viewport; it is useful for inspecting the control density.</figcaption></figure>
+</section>
+<section id="defect">
+  <h2>A reproducible clipped menu</h2>
+  <figure><a href="screenshots/17-song-search-columns.jpg"><img src="screenshots/17-song-search-columns.jpg" alt="Songs search for Fabienk with Columns dropdown clipped by the short table container" loading="lazy"></a><figcaption><strong>17 · Latest league → search Fabienk → Columns</strong>Only the first few menu items fit inside the one-row table container. The screenshot also shows how much space remains devoted to methodology after a simple search.</figcaption></figure>
+</section>
+<section id="admin">
+  <h2>Admin and FAQ</h2>
+  <div class="pair">
+    <figure><a href="screenshots/18-admin-desktop.jpg"><img src="screenshots/18-admin-desktop.jpg" alt="Full admin page with create league and nine editable league forms above import" loading="lazy"></a><figcaption><strong>18 · Admin page</strong>Create league and nine expanded edit forms precede analytics refresh and CSV import. At 1440 px wide, CSV sync starts around y=4807.</figcaption></figure>
+    <figure><a href="screenshots/19-admin-import.jpg"><img src="screenshots/19-admin-import.jpg" alt="CSV import controls and player name editing" loading="lazy"></a><figcaption><strong>19 · CSV import</strong>The routine workflow deserves an earlier position. Detailed schemas and technical identifiers can remain available as secondary help.</figcaption></figure>
+  </div>
+  <figure><a href="screenshots/20-faq-desktop.jpg"><img src="screenshots/20-faq-desktop.jpg" alt="FAQ cards with long statistical definitions" loading="lazy"></a><figcaption><strong>20 · FAQ</strong>Long definitions and formulas share the same card pattern. Organize around practical questions, then reveal the model details.</figcaption></figure>
+</section>
+</main>
+<footer><p class="note">Images are local audit evidence. No imports, enrichment, refreshes, or league edits were performed. See the report for source references, benchmark limitations, and the staged proposal.</p></footer>
+</html>
