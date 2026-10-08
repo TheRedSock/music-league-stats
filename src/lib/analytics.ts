@@ -1,6 +1,7 @@
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { cache } from "react";
+import { profileVoteCountCtes, profileVoteCountColumns, profileVoteCountJoins } from "@/lib/profile-vote-sql";
 
 import { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
 export { qualificationRoundFloor, qualificationFeatureFloor } from "@/lib/participation";
@@ -981,16 +982,7 @@ export async function loadAnalytics<T>(
 ): Promise<AnalyticsLoad<T>> {
   if (!process.env.DATABASE_URL) return { status: "setup" };
   try {
-    const [row] = await db.execute<{
-      status: string | null;
-      summary: unknown;
-    }>(sql`
-      select status, summary
-      from analytics_materialization_jobs
-      where analytics_revision = ${ANALYTICS_REVISION}
-      order by created_at desc
-      limit 1
-    `);
+    const row = await readAnalyticsReadiness();
     if (row?.status === "processing" || row?.status === "pending") {
       const summary = row.summary as {
         kind?: string;
@@ -1612,31 +1604,30 @@ export function canUseSongDerivedMats(filter: AnalyticsFilter): boolean {
   return filter.roundIds.length === 0;
 }
 
-async function hasCompletedAllLeaguesMaterialization(): Promise<boolean> {
-  const [row] = await db.execute<{ status: string | null }>(sql`
-    select status
-    from analytics_materialization_jobs
+// React cache only shares this promise within a server render; freshness is checked
+// again on every request, outside the persistent analytics data cache.
+const readAnalyticsReadiness = cache(async () => {
+  const [row] = await db.execute<{ status: string | null; summary: unknown }>(sql`
+    select status, summary from analytics_materialization_jobs
     where analytics_revision = ${ANALYTICS_REVISION}
-    order by created_at desc
-    limit 1
+    order by created_at desc limit 1
   `);
-  return row?.status === "completed";
+  return row;
+});
+
+async function hasCompletedAllLeaguesMaterialization(): Promise<boolean> {
+  return (await readAnalyticsReadiness())?.status === "completed";
 }
 
-async function hasCompletedScopeMaterialization(scopeKey: string): Promise<boolean> {
-  if (scopeKey === "all" || !scopeKey.includes(",")) {
-    return hasCompletedAllLeaguesMaterialization();
-  }
+const hasCompletedScopeMaterialization = cache(async (scopeKey: string): Promise<boolean> => {
+  if (scopeKey === "all" || !scopeKey.includes(",")) return hasCompletedAllLeaguesMaterialization();
   const [row] = await db.execute<{ status: string | null }>(sql`
-    select status
-    from analytics_scope_jobs
-    where analytics_revision = ${ANALYTICS_REVISION}
-      and scope_key = ${scopeKey}
-    order by created_at desc
-    limit 1
+    select status from analytics_scope_jobs
+    where analytics_revision = ${ANALYTICS_REVISION} and scope_key = ${scopeKey}
+    order by created_at desc limit 1
   `);
   return row?.status === "completed";
-}
+});
 
 async function countScopeRounds(filter: AnalyticsFilter): Promise<number> {
   const [row] = await db.execute<{ count: number }>(sql`
@@ -2396,6 +2387,7 @@ async function getMaterializedPlayerProfileData(
         }
       group by ev.round_id, ev.voter_id
     ),
+    ${profileVoteCountCtes("analytics_effective_votes", player.id)},
     highest_voted_song_rows as (
       select
         s.id as "submissionId",
@@ -2418,30 +2410,9 @@ async function getMaterializedPlayerProfileData(
         ev.points as "pointsGiven",
         bt.ballot_points as "ballotPoints",
         bt.eligible_opportunities as "eligibleOpportunities",
-        (
-          select count(*)::int
-          from analytics_effective_votes peer
-          where peer.round_id = ev.round_id
-            and peer.voter_id = ev.voter_id
-            and peer.points >= ev.points
-        ) as "songsAtLeast",
-        (
-          select coalesce(sum(peer.points), 0)::double precision
-          from analytics_effective_votes peer
-          where peer.submission_id = ev.submission_id
-        ) as "songPoints",
-        (
-          select count(*)::int
-          from analytics_effective_votes peer
-          where peer.submission_id = ev.submission_id
-        ) as "songEligibleVoters",
-        (
-          select count(*)::int
-          from analytics_effective_votes peer
-          where peer.submission_id = ev.submission_id
-            and peer.points >= ev.points
-        ) as "votersAtLeast"
+        ${profileVoteCountColumns}
       from analytics_effective_votes ev
+      ${profileVoteCountJoins}
       join player_ballot_totals bt
         on bt.round_id = ev.round_id
        and bt.voter_id = ev.voter_id
@@ -3105,6 +3076,7 @@ export async function getPlayerProfileData(
       join selected_rounds sr on sr.id = pp.round_id
       join leagues l on l.id = sr.league_id
     ),
+    ${profileVoteCountCtes("effective_votes", playerId)},
     highest_voted_song_rows as (
       select
         s.id as "submissionId",
@@ -3127,30 +3099,9 @@ export async function getPlayerProfileData(
         ev.points as "pointsGiven",
         bt.ballot_points as "ballotPoints",
         bt.eligible_opportunities as "eligibleOpportunities",
-        (
-          select count(*)::int
-          from effective_votes peer
-          where peer.round_id = ev.round_id
-            and peer.voter_id = ev.voter_id
-            and peer.points >= ev.points
-        ) as "songsAtLeast",
-        (
-          select coalesce(sum(peer.points), 0)::double precision
-          from effective_votes peer
-          where peer.submission_id = ev.submission_id
-        ) as "songPoints",
-        (
-          select count(*)::int
-          from effective_votes peer
-          where peer.submission_id = ev.submission_id
-        ) as "songEligibleVoters",
-        (
-          select count(*)::int
-          from effective_votes peer
-          where peer.submission_id = ev.submission_id
-            and peer.points >= ev.points
-        ) as "votersAtLeast"
+        ${profileVoteCountColumns}
       from effective_votes ev
+      ${profileVoteCountJoins}
       join ballot_totals bt
         on bt.round_id = ev.round_id
        and bt.voter_id = ev.voter_id

@@ -1,0 +1,48 @@
+{
+  "measuredAt": "2026-10-08T09:28:53.007Z",
+  "note": "Synthetic canonical-shaped rows; Node CPU benchmark, not browser or end-to-end import timing. Exact chunk boundaries and hashes checked, including Unicode, byte-limit chunks, and oversize-row rejection.",
+  "results": [
+    {
+      "rows": 5000,
+      "samples": [
+        {
+          "name": "original",
+          "ms": [
+            829,
+            823,
+            821
+          ]
+        },
+        {
+          "name": "incremental",
+          "ms": [
+            11,
+            9,
+            9
+          ]
+        }
+      ]
+    },
+    {
+      "rows": 25000,
+      "samples": [
+        {
+          "name": "original",
+          "ms": [
+            4192,
+            4378,
+            3939
+          ]
+        },
+        {
+          "name": "incremental",
+          "ms": [
+            44,
+            45,
+            43
+          ]
+        }
+      ]
+    }
+  ]
+}

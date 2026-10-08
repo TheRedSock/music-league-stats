@@ -153,6 +153,7 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
         status: "completed";
         summary: ImportSummary;
         analyticsWarning?: string;
+        needsRefresh?: boolean;
       }>(`/api/admin/imports/${batch.batchId}/commit`, { method: "POST" }, stage,
       );
       imported = true;
@@ -163,8 +164,8 @@ export function ImportPanel({ leagues }: { leagues: AdminLeague[] }) {
         router.refresh();
         return;
       }
-      await runSteppedAnalyticsRefresh((message) => setStatus(message));
-      setStatus("Import completed successfully.");
+      if (completed.needsRefresh !== false) await runSteppedAnalyticsRefresh((message) => setStatus(message));
+      setStatus(completed.needsRefresh === false ? "Import already saved; analytics are current." : "Import completed successfully.");
       router.refresh();
     } catch (caught) {
       const detail = caught instanceof Error ? caught.message : "The request failed.";

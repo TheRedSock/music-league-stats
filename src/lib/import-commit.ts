@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
-import { db } from "@/db";
+import { db, type Database } from "@/db";
 import {
   competitors,
   importBatches,
@@ -223,8 +223,9 @@ function batches<T>(values: T[], size = 500): T[][] {
 
 export async function commitImportBatch(
   batchId: string,
+  database: Database = db,
 ): Promise<ImportSummary> {
-  return db.transaction(async (tx) => {
+  return database.transaction(async (tx) => {
     const [batch] = await tx
       .select()
       .from(importBatches)

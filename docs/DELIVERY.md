@@ -11,7 +11,7 @@ The baseline and detailed acceptance criteria are in [the audit](audit-2026-10-0
 | 2 | Homepage and Songs visual and editorial reference | Complete |
 | 3 | Players, profiles, Facts, Compare, methodology, admin hierarchy | Complete |
 | 4 | Graph defaults, legends, keyboard/touch details and URL state | Complete |
-| 5 | Profile query grouping, import preparation, readiness reuse and retry behavior | Pending |
+| 5 | Profile query grouping, import preparation, readiness reuse and retry behavior | Complete |
 | 6 | On-demand details, maintained benchmarks, refresh instrumentation and measured optimization | Pending |
 
 Verification uses the existing configured database for read-only inspection. Imports, refreshes and mutations require isolated fixtures. Each stage receives a commit only after its applicable acceptance checks pass. A limitation will be recorded explicitly rather than marked as verified.
@@ -51,3 +51,9 @@ Graphs opens on League race, showing the top five standings with distinct colors
 Matrix has a fixed numerical color legend, distinct missing-data cells, persistent pair details, a player subset picker, arrow-key navigation and a searchable/sortable paginated table. Canvas views have a native player selector and equivalent connection tables. Flow shows incoming/outgoing point totals for qualifying connections; profiles link directly to Player connections. Canvas data is cloned before the force library mutates positions/endpoints. Decorative flow particles were removed.
 
 Validation: production build, type checking, lint and 94 unit tests passed. Browser checks confirmed the top-five default, adding TheRedSock, switching measure and reloading with both choices restored. Matrix ArrowRight selected a negative comparison and restored it after reload; the mobile click selected the same pair. Flow selected TheRedSock and showed 1,559 received / 1,576 given points with six visible table connections. All five graph views fit at 390 px; Flow's canvas measured 333 px. Desktop/mobile evidence is in delivery-evidence/stage-4-*.jpg.
+
+## Stage 5
+
+Materialized and live profiles share grouped cumulative vote counts instead of four correlated calculations per song. React request memoization shares readiness reads during a render without persisting a completed flag across requests. Import preparation counts UTF-8 bytes once per row, preserving the 500-row/request-byte limits and hashes. Import finalization writes an invalidation receipt into the existing JSON summary in the same transaction as invalidation. Retries always repeat cache revalidation, but skip database invalidation once receipted and skip refresh only when current analytics are completed. This preserves recovery after a committed import or lost response; old batches finalize once. No database migration is required.
+
+Validation: all 115 tests pass against a disposable local PostgreSQL 17 database, including the previously skipped integration suite. New tests cover tied points, inferred zeroes, multiple rounds, exact UTF-8 boundaries/hashes, failure while saving the invalidation receipt, rollback and completed-import retries. Lint, type checking and production build pass. The real-data profile still renders correctly. The actual grouped SQL builder returned exactly the same 1,109 rows: PostgreSQL execution 921.502 ms → 34.947 ms. Actual import preparation for 25,000 synthetic rows: median 4,192 ms → 44 ms, identical chunks/hashes. These are query/CPU measurements, not end-to-end page or upload claims. Evidence: delivery-evidence/stage-5-*.json. scripts/prepare-test-db.mjs creates an empty local *_test database's schema and synthetic fixtures without touching configured application data.

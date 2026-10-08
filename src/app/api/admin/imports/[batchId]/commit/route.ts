@@ -1,4 +1,3 @@
-import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
@@ -15,12 +14,7 @@ import {
   markImportFailed,
 } from "@/lib/import-commit";
 import { revalidateAnalyticsCache } from "@/lib/analytics";
-import {
-  invalidateAllLeaguesMaterialization,
-  invalidateScopesContainingLeague,
-} from "@/lib/analytics-materialize";
-import { db } from "@/db";
-import { importBatches } from "@/db/schema";
+import { finalizeImportAnalytics, importNeedsAnalyticsRefresh } from "@/lib/import-finalize";
 
 export const maxDuration = 60;
 
@@ -38,29 +32,15 @@ export async function POST(
     }
     const summary = await commitImportBatch(batchId);
     committed = summary;
-    const [batch] = await db
-      .select({ leagueId: importBatches.leagueId })
-      .from(importBatches)
-      .where(eq(importBatches.id, batchId))
-      .limit(1);
-    if (batch?.leagueId) {
-      await invalidateScopesContainingLeague(
-        batch.leagueId,
-        undefined,
-        "Invalidated after import commit.",
-      );
-    } else {
-      await invalidateAllLeaguesMaterialization(
-        undefined,
-        "Invalidated after import commit.",
-      );
-    }
+    await finalizeImportAnalytics(batchId);
+    // Repeat cache revalidation even when the database receipt exists: the last
+    // attempt might have lost its response or failed between these two steps.
     revalidateAnalyticsCache();
     revalidatePath("/");
     revalidatePath("/songs");
     revalidatePath("/players");
     revalidatePath("/admin");
-    return NextResponse.json({ status: "completed", summary });
+    return NextResponse.json({ status: "completed", summary, needsRefresh: await importNeedsAnalyticsRefresh() });
   } catch (error) {
     if (committed) {
       console.error("Post-import analytics invalidation failed", { batchId });

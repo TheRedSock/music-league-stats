@@ -56,31 +56,28 @@ function estimatedRequestSize(
   ).byteLength;
 }
 
-async function makeChunks(
+export async function makeChunks(
   kind: ImportKind,
   rows: unknown[],
 ): Promise<UploadChunk[]> {
   const groups: Array<{ startRow: number; rows: unknown[] }> = [];
   let current: unknown[] = [];
   let startRow = 0;
+  let bytes = estimatedRequestSize(kind, 0, 0, []);
 
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-    const next = [...current, rows[rowIndex]];
-    const tooLarge =
-      estimatedRequestSize(kind, groups.length, startRow, next) >
-      targetRequestBytes;
+    // Array slots serialize undefined as null. Count UTF-8 bytes, not JS characters.
+    const rowBytes = encoder.encode(JSON.stringify([rows[rowIndex]])).byteLength - 2;
+    const tooLarge = bytes + rowBytes + (current.length ? 1 : 0) > targetRequestBytes;
     if (current.length > 0 && (current.length >= maximumChunkRows || tooLarge)) {
       groups.push({ startRow, rows: current });
-      current = [rows[rowIndex]];
+      current = [];
       startRow = rowIndex;
-    } else {
-      current = next;
+      bytes = estimatedRequestSize(kind, groups.length, startRow, []);
     }
-    if (
-      current.length === 1 &&
-      estimatedRequestSize(kind, groups.length, startRow, current) >
-        targetRequestBytes
-    ) {
+    bytes += rowBytes + (current.length ? 1 : 0);
+    current.push(rows[rowIndex]);
+    if (current.length === 1 && bytes > targetRequestBytes) {
       throw new Error(
         `${kind}.csv row ${rowIndex + 2} is too large to upload safely.`,
       );

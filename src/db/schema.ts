@@ -272,6 +272,8 @@ export type ImportFileManifest = {
 export type ImportManifest = Record<ImportKind, ImportFileManifest>;
 
 export type ImportSummary = {
+  /** Written atomically with analytics invalidation; old batches safely finalize once. */
+  analyticsInvalidatedAt?: string;
   competitors: number;
   memberships: number;
   rounds: number;
