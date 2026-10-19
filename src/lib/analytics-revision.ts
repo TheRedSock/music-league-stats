@@ -1,1 +1,1 @@
-export const ANALYTICS_REVISION = "2026-10-06-centered-shared-song-alignment";
+export const ANALYTICS_REVISION = "2026-10-19-relative-mutual-support";

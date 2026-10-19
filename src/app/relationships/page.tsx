@@ -89,7 +89,7 @@ function metric(value: number | null | undefined, digits = 2): string {
 function valueFor(tab: RelationshipTab, row: RelationshipTableRow): string {
   if (tab === "alignment") return row.alignment == null ? "—" : `${(row.alignment * 100).toFixed(0)} / 100`;
   if (tab === "timing") return percent(row.averageTiming);
-  if (tab === "mutual") return percent(row.ballotPointShare, 1);
+  if (tab === "mutual") return row.relativeSupport == null ? "—" : `${row.relativeSupport.toFixed(2)}×`;
   return metric(row.pointsPerOpportunity);
 }
 
@@ -210,6 +210,7 @@ async function RelationshipsPageContent({
     focus: data.focusPlayer?.id ?? null,
     sort,
     tab,
+    ballotShare: params.ballotShare === "1" ? "1" : null,
   };
   const activeTab = tabs.find((item) => item.tab === tab)!;
   const scopeRounds = options.rounds.filter(round =>
@@ -217,10 +218,14 @@ async function RelationshipsPageContent({
     (!filter.roundIds.length || filter.roundIds.includes(round.id)),
   ).length;
   const minimumRounds = qualificationRoundFloor(scopeRounds, options.rounds.length);
-  const valueLabel = tab === "alignment" ? "Similarity" : tab === "timing" ? "Ballot position" : tab === "mutual" ? "Ballot share" : "Pts / opportunity";
+  const valueLabel = tab === "alignment" ? "Similarity" : tab === "timing" ? "Voting order" : tab === "mutual" ? "Relative support" : "Pts / opportunity";
   const sampleLabel = tab === "alignment" ? "Song comparisons" : tab === "timing" ? "Ballots cast" : "Opportunities";
   const contextLabel = tab === "timing" ? "Missed ballots" : tab === "alignment" ? "Scope covered" : "Awarded ≥1 pt";
-  const contextHelp = tab === "timing" ? "Entered rounds where the player did not cast a ballot." : tab === "alignment" ? "Shared voted rounds with variation in both voters' scores on shared songs, divided by all rounds in the selected scope." : "Percentage and count of eligible song-voter opportunities awarded at least one point; the rest received zero points. Mutual support combines both directions.";
+  const contextHelp = tab === "timing" ? "Missed ballots divided by rounds entered by submitting or voting. The count is shown in parentheses." : tab === "alignment" ? "Shared voted rounds with variation in both voters' scores on shared songs, divided by all rounds in the selected scope." : "Percentage and count of eligible song-voter opportunities awarded at least one point; the rest received zero points. Mutual support combines both directions.";
+
+  function sortHead(key: Parameters<typeof defaultRelationshipSortDirection>[0], label: string, title?: string) {
+    return <SortableTableHead activeDirection={direction} activeSort={sort} align="right" defaultDirection={defaultRelationshipSortDirection(key)} params={currentParams} path="/relationships" sortKey={key} title={title}>{label}</SortableTableHead>;
+  }
 
   return (
     <Container className="py-6 sm:py-10">
@@ -249,6 +254,7 @@ async function RelationshipsPageContent({
           </div>
           <Form action="/relationships" className="flex min-w-0 flex-wrap items-end gap-2 lg:w-96 lg:shrink-0">
             {filter.leagueIds.map(id => <input type="hidden" key={id} name="league" value={id} />)}
+            {currentParams.ballotShare === "1" ? <input type="hidden" name="ballotShare" value="1" /> : null}
             <input type="hidden" name="tab" value={tab} /><input type="hidden" name="sort" value={sort} /><input type="hidden" name="dir" value={direction} />
             <label className="min-w-0 flex-1"><span className="mb-1 block text-xs text-zinc-400">Focus on a player</span>
               <select name="focus" defaultValue={focus ?? ""} className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm">
@@ -285,118 +291,46 @@ async function RelationshipsPageContent({
 
           {data.rows.length ? (
             <div className="mt-5">
-              <Table className="min-w-[850px] table-fixed">
-                <TableHeader>
-                  <TableRow>
-                    <SortableTableHead
-                      activeDirection={direction}
-                      activeSort={sort}
-                      className="w-[30%]"
-                      defaultDirection="asc"
-                      params={currentParams}
-                      path="/relationships"
-                      title={tab === "given" ? "The player on the left gives points to the player on the right." : "The player or pair being compared; click either name to open their profile."}
-                      sortKey="player"
-                    >
-                      {tab === "given" ? "Giver → receiver" : tab === "timing" ? "Player" : "Player pair"}
-                    </SortableTableHead>
-                    <SortableTableHead
-                      activeDirection={direction}
-                      activeSort={sort}
-                      align="right"
-                      className="w-[14%]"
-                      title={tab === "alignment" ? "Agreement on shared songs: −100 means opposing choices, +100 means similar choices." : tab === "timing" ? "Average relative ballot completion order within each round; lower means earlier voting." : tab === "mutual" ? "The share of available ballot points two players gave each other." : "Average points per chance to vote for the recipient’s songs, including zeroes."}
-                      defaultDirection={defaultRelationshipSortDirection(
-                        tab === "alignment"
-                          ? "alignment"
-                          : tab === "timing"
-                            ? "timing"
-                            : tab === "mutual"
-                              ? "share"
-                              : "rate",
-                      )}
-                      params={currentParams}
-                      path="/relationships"
-                      sortKey={
-                        tab === "alignment"
-                          ? "alignment"
-                          : tab === "timing"
-                            ? "timing"
-                            : tab === "mutual"
-                              ? "share"
-                              : "rate"
-                      }
-                    >
-                      {valueLabel}
-                    </SortableTableHead>
-                    <SortableTableHead
-                      activeDirection={direction}
-                      activeSort={sort}
-                      align="right"
-                      className="w-[12%]"
-                      defaultDirection="desc"
-                      params={currentParams}
-                      path="/relationships"
-                      title={tab === "alignment" ? "Votes compared on songs both players could vote for." : tab === "timing" ? "Submitted ballots contributing to the timing average." : "Number of chances to vote for the other player’s songs."}
-                      sortKey={tab === "alignment" ? "features" : "opportunities"}
-                    >
-                      {sampleLabel}
-                    </SortableTableHead>
-                    <SortableTableHead
-                      activeDirection={direction}
-                      activeSort={sort}
-                      align="right"
-                      className="w-[12%]"
-                      defaultDirection="desc"
-                      params={currentParams}
-                      path="/relationships"
-                      title={tab === "timing" ? "Rounds entered by submitting or voting in the selected scope." : tab === "alignment" ? "Rounds where both players voted and both showed variation on shared songs." : "Distinct rounds with eligible opportunities for this pair."}
-                      sortKey="rounds"
-                    >
-                      Rounds
-                    </SortableTableHead>
-                    {tab === "given" || tab === "mutual" ? (
-                      <SortableTableHead activeDirection={direction} activeSort={sort} align="right" defaultDirection="desc" params={currentParams} path="/relationships" sortKey="points" title="Total points awarded across the eligible opportunities shown.">Points</SortableTableHead>
-                    ) : null}
-                    <TableHead className="text-right" title={contextHelp}>{contextLabel}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleRows.map((row) => {
-                    return (
-                      <TableRow key={`${row.leftId}-${row.rightId ?? "timing"}`}>
-                        <TableCell className="max-w-0">
-                          <div className="flex items-center gap-1.5 font-medium text-zinc-100">
-                            <Link className="min-w-0 truncate hover:text-lime-200" title={row.leftName} href={buildAnalyticsHref(`/players/${playerSlugs.get(row.leftId) ?? row.leftId}`, scopeQueryParams(filter), {})}>{row.leftName}</Link>
-                            {row.rightId ? <>
-                              <span aria-label={tab === "given" ? "gives points to" : "compared with"} className="shrink-0 text-lime-300">{tab === "given" ? "→" : "↔"}</span>
-                              <Link className="min-w-0 truncate hover:text-lime-200" title={row.rightName ?? "Player"} href={buildAnalyticsHref(`/players/${playerSlugs.get(row.rightId ?? "") ?? row.rightId}`, scopeQueryParams(filter), {})}>{row.rightName}</Link>
-                            </> : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-lime-200">
-                          {valueFor(tab, row)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {tab === "alignment"
-                            ? (row.comparableFeatures ?? "—")
-                            : tab === "timing"
-                              ? (row.votedRounds ?? "—")
-                              : (row.opportunities ?? "—")}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {row.sharedRounds ?? row.votedRounds ?? "—"}
-                        </TableCell>
-                        {tab === "given" || tab === "mutual" ? <TableCell className="text-right font-mono">{row.points ?? 0}</TableCell> : null}
-                        <TableCell className="text-right text-xs text-zinc-400" title={contextHelp}>
-                          {tab === "timing" ? row.missedBallots ?? 0 : tab === "alignment"
-                            ? percent(row.scopeRounds ? (row.sharedRounds ?? 0) / row.scopeRounds : null)
-                            : `${percent(row.positiveRate)} (${Math.round((row.positiveRate ?? 0) * (row.opportunities ?? 0))}/${row.opportunities ?? 0})`}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
+              {tab === "mutual" ? <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-zinc-400">1× = expected support for each round’s available choices.</span>
+                <Link className="text-lime-300 hover:underline" href={buildAnalyticsHref("/relationships",currentParams,{ballotShare:currentParams.ballotShare === "1" || sort === "share" ? null : "1",sort:sort === "share" ? "mutual-support" : sort,page:null})}>{currentParams.ballotShare === "1" || sort === "share" ? "Hide ballot share" : "Show ballot share"}</Link>
+              </div> : null}
+              {tab === "timing" ? <p className="mb-3 max-w-3xl text-xs leading-5 text-zinc-400">Window scores use estimated schedules unless set in Admin. Combined gives Order and Window equal weight.</p> : null}
+              <Table className="min-w-[850px] [&_td]:whitespace-nowrap [&_th]:px-3 [&_td]:px-3">
+                <TableHeader><TableRow>
+                  <SortableTableHead activeDirection={direction} activeSort={sort} defaultDirection="asc" params={currentParams} path="/relationships" sortKey="player">{tab === "given" ? "Giver → receiver" : tab === "timing" ? "Player" : "Player pair"}</SortableTableHead>
+                  {sortHead(tab === "alignment" ? "alignment" : tab === "timing" ? "timing" : tab === "mutual" ? "mutual-support" : "rate",valueLabel,
+                    tab === "mutual" ? "Points exchanged divided by expected points for the pair’s actual ballot budgets and eligible songs. 1× is expected support." : tab === "timing" ? "Average position among the voters in each round. Lower is earlier." : undefined)}
+                  {tab === "timing" ? <>
+                    {sortHead("window-timing","Voting\nwindow","Average fraction of the voting window elapsed when voting. May use estimated boundaries; 0% is opening and 100% is closing.")}
+                    {sortHead("combined-timing","Combined","Equal average of Order and Voting window, calculated for each ballot with both measures.")}
+                    <TableHead className="whitespace-pre-line text-right" title="Ballots contributing to Voting window and Combined. An estimated window is inferred from submissions/votes and a likely schedule boundary.">{"Window\ncoverage"}</TableHead>
+                  </> : null}
+                  {tab === "mutual" && (currentParams.ballotShare === "1" || sort === "share") ? sortHead("share","Ballot\nshare","Share of the pair’s eligible ballot budgets spent on each other, without adjusting for round size.") : null}
+                  {sortHead(tab === "alignment" ? "features" : "opportunities",sampleLabel)}
+                  {sortHead("rounds","Rounds",tab === "timing" ? "Rounds entered by submitting or voting in this scope." : "Rounds with eligible comparison data.")}
+                  {tab === "given" || tab === "mutual" ? sortHead("points","Points") : null}
+                  {tab === "timing" ? sortHead("missed-rate","Missed\nballots",contextHelp) : <TableHead className="text-right" title={contextHelp}>{contextLabel}</TableHead>}
+                </TableRow></TableHeader>
+                <TableBody>{visibleRows.map(row => <TableRow key={`${row.leftId}-${row.rightId ?? "timing"}`}>
+                  <TableCell className="min-w-44">
+                    <div className="flex items-center gap-1.5 font-medium text-zinc-100">
+                      <Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${playerSlugs.get(row.leftId) ?? row.leftId}`,scopeQueryParams(filter),{})}>{row.leftName}</Link>
+                      {row.rightId ? <><span aria-label={tab === "given" ? "gives points to" : "compared with"} className="text-lime-300">{tab === "given" ? "→" : "↔"}</span><Link className="hover:text-lime-200" href={buildAnalyticsHref(`/players/${playerSlugs.get(row.rightId) ?? row.rightId}`,scopeQueryParams(filter),{})}>{row.rightName}</Link></> : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono text-lime-200">{valueFor(tab,row)}</TableCell>
+                  {tab === "timing" ? <>
+                    <TableCell className="text-right font-mono">{percent(row.averageWindowTiming)}</TableCell>
+                    <TableCell className="text-right font-mono">{percent(row.averageCombinedTiming)}</TableCell>
+                    <TableCell className="text-right text-xs text-zinc-400" title={`${row.estimatedWindowRounds ?? 0} of these windows are estimated`}>{row.windowTimedRounds ?? 0}/{row.votedRounds ?? 0}{row.estimatedWindowRounds ? " · est." : ""}</TableCell>
+                  </> : null}
+                  {tab === "mutual" && (currentParams.ballotShare === "1" || sort === "share") ? <TableCell className="text-right font-mono">{percent(row.ballotPointShare,1)}</TableCell> : null}
+                  <TableCell className="text-right font-mono">{tab === "alignment" ? row.comparableFeatures ?? "—" : tab === "timing" ? row.votedRounds ?? "—" : row.opportunities ?? "—"}</TableCell>
+                  <TableCell className="text-right font-mono">{row.sharedRounds ?? "—"}</TableCell>
+                  {tab === "given" || tab === "mutual" ? <TableCell className="text-right font-mono">{row.points ?? 0}</TableCell> : null}
+                  <TableCell className="text-right text-xs text-zinc-400" title={contextHelp}>{tab === "timing" ? `${percent(row.missedRate,1)} (${row.missedBallots ?? 0}/${row.sharedRounds ?? 0})` : tab === "alignment" ? percent(row.scopeRounds ? (row.sharedRounds ?? 0)/row.scopeRounds : null) : `${percent(row.positiveRate)} (${Math.round((row.positiveRate ?? 0)*(row.opportunities ?? 0))}/${row.opportunities ?? 0})`}</TableCell>
+                </TableRow>)}</TableBody>
               </Table>
             </div>
           ) : (

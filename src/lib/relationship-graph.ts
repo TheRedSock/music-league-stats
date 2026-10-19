@@ -64,6 +64,7 @@ function shapeGraphData(
         row.leftId < row.rightId ? (row.rightName ?? row.rightId) : row.leftName,
       alignment: row.alignment,
       mutualShare: existing?.mutualShare ?? null,
+      relativeMutualSupport: existing?.relativeMutualSupport ?? null,
       sharedRounds: row.sharedRounds ?? existing?.sharedRounds ?? null,
       comparableFeatures: row.comparableFeatures,
       mutualPoints: existing?.mutualPoints ?? null,
@@ -85,6 +86,7 @@ function shapeGraphData(
         row.leftId < row.rightId ? (row.rightName ?? row.rightId) : row.leftName,
       alignment: existing?.alignment ?? null,
       mutualShare: row.ballotPointShare,
+      relativeMutualSupport: row.relativeSupport,
       sharedRounds: row.sharedRounds ?? existing?.sharedRounds ?? null,
       comparableFeatures: existing?.comparableFeatures ?? null,
       mutualPoints: row.points,
@@ -130,7 +132,7 @@ export async function getRelationshipGraphData(
     getRelationshipsTableData(filter, {
       direction: "desc",
       focusPlayerId: null,
-      sort: "share",
+      sort: "mutual-support",
       tab: "mutual",
     }),
     getRelationshipsTableData(filter, {

@@ -18,4 +18,4 @@ export function useGraphSetting<T extends string | number | boolean | null>(key:
 
 export const graphText = (raw: string) => raw.slice(0, 2048);
 export const graphBoolean = (raw: string) => raw === "true" ? true : raw === "false" ? false : undefined;
-export const graphMetric = (raw: string) => raw === "mutual" || raw === "alignment" ? raw : undefined;
+export const graphMetric = (raw: string) => raw === "mutual" || raw === "alignment" || raw === "mutual-share" ? raw : undefined;

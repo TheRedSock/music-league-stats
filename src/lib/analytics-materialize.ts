@@ -1,3 +1,5 @@
+import { timingRoundCtes } from "@/lib/voting-timing-sql";
+import { mutualSupportCtes } from "@/lib/mutual-support-sql";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
@@ -516,39 +518,11 @@ async function runMaterializationStep(
       insert into analytics_player_timing (
         player_id, player_name, round_id, round_name, league_id, league_name, league_slug,
         league_music_league_id, source_round_id, ordinal, cast_at,
-        relative_order, ballot_rank, tie_count, observed_voters, participation
+        relative_order, ballot_rank, tie_count, observed_voters, participation,
+        window_position, window_opens_at, window_closes_at, window_source
       )
       with ${voteOpportunityCtes(ALL_LEAGUES_FILTER)},
-      round_ballot_counts as (
-        select round_id, count(*)::int as observed_voters
-        from active_ballots
-        group by round_id
-      ),
-      ballot_positions as (
-        select
-          active_ballots.*,
-          rbc.observed_voters,
-          rank() over (
-            partition by active_ballots.round_id
-            order by active_ballots.cast_at
-          )::int as ballot_rank,
-          count(*) over (
-            partition by active_ballots.round_id, active_ballots.cast_at
-          )::int as tie_count
-        from active_ballots
-        join round_ballot_counts rbc on rbc.round_id = active_ballots.round_id
-      ),
-      ranked_ballots as (
-        select
-          ballot_positions.*,
-          case
-            when observed_voters = 1 then 0.5::double precision
-            else (
-              ballot_rank::double precision - 1 + tie_count::double precision / 2
-            ) / observed_voters
-          end as relative_order
-        from ballot_positions
-      ),
+      ${timingRoundCtes()},
       player_scope_rounds as (
         select distinct s.submitter_id as player_id, s.round_id
         from submissions s
@@ -573,10 +547,12 @@ async function runMaterializationStep(
         rb.ballot_rank,
         rb.tie_count,
         coalesce(rb.observed_voters, rbc.observed_voters, 0)::int,
-        case when rb.voter_id is null then 'did_not_vote' else 'voted' end
+        case when rb.voter_id is null then 'did_not_vote' else 'voted' end,
+        rb.window_position, rw.opens_at, rw.closes_at, rw.source
       from player_scope_rounds psr
       join selected_rounds sr on sr.id = psr.round_id
       join leagues l on l.id = sr.league_id
+      join round_windows rw on rw.id = sr.id
       join competitors c on c.id = psr.player_id
       left join ranked_ballots rb
         on rb.round_id = psr.round_id
@@ -730,68 +706,24 @@ async function insertRelationshipPairs(
   `);
 }
 
-async function insertRelationshipMutual(
-  tx: SqlExecutor,
-  scopeKey: string,
-  filter: AnalyticsFilter,
-): Promise<void> {
-  await tx.execute(
-    sql`delete from analytics_relationship_mutual where scope_key = ${scopeKey}`,
-  );
+async function insertRelationshipMutual(tx: SqlExecutor, scopeKey: string, filter: AnalyticsFilter): Promise<void> {
+  await tx.execute(sql`delete from analytics_relationship_mutual where scope_key = ${scopeKey}`);
   await tx.execute(sql`
     insert into analytics_relationship_mutual (
       scope_key, left_id, left_name, right_id, right_name, points, opportunities,
-      shared_rounds, scope_rounds, points_per_opportunity,
-      positive_rate, ballot_point_share
+      shared_rounds, scope_rounds, points_per_opportunity, positive_rate, ballot_point_share,
+      expected_points, relative_support
     )
-    with ${voteOpportunityCtes(filter)},
-    mutual_rows as (
-      select
-        case when ev.voter_id < ev.submitter_id then ev.voter_id else ev.submitter_id end as left_id,
-        case when ev.voter_id < ev.submitter_id then ev.submitter_id else ev.voter_id end as right_id,
-        sum(ev.points)::int as points,
-        count(*)::int as opportunities,
-        count(distinct ev.round_id)::int as shared_rounds,
-        count(*) filter (where ev.points > 0)::int as positives
-      from effective_votes ev
-      group by left_id, right_id
-    ),
-    mutual_budget_rows as (
-      select distinct
-        case when ev.voter_id < ev.submitter_id then ev.voter_id else ev.submitter_id end as left_id,
-        case when ev.voter_id < ev.submitter_id then ev.submitter_id else ev.voter_id end as right_id,
-        ev.round_id,
-        ev.voter_id,
-        bt.ballot_points
-      from effective_votes ev
-      join ballot_totals bt
-        on bt.round_id = ev.round_id
-       and bt.voter_id = ev.voter_id
-    ),
-    mutual_budgets as (
-      select left_id, right_id, sum(ballot_points)::double precision as eligible_ballot_points
-      from mutual_budget_rows
-      group by left_id, right_id
-    )
-    select
-      ${scopeKey},
-      mr.left_id,
-      ${competitorDisplayName("left_player")},
-      mr.right_id,
-      ${competitorDisplayName("right_player")},
-      mr.points,
-      mr.opportunities,
-      mr.shared_rounds,
-      (select scope_rounds from scope_thresholds),
-      mr.points::double precision / nullif(mr.opportunities, 0),
-      mr.positives::double precision / nullif(mr.opportunities, 0),
-      mr.points::double precision / nullif(mb.eligible_ballot_points, 0)
-    from mutual_rows mr
-    join mutual_budgets mb on mb.left_id = mr.left_id and mb.right_id = mr.right_id
+    with ${voteOpportunityCtes(filter)}, ${mutualSupportCtes()}
+    select ${scopeKey}, mr.left_id, ${competitorDisplayName("left_player")},
+      mr.right_id, ${competitorDisplayName("right_player")}, mr.points, mr.opportunities,
+      mr.shared_rounds, (select scope_rounds from scope_thresholds),
+      mr.points::double precision / mr.opportunities,
+      mr.positives::double precision / mr.opportunities,
+      mr.ballot_point_share, mr.expected_points, mr.relative_support
+    from mutual_comparisons mr
     join competitors left_player on left_player.id = mr.left_id
     join competitors right_player on right_player.id = mr.right_id
-    where mr.opportunities > 0
-      and mb.eligible_ballot_points > 0
   `);
 }
 

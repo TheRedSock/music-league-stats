@@ -58,6 +58,7 @@ export function RelationshipForceGraph({
   links,
   nodes,
   pointTotals,
+  weightMultiplier = directed ? 1 : 100,
   weightLabel = directed ? "Points / opportunity" : "Similarity / 100",
 }: {
   directed?: boolean;
@@ -66,6 +67,7 @@ export function RelationshipForceGraph({
   links: ForceLink[];
   nodes: ForceNode[];
   weightLabel?: string;
+  weightMultiplier?: number;
   pointTotals?: Record<string, { incoming: number; outgoing: number }>;
 }) {
   const {
@@ -315,7 +317,7 @@ export function RelationshipForceGraph({
       />
       )}
     </div>
-    <ConnectionTable unit={weightLabel} rows={links.filter(link => !selected || link.source === selected.id || link.target === selected.id).map(link => ({id:`${link.source}:${link.target}`,left:nodes.find(node=>node.id===link.source)?.name ?? link.source,right:nodes.find(node=>node.id===link.target)?.name ?? link.target,value:directed ? link.weight : link.weight*100,context:link.fallback ? "Below cutoff" : directed ? "Giver → receiver" : link.weight < 0 ? "Opposing preferences" : ""}))} />
+    <ConnectionTable unit={weightLabel} rows={links.filter(link => !selected || link.source === selected.id || link.target === selected.id).map(link => ({id:`${link.source}:${link.target}`,left:nodes.find(node=>node.id===link.source)?.name ?? link.source,right:nodes.find(node=>node.id===link.target)?.name ?? link.target,value:link.weight * weightMultiplier,context:link.fallback ? "Below cutoff" : directed ? "Giver → receiver" : link.weight < 0 ? "Opposing preferences" : ""}))} />
     </>
   );
 }

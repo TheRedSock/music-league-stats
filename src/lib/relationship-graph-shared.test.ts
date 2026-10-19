@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeightScale, buildDensityWeightScale, bubbleWeightScale, directedWeightScale, filterUndirectedEdges, undirectedWeightScale, normalizedToRaw, type DirectedRelationshipEdge, type UndirectedRelationshipEdge } from "./relationship-graph-shared";
+import { edgeWeight, formatWeightValue, undirectedMetricFormat, undirectedDisplayValue, buildWeightScale, buildDensityWeightScale, bubbleWeightScale, directedWeightScale, filterUndirectedEdges, undirectedWeightScale, normalizedToRaw, type DirectedRelationshipEdge, type UndirectedRelationshipEdge } from "./relationship-graph-shared";
 
 function visible(weights: number[], position: number) {
   const scale = buildWeightScale(weights);
@@ -8,7 +8,7 @@ function visible(weights: number[], position: number) {
 
 describe("graph filtering", () => {
   it("retains signed alignment for Matrix/Ego but budgets only positive bubble links", () => {
-    const edges = [-0.8, 0, 0.4].map((alignment, i) => ({ source: "a", target: `${i}`, sourceName: "a", targetName: `${i}`, alignment, mutualShare: null, sharedRounds: 4, comparableFeatures: 20, mutualPoints: null }));
+    const edges = [-0.8, 0, 0.4].map((alignment, i) => ({ source: "a", target: `${i}`, sourceName: "a", targetName: `${i}`, alignment, mutualShare: null, relativeMutualSupport: null, sharedRounds: 4, comparableFeatures: 20, mutualPoints: null }));
     const scale = undirectedWeightScale(edges, "alignment");
     expect(scale.sorted).toEqual([-0.8, 0, 0.4]);
     expect(filterUndirectedEdges(edges, "alignment", normalizedToRaw(0, scale))).toEqual(edges);
@@ -54,7 +54,7 @@ describe("graph filtering", () => {
       const directed: DirectedRelationshipEdge[] = [];
       for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
         const weight = pairs.length + 1;
-        pairs.push({ source: `${i}`, target: `${j}`, sourceName: `${i}`, targetName: `${j}`, alignment: weight, mutualShare: weight, sharedRounds: 4, comparableFeatures: 20, mutualPoints: 10 });
+        pairs.push({ source: `${i}`, target: `${j}`, sourceName: `${i}`, targetName: `${j}`, alignment: weight, mutualShare: weight, relativeMutualSupport: weight, sharedRounds: 4, comparableFeatures: 20, mutualPoints: 10 });
         directed.push({ source: `${i}`, target: `${j}`, sourceName: `${i}`, targetName: `${j}`, pointsPerOpportunity: weight, points: 10, opportunities: 4, positiveRate: 1, sharedRounds: 4 });
       }
       const bubbleScale = bubbleWeightScale(pairs);
@@ -100,4 +100,14 @@ describe("graph filtering", () => {
     }
     expect(buildDensityWeightScale([NaN, Infinity], 5, 1.5).sampleSize).toBe(0);
   });
+});
+
+it("keeps relative support in multiples and raw ballot share opt-in",()=>{
+  const edge:UndirectedRelationshipEdge={source:"a",target:"b",sourceName:"A",targetName:"B",alignment:0.4,mutualShare:0.1,relativeMutualSupport:2.5,sharedRounds:8,comparableFeatures:30,mutualPoints:50};
+  expect(edgeWeight(edge,"mutual")).toBe(2.5);
+  expect(bubbleWeightScale([edge],"mutual").sorted).toEqual([2.5]);
+  expect(edgeWeight(edge,"mutual-share")).toBe(0.1);
+  expect(undirectedDisplayValue(2.5,"mutual")).toBe(2.5);
+  expect(formatWeightValue(2.5,undirectedMetricFormat("mutual"))).toBe("2.50×");
+  expect(undirectedDisplayValue(0.4,"alignment")).toBe(40);
 });

@@ -1,12 +1,10 @@
 import { GraphViewSelect } from "./graph-view-select";
 import type { ReactNode } from "react";
 
-import Link from "next/link";
 
 import { AnalyticsFilterBar } from "@/components/analytics/analytics-filter-bar";
 import { AnalyticsUnavailable } from "@/components/analytics/analytics-state";
 import { Container } from "@/components/layout/container";
-import { buttonStyles } from "@/components/ui/button";
 import {
   buildAnalyticsHref,
   loadAnalytics,
@@ -24,7 +22,6 @@ import {
   getRelationshipGraphData,
   relationshipGraphCacheKeys,
 } from "@/lib/relationship-graph";
-import { cn } from "@/lib/utils";
 
 export const GRAPH_VIEWS = [
   {
@@ -34,9 +31,9 @@ export const GRAPH_VIEWS = [
   },
   {
     id: "bubbles",
-    label: "Voting similarity",
+    label: "Player groups",
     description:
-      "Who votes alike. Colors group similar voting patterns.",
+      "Groups based on shared preferences or mutual support.",
   },
   {
     id: "flow",
@@ -167,29 +164,7 @@ export function GraphsShell({
       </div>
 
       <GraphViewSelect value={activeView} views={GRAPH_VIEWS.map(view=>({...view,href:buildAnalyticsHref("/relationships/graphs",scopeQueryParams(filter),{view:view.id})}))} />
-      <nav
-        aria-label="Graph views"
-        className="mt-5 hidden flex-wrap gap-2 md:flex"
-      >
-        {GRAPH_VIEWS.map((view) => (
-          <Link
-            key={view.id}
-            className={cn(
-              buttonStyles({ size: "sm", variant: "ghost" }),
-              activeView === view.id
-                ? "border border-lime-300/30 bg-lime-300/10 text-lime-100"
-                : "border border-white/10 text-zinc-400",
-            )}
-            href={buildAnalyticsHref(
-              "/relationships/graphs",
-              scopeQueryParams(filter),
-              { view: view.id, round: filter.roundIds },
-            )}
-          >
-            {view.label}
-          </Link>
-        ))}
-      </nav>
+
 
       {activeView !== "progression" ? <p className="mt-4 text-sm text-zinc-400">{active.description}</p> : null}
 

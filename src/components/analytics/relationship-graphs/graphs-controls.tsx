@@ -44,7 +44,7 @@ export function LabsControls({
 }) {
   return <div className="flex min-w-0 flex-wrap items-start gap-4 rounded-lg border border-white/10 p-4">
     {showMetric && metric && onMetricChange ? <label className="text-xs text-zinc-400"><span className="mb-2 block">Measure</span>
-      <select className="h-9 max-w-full rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100" value={metric} onChange={event => onMetricChange(event.target.value as UndirectedMetric)}><option value="alignment">Voting similarity</option><option value="mutual">Mutual ballot share</option></select>
+      <select className="h-9 max-w-full rounded-md border border-white/10 bg-zinc-950 px-3 text-sm text-zinc-100" value={metric} onChange={event => onMetricChange(event.target.value as UndirectedMetric)}><option value="alignment">Voting similarity</option><option value="mutual">Relative mutual support</option><option value="mutual-share">Ballot share (raw)</option></select>
     </label> : null}
     <div className="min-w-0 flex-1 basis-64">
       <label className="block text-xs text-zinc-400"><span className="mb-2 block">Connections</span>

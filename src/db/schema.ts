@@ -141,6 +141,8 @@ export const rounds = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     playlistUrl: text("playlist_url"),
+    votingOpensAt: timestamp("voting_opens_at", { withTimezone: true }),
+    votingClosesAt: timestamp("voting_closes_at", { withTimezone: true }),
     sourceCreatedAt: timestamp("source_created_at", {
       withTimezone: true,
     }).notNull(),
@@ -158,6 +160,7 @@ export const rounds = pgTable(
     unique("rounds_id_league_unique").on(table.id, table.leagueId),
     index("rounds_league_idx").on(table.leagueId),
     check("rounds_ordinal_positive", sql`${table.ordinal} > 0`),
+    check("rounds_voting_window_valid", sql`(${table.votingOpensAt} is null and ${table.votingClosesAt} is null) or (${table.votingOpensAt} is not null and ${table.votingClosesAt} is not null and ${table.votingClosesAt} > ${table.votingOpensAt})`),
   ],
 );
 
@@ -650,6 +653,8 @@ export const analyticsRelationshipMutual = pgTable(
     pointsPerOpportunity: doublePrecision("points_per_opportunity").notNull(),
     positiveRate: doublePrecision("positive_rate").notNull(),
     ballotPointShare: doublePrecision("ballot_point_share").notNull(),
+    expectedPoints: doublePrecision("expected_points"),
+    relativeSupport: doublePrecision("relative_support"),
     ...timestamps,
   },
   (table) => [
@@ -717,6 +722,10 @@ export const analyticsPlayerTiming = pgTable(
     ordinal: integer("ordinal").notNull(),
     castAt: timestamp("cast_at", { withTimezone: true }),
     relativeOrder: doublePrecision("relative_order"),
+    windowPosition: doublePrecision("window_position"),
+    windowOpensAt: timestamp("window_opens_at", { withTimezone: true }),
+    windowClosesAt: timestamp("window_closes_at", { withTimezone: true }),
+    windowSource: text("window_source").notNull().default("unavailable"),
     ballotRank: integer("ballot_rank"),
     tieCount: integer("tie_count"),
     observedVoters: integer("observed_voters").notNull(),

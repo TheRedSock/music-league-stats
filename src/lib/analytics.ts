@@ -1,3 +1,5 @@
+import { timingRoundCtes } from "@/lib/voting-timing-sql";
+import { mutualSupportCtes } from "@/lib/mutual-support-sql";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { cacheLife, cacheTag, revalidateTag } from "next/cache";
 import { cache } from "react";
@@ -229,6 +231,8 @@ export type MutualRelationship = {
   pointsPerOpportunity: number;
   positiveRate: number;
   ballotPointShare: number;
+  relativeSupport: number | null;
+  expectedPoints: number | null;
 };
 
 export type TimingRow = {
@@ -241,6 +245,10 @@ export type TimingRow = {
   ordinal: number;
   castAt: string | null;
   relativeOrder: number | null;
+  windowPosition: number | null;
+  windowOpensAt: string | null;
+  windowClosesAt: string | null;
+  windowSource: "set" | "estimated" | "unavailable";
   ballotRank: number | null;
   tieCount: number | null;
   observedVoters: number;
@@ -285,10 +293,14 @@ export const relationshipSorts = [
   "positive",
   "rounds",
   "share",
+  "mutual-support",
   "alignment",
   "features",
   "timing",
   "missed",
+  "missed-rate",
+  "window-timing",
+  "combined-timing",
 ] as const;
 export type RelationshipSort = (typeof relationshipSorts)[number];
 
@@ -304,9 +316,16 @@ export type RelationshipTableRow = {
   pointsPerOpportunity: number | null;
   positiveRate: number | null;
   ballotPointShare: number | null;
+  relativeSupport: number | null;
+  expectedPoints: number | null;
   alignment: number | null;
   comparableFeatures: number | null;
   averageTiming: number | null;
+  averageWindowTiming: number | null;
+  averageCombinedTiming: number | null;
+  windowTimedRounds: number | null;
+  estimatedWindowRounds: number | null;
+  missedRate: number | null;
   votedRounds: number | null;
   missedBallots: number | null;
 };
@@ -609,14 +628,14 @@ export function parseRelationshipSort(
   }
   if (tab === "alignment") return "alignment";
   if (tab === "timing") return "timing";
-  if (tab === "mutual") return "share";
+  if (tab === "mutual") return "mutual-support";
   return "rate";
 }
 
 export function defaultRelationshipSortDirection(
   sort: RelationshipSort,
 ): SortDirection {
-  return sort === "player" || sort === "missed" ? "asc" : "desc";
+  return ["player", "missed", "missed-rate", "timing", "window-timing", "combined-timing"].includes(sort) ? "asc" : "desc";
 }
 
 export function parseSongSortDirection(
@@ -2315,7 +2334,8 @@ async function getMaterializedPlayerProfileData(
         arm.scope_rounds as "scopeRounds",
         arm.points_per_opportunity as "pointsPerOpportunity",
         arm.positive_rate as "positiveRate",
-        arm.ballot_point_share as "ballotPointShare"
+        arm.ballot_point_share as "ballotPointShare",
+        arm.relative_support as "relativeSupport", arm.expected_points as "expectedPoints"
       from analytics_relationship_mutual arm
       join competitors c
         on c.id = case
@@ -2354,6 +2374,8 @@ async function getMaterializedPlayerProfileData(
         t.ordinal,
         t.cast_at as "castAt",
         t.relative_order as "relativeOrder",
+        t.window_position as "windowPosition", t.window_opens_at as "windowOpensAt",
+        t.window_closes_at as "windowClosesAt", t.window_source as "windowSource",
         t.ballot_rank as "ballotRank",
         t.tie_count as "tieCount",
         t.observed_voters as "observedVoters",
@@ -2924,61 +2946,19 @@ export async function getPlayerProfileData(
       from relationship_rows rr
       join competitors c on c.id = rr.competitor_id
     ),
-    mutual_rows as (
-      select
-        case
-          when ev.voter_id = ${playerId} then ev.submitter_id
-          else ev.voter_id
-        end as competitor_id,
-        sum(ev.points)::int as points,
-        count(*)::int as opportunities,
-        count(distinct ev.round_id)::int as shared_rounds,
-        count(*) filter (where ev.points > 0)::int as positives
-      from effective_votes ev
-      where ev.voter_id = ${playerId}
-         or ev.submitter_id = ${playerId}
-      group by competitor_id
-    ),
-    mutual_budget_rounds as (
-      select distinct
-        case
-          when ev.voter_id = ${playerId} then ev.submitter_id
-          else ev.voter_id
-        end as competitor_id,
-        ev.round_id,
-        ev.voter_id,
-        bt.ballot_points
-      from effective_votes ev
-      join ballot_totals bt
-        on bt.round_id = ev.round_id
-       and bt.voter_id = ev.voter_id
-      where ev.voter_id = ${playerId}
-         or ev.submitter_id = ${playerId}
-    ),
-    mutual_budgets as (
-      select
-        competitor_id,
-        sum(ballot_points)::double precision as eligible_ballot_points
-      from mutual_budget_rounds
-      group by competitor_id
-    ),
+    ${mutualSupportCtes()},
     mutual_relationships as (
-      select
-        mr.competitor_id as "competitorId",
-        c.slug as "competitorSlug",
-        ${competitorDisplayName("c")} as "competitorName",
-        mr.points,
-        mr.opportunities,
-        mr.shared_rounds as "sharedRounds",
+      select case when mr.left_id = ${playerId} then mr.right_id else mr.left_id end as "competitorId",
+        c.slug as "competitorSlug", ${competitorDisplayName("c")} as "competitorName",
+        mr.points, mr.opportunities, mr.shared_rounds as "sharedRounds",
         (select scope_rounds from scope_thresholds) as "scopeRounds",
         mr.points::double precision / mr.opportunities as "pointsPerOpportunity",
         mr.positives::double precision / mr.opportunities as "positiveRate",
-        mr.points::double precision / nullif(mb.eligible_ballot_points, 0) as "ballotPointShare"
-      from mutual_rows mr
-      join mutual_budgets mb on mb.competitor_id = mr.competitor_id
-      join competitors c on c.id = mr.competitor_id
-      where mr.opportunities > 0
-        and mb.eligible_ballot_points > 0
+        mr.ballot_point_share as "ballotPointShare", mr.relative_support as "relativeSupport",
+        mr.expected_points as "expectedPoints"
+      from mutual_comparisons mr
+      join competitors c on c.id = case when mr.left_id = ${playerId} then mr.right_id else mr.left_id end
+      where mr.left_id = ${playerId} or mr.right_id = ${playerId}
     ),
     alignment_rows as (
       select
@@ -3001,36 +2981,7 @@ export async function getPlayerProfileData(
       where (pc.left_id = ${playerId} or pc.right_id = ${playerId})
         and pc.magnitude > 0
     ),
-    round_ballot_counts as (
-      select round_id, count(*)::int as observed_voters
-      from active_ballots
-      group by round_id
-    ),
-    ballot_positions as (
-      select
-        active_ballots.*,
-        rbc.observed_voters,
-        rank() over (
-          partition by active_ballots.round_id
-          order by active_ballots.cast_at
-        )::int as ballot_rank,
-        count(*) over (
-          partition by active_ballots.round_id, active_ballots.cast_at
-        )::int as tie_count
-      from active_ballots
-      join round_ballot_counts rbc on rbc.round_id = active_ballots.round_id
-    ),
-    ranked_ballots as (
-      select
-        ballot_positions.*,
-        case
-          when observed_voters = 1 then 0.5::double precision
-          else (
-            ballot_rank::double precision - 1 + tie_count::double precision / 2
-          ) / observed_voters
-        end as relative_order
-      from ballot_positions
-    ),
+    ${timingRoundCtes()},
     player_submission_rounds as (
       select distinct s.round_id
       from submissions s
@@ -3042,6 +2993,7 @@ export async function getPlayerProfileData(
         sr.id as round_id,
         rb.cast_at,
         rb.relative_order,
+        rb.window_position,
         rb.ballot_rank,
         rb.tie_count,
         coalesce(rb.observed_voters, rbc.observed_voters, 0)::int as observed_voters,
@@ -3070,11 +3022,14 @@ export async function getPlayerProfileData(
         sr.source_created_at as "sourceCreatedAt",
         pp.cast_at as "castAt",
         pp.relative_order as "relativeOrder",
+        pp.window_position as "windowPosition", rw.opens_at as "windowOpensAt",
+        rw.closes_at as "windowClosesAt", rw.source as "windowSource",
         pp.ballot_rank as "ballotRank",
         pp.tie_count as "tieCount",
         pp.observed_voters as "observedVoters",
         pp.participation as "participation"
       from player_participation pp
+      join round_windows rw on rw.id = pp.round_id
       join selected_rounds sr on sr.id = pp.round_id
       join leagues l on l.id = sr.league_id
     ),
@@ -3214,9 +3169,13 @@ function sortRelationshipRows(
     if (sort === "positive") return row.positiveRate;
     if (sort === "rounds") return row.sharedRounds ?? row.votedRounds;
     if (sort === "share") return row.ballotPointShare;
+    if (sort === "mutual-support") return row.relativeSupport;
     if (sort === "alignment") return row.alignment;
     if (sort === "features") return row.comparableFeatures;
     if (sort === "timing") return row.averageTiming;
+    if (sort === "window-timing") return row.averageWindowTiming;
+    if (sort === "combined-timing") return row.averageCombinedTiming;
+    if (sort === "missed-rate") return row.missedRate;
     if (sort === "missed") return row.missedBallots;
     return null;
   }
@@ -3276,9 +3235,12 @@ async function getMaterializedRelationshipRows(
         null::double precision as "pointsPerOpportunity",
         null::double precision as "positiveRate",
         null::double precision as "ballotPointShare",
+        null::double precision as "relativeSupport", null::double precision as "expectedPoints",
         alignment,
         comparable_features as "comparableFeatures",
         null::double precision as "averageTiming",
+        null::double precision as "averageWindowTiming", null::double precision as "averageCombinedTiming",
+        null::int as "windowTimedRounds", null::int as "estimatedWindowRounds", null::double precision as "missedRate",
         null::int as "votedRounds",
         null::int as "missedBallots"
       from analytics_relationship_alignment
@@ -3301,9 +3263,12 @@ async function getMaterializedRelationshipRows(
         points_per_opportunity as "pointsPerOpportunity",
         positive_rate as "positiveRate",
         ballot_point_share as "ballotPointShare",
+        relative_support as "relativeSupport", expected_points as "expectedPoints",
         null::double precision as alignment,
         null::int as "comparableFeatures",
         null::double precision as "averageTiming",
+        null::double precision as "averageWindowTiming", null::double precision as "averageCombinedTiming",
+        null::int as "windowTimedRounds", null::int as "estimatedWindowRounds", null::double precision as "missedRate",
         null::int as "votedRounds",
         null::int as "missedBallots"
       from analytics_relationship_mutual
@@ -3333,9 +3298,15 @@ async function getMaterializedRelationshipRows(
         null::double precision as "pointsPerOpportunity",
         null::double precision as "positiveRate",
         null::double precision as "ballotPointShare",
+        null::double precision as "relativeSupport", null::double precision as "expectedPoints",
         null::double precision as alignment,
         null::int as "comparableFeatures",
         avg(relative_order) as "averageTiming",
+        avg(window_position) as "averageWindowTiming",
+        avg((relative_order + window_position) / 2) as "averageCombinedTiming",
+        count(window_position)::int as "windowTimedRounds",
+        count(window_position) filter (where window_source = 'estimated')::int as "estimatedWindowRounds",
+        count(*) filter (where participation = 'did_not_vote')::double precision / nullif(count(*),0) as "missedRate",
         count(*) filter (where participation = 'voted')::int as "votedRounds",
         count(*) filter (where participation = 'did_not_vote')::int as "missedBallots"
       from analytics_player_timing
@@ -3365,9 +3336,12 @@ async function getMaterializedRelationshipRows(
       points_per_opportunity as "pointsPerOpportunity",
       positive_rate as "positiveRate",
       null::double precision as "ballotPointShare",
+        null::double precision as "relativeSupport", null::double precision as "expectedPoints",
       null::double precision as alignment,
       null::int as "comparableFeatures",
       null::double precision as "averageTiming",
+        null::double precision as "averageWindowTiming", null::double precision as "averageCombinedTiming",
+        null::int as "windowTimedRounds", null::int as "estimatedWindowRounds", null::double precision as "missedRate",
       null::int as "votedRounds",
       null::int as "missedBallots"
     from analytics_relationship_pairs
@@ -3444,9 +3418,12 @@ export async function getRelationshipsTableData(
             null::double precision as "pointsPerOpportunity",
             null::double precision as "positiveRate",
             null::double precision as "ballotPointShare",
+        null::double precision as "relativeSupport", null::double precision as "expectedPoints",
             pc.alignment,
             pc.comparable_features as "comparableFeatures",
             null::double precision as "averageTiming",
+        null::double precision as "averageWindowTiming", null::double precision as "averageCombinedTiming",
+        null::int as "windowTimedRounds", null::int as "estimatedWindowRounds", null::double precision as "missedRate",
             null::int as "votedRounds",
             null::int as "missedBallots"
           from pair_comparisons pc
@@ -3457,37 +3434,7 @@ export async function getRelationshipsTableData(
       : tab === "mutual"
         ? db.execute<RelationshipTableRow>(sql`
             with ${voteOpportunityCtes(filter)},
-            mutual_rows as (
-              select
-                case when ev.voter_id < ev.submitter_id then ev.voter_id else ev.submitter_id end as left_id,
-                case when ev.voter_id < ev.submitter_id then ev.submitter_id else ev.voter_id end as right_id,
-                sum(ev.points)::int as points,
-                count(*)::int as opportunities,
-                count(distinct ev.round_id)::int as shared_rounds,
-                count(*) filter (where ev.points > 0)::int as positives
-              from effective_votes ev
-              group by left_id, right_id
-            ),
-            mutual_budget_rows as (
-              select distinct
-                case when ev.voter_id < ev.submitter_id then ev.voter_id else ev.submitter_id end as left_id,
-                case when ev.voter_id < ev.submitter_id then ev.submitter_id else ev.voter_id end as right_id,
-                ev.round_id,
-                ev.voter_id,
-                bt.ballot_points
-              from effective_votes ev
-              join ballot_totals bt
-                on bt.round_id = ev.round_id
-               and bt.voter_id = ev.voter_id
-            ),
-            mutual_budgets as (
-              select
-                left_id,
-                right_id,
-                sum(ballot_points)::double precision as eligible_ballot_points
-              from mutual_budget_rows
-              group by left_id, right_id
-            )
+            ${mutualSupportCtes()}
             select
               mr.left_id as "leftId",
               ${competitorDisplayName("left_player")} as "leftName",
@@ -3499,55 +3446,25 @@ export async function getRelationshipsTableData(
               (select scope_rounds from scope_thresholds) as "scopeRounds",
               mr.points::double precision / nullif(mr.opportunities, 0) as "pointsPerOpportunity",
               mr.positives::double precision / nullif(mr.opportunities, 0) as "positiveRate",
-              mr.points::double precision / nullif(mb.eligible_ballot_points, 0) as "ballotPointShare",
+              mr.ballot_point_share as "ballotPointShare",
+              mr.relative_support as "relativeSupport", mr.expected_points as "expectedPoints",
               null::double precision as alignment,
               null::int as "comparableFeatures",
               null::double precision as "averageTiming",
+        null::double precision as "averageWindowTiming", null::double precision as "averageCombinedTiming",
+        null::int as "windowTimedRounds", null::int as "estimatedWindowRounds", null::double precision as "missedRate",
               null::int as "votedRounds",
               null::int as "missedBallots"
-            from mutual_rows mr
-            join mutual_budgets mb
-              on mb.left_id = mr.left_id
-             and mb.right_id = mr.right_id
+            from mutual_comparisons mr
             join competitors left_player on left_player.id = mr.left_id
             join competitors right_player on right_player.id = mr.right_id
             where mr.opportunities > 0
-              and mb.eligible_ballot_points > 0
               and (${focus}::uuid is null or mr.left_id = ${focus} or mr.right_id = ${focus})
           `)
         : tab === "timing"
           ? db.execute<RelationshipTableRow>(sql`
               with ${voteOpportunityCtes(filter)},
-              round_ballot_counts as (
-                select round_id, count(*)::int as observed_voters
-                from active_ballots
-                group by round_id
-              ),
-              ballot_positions as (
-                select
-                  active_ballots.*,
-                  rbc.observed_voters,
-                  rank() over (
-                    partition by active_ballots.round_id
-                    order by active_ballots.cast_at
-                  )::int as ballot_rank,
-                  count(*) over (
-                    partition by active_ballots.round_id, active_ballots.cast_at
-                  )::int as tie_count
-                from active_ballots
-                join round_ballot_counts rbc on rbc.round_id = active_ballots.round_id
-              ),
-              ranked_ballots as (
-                select
-                  ballot_positions.*,
-                  case
-                    when observed_voters = 1 then 0.5::double precision
-                    else (
-                      ballot_rank::double precision - 1 + tie_count::double precision / 2
-                    ) / observed_voters
-                  end as relative_order
-                from ballot_positions
-              ),
+              ${timingRoundCtes()},
               player_scope_rounds as (
                 select distinct s.submitter_id as competitor_id, s.round_id
                 from submissions s
@@ -3560,6 +3477,10 @@ export async function getRelationshipsTableData(
                 select
                   psr.competitor_id,
                   avg(rb.relative_order) as average_timing,
+                  avg(rb.window_position) as window_timing,
+                  avg((rb.relative_order + rb.window_position) / 2) as combined_timing,
+                  count(rb.window_position)::int as window_rounds,
+                  count(rb.window_position) filter (where rb.window_source = 'estimated')::int as estimated_rounds,
                   count(rb.round_id)::int as voted_rounds,
                   count(*) filter (where rb.round_id is null)::int as missed_ballots,
                   count(distinct psr.round_id)::int as scope_rounds
@@ -3582,9 +3503,13 @@ export async function getRelationshipsTableData(
                 null::double precision as "pointsPerOpportunity",
                 null::double precision as "positiveRate",
                 null::double precision as "ballotPointShare",
+        null::double precision as "relativeSupport", null::double precision as "expectedPoints",
                 null::double precision as alignment,
                 null::int as "comparableFeatures",
                 tr.average_timing as "averageTiming",
+                tr.window_timing as "averageWindowTiming", tr.combined_timing as "averageCombinedTiming",
+                tr.window_rounds as "windowTimedRounds", tr.estimated_rounds as "estimatedWindowRounds",
+                tr.missed_ballots::double precision / nullif(tr.scope_rounds,0) as "missedRate",
                 tr.voted_rounds as "votedRounds",
                 tr.missed_ballots as "missedBallots"
               from timing_rows tr
@@ -3617,9 +3542,12 @@ export async function getRelationshipsTableData(
                 rr.points::double precision / nullif(rr.opportunities, 0) as "pointsPerOpportunity",
                 rr.positives::double precision / nullif(rr.opportunities, 0) as "positiveRate",
                 null::double precision as "ballotPointShare",
+        null::double precision as "relativeSupport", null::double precision as "expectedPoints",
                 null::double precision as alignment,
                 null::int as "comparableFeatures",
                 null::double precision as "averageTiming",
+        null::double precision as "averageWindowTiming", null::double precision as "averageCombinedTiming",
+        null::int as "windowTimedRounds", null::int as "estimatedWindowRounds", null::double precision as "missedRate",
                 null::int as "votedRounds",
                 null::int as "missedBallots"
               from relationship_rows rr

@@ -3,7 +3,7 @@ import { bubbleFallbacks } from "./bubble-fallbacks";
 import type { UndirectedRelationshipEdge } from "./relationship-graph-shared";
 
 function edge(source: string, target: string, alignment: number | null): UndirectedRelationshipEdge {
-  return { source, target, sourceName: source, targetName: target, alignment, mutualShare: null, mutualPoints: null, sharedRounds: 4, comparableFeatures: 20 };
+  return { source, target, sourceName: source, targetName: target, alignment, mutualShare: null, relativeMutualSupport: null, mutualPoints: null, sharedRounds: 4, comparableFeatures: 20 };
 }
 
 describe("bubble fallback attachments", () => {
@@ -40,4 +40,10 @@ describe("bubble fallback attachments", () => {
     expect(result.assignment).toEqual({ a: 0, z: 0 });
     expect(result.links).toEqual([edge("a", "z", 0.1)]);
   });
+});
+
+it("uses relative mutual weights for support fallback links",()=>{
+  const edges=[{...edge("a","x",null),relativeMutualSupport:2}];
+  expect(bubbleFallbacks(edges,3,{a:0},"mutual").assignment).toEqual({a:0,x:0});
+  expect(bubbleFallbacks(edges,3,{a:0},"mutual-share").links).toEqual([]);
 });

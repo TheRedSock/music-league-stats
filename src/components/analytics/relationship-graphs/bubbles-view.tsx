@@ -4,7 +4,7 @@ import Graph from "graphology";
 import louvain from "graphology-communities-louvain";
 import { connectedComponents } from "graphology-components";
 import { useMemo } from "react";
-import { useGraphSetting, graphBoolean } from "./use-graph-setting";
+import { useGraphSetting, graphBoolean, graphMetric } from "./use-graph-setting";
 
 import {
   GraphEmptyState,
@@ -26,6 +26,7 @@ import {
 import {
   bubbleWeightScale,
   edgeWeight,
+  formatWeightValue, undirectedMetricFormat, undirectedMetricLabel, type UndirectedMetric,
   filterUndirectedEdges,
   formatScaleCaption,
   type RelationshipGraphData,
@@ -44,13 +45,14 @@ const PALETTE = [
 ];
 
 export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
+  const [metric,setMetric]=useGraphSetting<UndirectedMetric>("metric","alignment",graphMetric);
   const [mode, setMode] = useGraphSetting<"louvain" | "components">("algorithm", "louvain", raw => raw === "louvain" || raw === "components" ? raw : undefined);
   const [keepEveryone, setKeepEveryone] = useGraphSetting("fallback", true, graphBoolean);
   const scale = useMemo(
-    () => bubbleWeightScale(graph.undirectedEdges),
-    [graph.undirectedEdges],
+    () => bubbleWeightScale(graph.undirectedEdges,metric),
+    [graph.undirectedEdges,metric],
   );
-  const scaleKey = `bubbles:${graph.scopeKey}:${scale.sorted.join(",")}`;
+  const scaleKey = `bubbles:${graph.scopeKey}:${metric}:${scale.sorted.join(",")}`;
   const { normalized, rawThreshold, setNormalized, unfiltered, setUnfiltered } = useNormalizedThreshold(
     scale,
     scaleKey,
@@ -58,8 +60,8 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
 
   const { links, nodes, summary, primaryCount, fallbackCount, ungroupedCount } = useMemo(() => {
     const filtered = filterUndirectedEdges(
-      graph.undirectedEdges.filter(edge => (edge.alignment ?? 0) > 0),
-      "alignment",
+      graph.undirectedEdges.filter(edge => (edgeWeight(edge,metric) ?? 0) > 0),
+      metric,
       rawThreshold,
     );
     const coreIds = new Set<string>();
@@ -77,13 +79,13 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
     for (const edge of filtered) {
       if (!g.hasEdge(edge.source, edge.target)) {
         g.addEdge(edge.source, edge.target, {
-          weight: edge.alignment ?? 0,
+          weight: edgeWeight(edge,metric) ?? 0,
         });
       }
     }
 
     let assignment: Record<string, number> = {};
-    if (mode === "louvain" && filtered.some(edge => (edge.alignment ?? 0) > 0)) {
+    if (mode === "louvain" && filtered.some(edge => (edgeWeight(edge,metric) ?? 0) > 0)) {
       assignment = louvain(g, { getEdgeWeight: "weight", randomWalk: false }) as Record<
         string,
         number
@@ -118,7 +120,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
               ? edge.source
               : null;
         if (other == null || !mates.includes(other)) continue;
-        maxWithin = Math.max(maxWithin, edge.alignment ?? 0);
+        maxWithin = Math.max(maxWithin, edgeWeight(edge,metric) ?? 0);
       }
       strengthById.set(nodeId, maxWithin);
     }
@@ -126,7 +128,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
     const maxStrength = Math.max(...allStrengths, 0.0001);
 
     const fallback = keepEveryone
-      ? bubbleFallbacks(graph.undirectedEdges, rawThreshold, assignment)
+      ? bubbleFallbacks(graph.undirectedEdges, rawThreshold, assignment,metric)
       : { assignment, links: [] };
     const displayAssignment = fallback.assignment;
     const visibleIds = new Set(keepEveryone ? graph.nodes.map(node => node.id) : coreIds);
@@ -164,16 +166,16 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
                 (item.source === coreOnly[j].id &&
                   item.target === coreOnly[i].id),
             );
-            if (edge?.alignment != null) pairWeights.push(edge.alignment);
+            if (edge) {const weight=edgeWeight(edge,metric);if(weight!=null)pairWeights.push(weight);}
           }
         }
-        const avgAlignment =
+        const avgWeight =
           pairWeights.length > 0
             ? pairWeights.reduce((sum, value) => sum + value, 0) /
               pairWeights.length
             : null;
         return {
-          avgAlignment,
+          avgWeight,
           color: PALETTE[id % PALETTE.length],
           core: coreOnly.length,
           id,
@@ -202,16 +204,16 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       ...filtered.map((edge) => ({
         source: edge.source,
         target: edge.target,
-        weight: edgeWeight(edge, "alignment") ?? 0,
-        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)} / 100 similarity`,
+        weight: edgeWeight(edge, metric) ?? 0,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${formatWeightValue(edgeWeight(edge,metric) ?? 0,undirectedMetricFormat(metric))}`,
       })),
       ...fallback.links.map(edge => ({
         source: edge.source,
         target: edge.target,
-        weight: edge.alignment ?? 0,
+        weight: edgeWeight(edge,metric) ?? 0,
         fallback: true,
         color: "rgba(161, 161, 170, 0.55)",
-        label: `${edge.sourceName} ↔ ${edge.targetName}: ${((edge.alignment ?? 0) * 100).toFixed(1)} / 100 similarity (below cutoff)`,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${formatWeightValue(edgeWeight(edge,metric) ?? 0,undirectedMetricFormat(metric))} (below cutoff)`,
       })),
     ];
 
@@ -223,7 +225,7 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       nodes: forceNodes,
       summary: summaryRows,
     };
-  }, [graph.nodes, graph.undirectedEdges, keepEveryone, mode, rawThreshold]);
+  }, [graph.nodes, graph.undirectedEdges, keepEveryone, mode, rawThreshold,metric]);
 
   return (
     <div className="space-y-4">
@@ -239,8 +241,8 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
         }
         onThresholdChange={setNormalized}
         rawThreshold={rawThreshold}
-        scaleCaption={formatScaleCaption(scale)}
-        showMetric={false}
+        scaleCaption={formatScaleCaption(scale,undirectedMetricFormat(metric))}
+        rawFormat={undirectedMetricFormat(metric)} metric={metric} onMetricChange={setMetric}
         threshold={normalized}
         thresholdLabel="Bubble sensitivity"
       >
@@ -260,9 +262,10 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
       </LabsControls>
       <p className="text-xs text-zinc-400">{summary.length} groups · {nodes.length} players · {primaryCount} connections. {fallbackCount ? `${fallbackCount} gray connections fall below the cutoff.` : ""} {ungroupedCount ? `${ungroupedCount} ungrouped players appear gray.` : ""}</p>
       {nodes.length === 0 ? (
-        <GraphEmptyState message="No alignment structure at this sensitivity." />
+        <GraphEmptyState message="No connections at this sensitivity." />
       ) : (
         <RelationshipForceGraph
+          weightLabel={undirectedMetricLabel(metric)} weightMultiplier={metric === "mutual" ? 1 : 100}
           layout={{
             chargeStrength: -150,
             collideRadius: 20,
@@ -290,8 +293,8 @@ export function BubblesView({ graph }: { graph: RelationshipGraphData }) {
               <CardDescription>
                 {group.core} core
                 {group.size > group.core ? ` · ${group.size - group.core} fallback` : ""}
-                {group.avgAlignment != null
-                  ? ` · core avg ${(group.avgAlignment * 100).toFixed(0)}%`
+                {group.avgWeight != null
+                  ? ` · core avg ${formatWeightValue(group.avgWeight,undirectedMetricFormat(metric))}`
                   : ""}
               </CardDescription>
             </CardHeader>

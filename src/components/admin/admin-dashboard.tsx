@@ -7,6 +7,7 @@ import { useState } from "react";
 import { MusicLeagueLink } from "@/components/analytics/music-league-link";
 import { AnalyticsRefreshPanel } from "@/components/admin/analytics-refresh-panel";
 import { ImportPanel } from "@/components/admin/import-panel";
+import { VotingWindowEditor } from "@/components/admin/voting-window-editor";
 import { LeagueForm } from "@/components/admin/league-form";
 import { PlayerNameEditor } from "@/components/admin/player-name-editor";
 import { SpotifyEnrichPanel } from "@/components/admin/spotify-enrich-panel";
@@ -170,6 +171,7 @@ export function AdminDashboard({
                     </CardHeader>
                     <CardContent>
                       <LeagueForm league={league} />
+                      <VotingWindowEditor leagueId={league.id} />
                     </CardContent>
                   </details>
                 ))}

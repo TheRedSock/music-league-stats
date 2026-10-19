@@ -1,0 +1,17 @@
+{
+  "migration": "0009_relative_mutual_voting_windows",
+  "source": "disposable local synthetic fixtures",
+  "roundsPreserved": 16,
+  "legacyMutual": {
+    "points": 12,
+    "ballot_point_share": 0.1,
+    "expected_points": null,
+    "relative_support": null
+  },
+  "legacyTiming": {
+    "relative_order": 0.5,
+    "window_position": null,
+    "window_source": "unavailable"
+  },
+  "passed": true
+}

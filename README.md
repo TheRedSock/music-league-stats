@@ -151,18 +151,32 @@ database cannot be queried. URL parameters keep analytics views shareable:
   The existing selected-scope sample and coverage thresholds still apply.
   Mutual support remains a separate metric. Refresh analytics after deploying
   this revision to rebuild cached scores.
-- Directional and mutual vote figures include points per eligible opportunity
-  and positive-opportunity rates. Mutual support also shows total points and the
-  share of eligible ballot points allocated to each other. Relative voting order
-  uses each voter's latest exported `castAt` in a round and displays a
-  tie-aware midpoint percentile among observed ballot timestamps. Submitted
-  rounds with no exported vote row are shown as did not vote.
+- Relative mutual support is points exchanged divided by expected points exchanged.
+  Expectations use each actual ballot budget and the recipient's eligible songs,
+  calculated per direction and round before summing. 1× is even-allocation support.
+  Ballot share remains opt-in in Compare, profiles and graphs. It describes raw
+  budget share and does not adjust for the number of available songs.
+- Voting order uses the latest exported ballot timestamp and a tie-aware midpoint
+  position among observed voters. Voting window measures elapsed time between
+  opening and closing. Combined averages both per ballot, using only complete
+  cases. Coverage and the number of estimated windows accompany these averages.
+  Missed-ballot percentage uses rounds entered by submitting or voting as its
+  denominator; missing ballots are excluded from timing averages.
+- Window estimates bracket opening between the last submission and first vote,
+  and closing between the last vote and the next round's first submission.
+  Midnight in Europe/Oslo is preferred, then three-/four-hour boundaries, then
+  other whole hours. Opening takes the earliest preferred candidate; closing
+  takes the latest. The final scheduled round (or last round of an ended league)
+  uses the end of the league's final calendar day; incomplete active leagues
+  do not use that cutoff. Missing/conflicting brackets or gaps above 31 days remain unavailable.
+  Optional exact windows in Admin override estimates and survive CSV imports.
+  UTC instants preserve actual elapsed time across daylight-saving changes.
 - Point-distribution charts show vote counts or vote shares with the same bar
   geometry. Shares use the votes in the displayed score range as their denominator.
   Total points are stated separately; extended mode includes zero and 5+ scores.
 - CSV exports do not include listening behavior or reliable deadline context.
-  The app therefore does not claim friendship, causality, or early/late
-  submission against a deadline.
+  Window estimates are labelled accordingly; they do not establish official
+  deadline compliance. The app does not claim friendship or causality.
 
 ## Commands
 
@@ -215,3 +229,13 @@ dialog, Tab/Shift+Tab, Escape and verify returned focus; search and paginate bot
 profile votes and Facts; use Matrix arrows and selection; reload the League race
 with an added player. Screenshots and the completed delivery log are in
 `docs/delivery-evidence` and `docs/DELIVERY.md`.
+
+### Relative support and voting-window release (2026-10-19)
+
+Apply migration `0009_relative_mutual_voting_windows` before deploying this version,
+then run a complete Admin analytics refresh. The revision changes to
+`2026-10-19-relative-mutual-support`; previous materializations will not be
+treated as current. The migration adds nullable mutual-support and voting-window
+fields and preserves existing data. Round windows are optional: estimates work
+without manual input. Saving or clearing an override invalidates analytics;
+refresh to publish the new timing results.

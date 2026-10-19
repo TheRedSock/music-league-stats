@@ -10,6 +10,7 @@ export type UndirectedRelationshipEdge = {
   targetName: string;
   alignment: number | null;
   mutualShare: number | null;
+  relativeMutualSupport: number | null;
   sharedRounds: number | null;
   comparableFeatures: number | null;
   mutualPoints: number | null;
@@ -35,7 +36,7 @@ export type RelationshipGraphData = {
   scopeKey?: string;
 };
 
-export type UndirectedMetric = "alignment" | "mutual";
+export type UndirectedMetric = "alignment" | "mutual" | "mutual-share";
 
 /** Matrix starts unfiltered; other views choose a density-based default. */
 export const LAB_DEFAULT_NORMALIZED = { matrix: 0 } as const;
@@ -55,7 +56,7 @@ export function edgeWeight(
   edge: UndirectedRelationshipEdge,
   metric: UndirectedMetric,
 ): number | null {
-  return metric === "alignment" ? edge.alignment : edge.mutualShare;
+  return metric === "alignment" ? edge.alignment : metric === "mutual" ? edge.relativeMutualSupport : edge.mutualShare;
 }
 
 export function percentile(sortedAscending: number[], p: number): number {
@@ -152,10 +153,10 @@ export function buildDensityWeightScale(
   };
 }
 
-export function bubbleWeightScale(edges: readonly UndirectedRelationshipEdge[]): WeightScale {
-  const eligible = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment) && edge.alignment > 0);
+export function bubbleWeightScale(edges: readonly UndirectedRelationshipEdge[], metric: UndirectedMetric = "alignment"): WeightScale {
+  const eligible = edges.filter(edge => {const weight=edgeWeight(edge,metric); return weight != null && Number.isFinite(weight) && weight > 0;});
   const nodes = new Set(eligible.flatMap(edge => [edge.source, edge.target]));
-  return buildDensityWeightScale(eligible.map(edge => edge.alignment!), nodes.size, 1.25);
+  return buildDensityWeightScale(eligible.map(edge => edgeWeight(edge,metric)!), nodes.size, 1.25);
 }
 
 export function normalizedToRaw(
@@ -176,13 +177,15 @@ export function normalizedToRaw(
   return percentile(scale.sorted, clamp01(normalized));
 }
 
-export type WeightFormat = "ratio" | "absolute";
+export type WeightFormat = "ratio" | "absolute" | "multiple" | "similarity";
 
 export function formatWeightValue(
   value: number,
   format: WeightFormat = "ratio",
   digits = 1,
 ): string {
+  if (format === "multiple") return `${value.toFixed(2)}×`;
+  if (format === "similarity") return `${(value * 100).toFixed(digits)} / 100`;
   if (format === "absolute") return value.toFixed(Math.max(digits, 2));
   return `${(value * 100).toFixed(digits)}%`;
 }
@@ -240,4 +243,14 @@ export function colorDomainFromVisibleWeights(
     sortedAll[sortedAll.length - 1] ?? cutoff,
   );
   return [cutoff, high];
+}
+
+export function undirectedMetricFormat(metric: UndirectedMetric): WeightFormat {
+  return metric === "mutual" ? "multiple" : metric === "alignment" ? "similarity" : "ratio";
+}
+export function undirectedMetricLabel(metric: UndirectedMetric): string {
+  return metric === "mutual" ? "Relative mutual support (×)" : metric === "alignment" ? "Similarity / 100" : "Mutual ballot share (%)";
+}
+export function undirectedDisplayValue(value: number, metric: UndirectedMetric): number {
+  return metric === "mutual" ? value : value * 100;
 }

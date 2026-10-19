@@ -1,0 +1,10 @@
+{
+  "date": "2026-10-19",
+  "source": "configured Neon database, read-only transaction, aggregate counts only",
+  "mode": "estimates without manual overrides; no source rows exported",
+  "rounds": 82,
+  "estimatedWindows": 79,
+  "unavailableWindows": 3,
+  "recordedBallots": 1550,
+  "ballotsWithWindow": 1496
+}

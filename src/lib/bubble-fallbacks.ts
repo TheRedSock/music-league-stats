@@ -1,4 +1,4 @@
-import type { UndirectedRelationshipEdge } from "./relationship-graph-shared";
+import { edgeWeight, type UndirectedMetric, type UndirectedRelationshipEdge } from "./relationship-graph-shared";
 
 /** Maximum-strength fallback forest, rooted in the already-detected bubbles.
  * A fallback can join a bubble via another fallback, but cannot merge bubbles
@@ -8,6 +8,7 @@ export function bubbleFallbacks(
   edges: readonly UndirectedRelationshipEdge[],
   cutoff: number,
   coreAssignment: Readonly<Record<string, number>>,
+  metric: UndirectedMetric = "alignment",
 ) {
   const parent = new Map<string, string>();
   const group = new Map<string, number>();
@@ -26,8 +27,8 @@ export function bubbleFallbacks(
     parent.set(id, seed);
     group.set(seed, community);
   }
-  const candidates = edges.filter(edge => edge.alignment != null && Number.isFinite(edge.alignment) && edge.alignment > 0 && edge.alignment < cutoff)
-    .sort((a, b) => b.alignment! - a.alignment! || a.source.localeCompare(b.source) || a.target.localeCompare(b.target));
+  const candidates = edges.filter(edge => {const weight=edgeWeight(edge,metric);return weight != null && Number.isFinite(weight) && weight > 0 && weight < cutoff;})
+    .sort((a, b) => edgeWeight(b,metric)! - edgeWeight(a,metric)! || a.source.localeCompare(b.source) || a.target.localeCompare(b.target));
   const links: UndirectedRelationshipEdge[] = [];
   for (const edge of candidates) {
     const a = root(edge.source);

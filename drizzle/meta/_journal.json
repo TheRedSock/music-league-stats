@@ -64,6 +64,13 @@
       "when": 1784850000000,
       "tag": "0008_competitor_slug",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792368000000,
+      "tag": "0009_relative_mutual_voting_windows",
+      "breakpoints": true
     }
   ]
 }

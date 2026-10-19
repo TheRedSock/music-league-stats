@@ -1,3 +1,4 @@
+import { MutualSupportPanel } from "@/components/analytics/mutual-support-panel";
 import { PlayerTimingPanel } from "@/components/analytics/player-timing-panel";
 import { Suspense } from "react";
 import { AnalyticsLoadingShell } from "@/components/analytics/analytics-loading-shell";
@@ -41,7 +42,6 @@ import {
   scopeQueryParams,
   truncateArtistForMeta,
   type DirectionalRelationship,
-  type MutualRelationship,
   type SearchParams,
   type SongAnalyticsRow,
 } from "@/lib/analytics";
@@ -70,23 +70,6 @@ function relationshipExtremes(
       .slice(0, 3),
     least: [...sampled]
       .sort((a, b) => a.pointsPerEncounter - b.pointsPerEncounter)
-      .slice(0, 3),
-  };
-}
-
-function mutualExtremes(relationships: MutualRelationship[]) {
-  return {
-    mostPoints: [...relationships]
-      .sort((a, b) => b.points - a.points)
-      .slice(0, 3),
-    leastPoints: [...relationships]
-      .sort((a, b) => a.points - b.points)
-      .slice(0, 3),
-    highestShare: [...relationships]
-      .sort((a, b) => b.ballotPointShare - a.ballotPointShare)
-      .slice(0, 3),
-    lowestShare: [...relationships]
-      .sort((a, b) => a.ballotPointShare - b.ballotPointShare)
       .slice(0, 3),
   };
 }
@@ -254,7 +237,6 @@ async function PlayerProfilePageContent({
     .slice(0, 3);
   const received = relationshipExtremes(profile.relationships, "received");
   const given = relationshipExtremes(profile.relationships, "given");
-  const mutual = mutualExtremes(profile.mutualRelationships);
   const highestAlignments = profile.alignments.slice(0, 3);
   const lowestAlignments = profile.alignments.slice(-3).reverse();
   const overviewCards = [
@@ -447,84 +429,7 @@ async function PlayerProfilePageContent({
         ))}
       </section>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <Network aria-hidden="true" className="mb-2 size-5 text-lime-300" />
-          <div className="flex flex-wrap items-baseline justify-between gap-2"><CardTitle>Mutual voting support</CardTitle><Link className="text-xs text-lime-300 hover:underline" href={compareHref("mutual", "share")}>View all →</Link></div>
-          <CardDescription>
-            {`Points ${player.name} and each player gave one another, as totals and as a share of their voting budgets.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid min-w-0 grid-cols-1 gap-7 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: "Most combined points",
-              rows: mutual.mostPoints,
-              value: (row: MutualRelationship) => formatPoints(row.points),
-            },
-            {
-              label: "Fewest combined points",
-              rows: mutual.leastPoints,
-              value: (row: MutualRelationship) => formatPoints(row.points),
-            },
-            {
-              label: "Highest ballot share",
-              rows: mutual.highestShare,
-              value: (row: MutualRelationship) =>
-                `${(row.ballotPointShare * 100).toFixed(1)}%`,
-            },
-            {
-              label: "Lowest ballot share",
-              rows: mutual.lowestShare,
-              value: (row: MutualRelationship) =>
-                `${(row.ballotPointShare * 100).toFixed(1)}%`,
-            },
-          ].map(({ label, rows, value }) => (
-            <div key={label}>
-              <h3 className="text-sm font-medium text-zinc-400">
-                {label}
-              </h3>
-              <ol className="mt-2 divide-y divide-white/[0.06]">
-                {rows.map((row) => (
-                  <li
-                    className="flex items-center justify-between gap-3 py-3"
-                    key={row.competitorId}
-                  >
-                    <div className="min-w-0">
-                      <Link
-                        className="truncate text-sm font-medium text-zinc-100 hover:text-lime-200"
-                        href={buildAnalyticsHref(
-                          playerPath({
-                            id: row.competitorId,
-                            slug: row.competitorSlug,
-                          }),
-                          filterParams,
-                          {},
-                        )}
-                      >
-                        {row.competitorName}
-                      </Link>
-                      <p className="mt-0.5 text-[11px] text-zinc-600">
-                        {row.pointsPerOpportunity.toFixed(2)} pts/opportunity ·{" "}
-                        {(row.positiveRate * 100).toFixed(0)}% awarded ≥1 pt ·{" "}
-                        {row.sharedRounds}/{row.scopeRounds} rounds
-                      </p>
-                    </div>
-                    <p className="shrink-0 font-mono text-sm text-lime-200">
-                      {value(row)}
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-          {!mutual.mostPoints.length ? (
-            <p className="text-sm leading-6 text-zinc-500 sm:col-span-2 xl:col-span-4">
-              No mutual comparison meets the adaptive participation minimum for the selected scope.
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+      <MutualSupportPanel rows={profile.mutualRelationships} filterParams={filterParams} compareHref={compareHref("mutual","mutual-support")} />
 
       <section className="mt-6 grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>

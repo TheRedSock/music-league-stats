@@ -16,6 +16,7 @@ import {
 import { useNormalizedThreshold } from "@/components/analytics/relationship-graphs/use-normalized-threshold";
 import {
   edgeWeight,
+  formatWeightValue, undirectedMetricFormat, undirectedMetricLabel,
   formatScaleCaption,
   undirectedWeightScale,
   type RelationshipGraphData,
@@ -112,7 +113,7 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         source: edge.source,
         target: edge.target,
         weight,
-        label: `${edge.sourceName} ↔ ${edge.targetName}: ${(weight * 100).toFixed(1)}${metric === "alignment" ? " / 100 similarity" : "% mutual share"}`,
+        label: `${edge.sourceName} ↔ ${edge.targetName}: ${formatWeightValue(weight, undirectedMetricFormat(metric))}`,
       })),
     [neighborEdges, metric],
   );
@@ -130,7 +131,8 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
         onMetricChange={setMetric}
         onThresholdChange={setNormalized}
         rawThreshold={rawThreshold}
-        scaleCaption={formatScaleCaption(scale)}
+        rawFormat={undirectedMetricFormat(metric)}
+        scaleCaption={formatScaleCaption(scale, undirectedMetricFormat(metric))}
         threshold={normalized}
         thresholdLabel="Min neighbor strength"
       >
@@ -140,12 +142,13 @@ export function EgoView({ graph }: { graph: RelationshipGraphData }) {
           value={resolvedFocusId}
         />
       </LabsControls>
-      <p className="text-xs text-zinc-400">{links.length} connections. {metric === "alignment" ? "Red means opposing preferences; green means agreement." : "Larger nodes have a greater mutual ballot share."}</p>
+      <p className="text-xs text-zinc-400">{links.length} connections. {metric === "alignment" ? "Red means opposing preferences; green means agreement." : metric === "mutual" ? "1× is expected support; larger nodes received stronger mutual support." : "Larger nodes have a greater mutual ballot share."}</p>
       {links.length === 0 ? (
         <GraphEmptyState message="No neighbors above this threshold for the focused player." />
       ) : (
         <RelationshipForceGraph
-          weightLabel={metric === "alignment" ? "Similarity / 100" : "Mutual share (%)"}
+          weightLabel={undirectedMetricLabel(metric)}
+          weightMultiplier={metric === "mutual" ? 1 : 100}
           highlightId={resolvedFocusId}
           layout={{
             chargeStrength: -200,

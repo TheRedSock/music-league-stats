@@ -392,10 +392,13 @@ describe("analytics filter helpers", () => {
     expect(parsePlayerSortDirection("asc", "points")).toBe("asc");
     expect(parseRelationshipTab("alignment")).toBe("alignment");
     expect(parseRelationshipTab("nope")).toBe("received");
-    expect(parseRelationshipSort(undefined, "mutual")).toBe("share");
+    expect(parseRelationshipSort(undefined, "mutual")).toBe("mutual-support");
     expect(parseRelationshipSort("features", "alignment")).toBe("features");
     expect(defaultRelationshipSortDirection("player")).toBe("asc");
-    expect(parseRelationshipSortDirection(undefined, "timing")).toBe("desc");
+    expect(parseRelationshipSortDirection(undefined, "timing")).toBe("asc");
+    expect(parseRelationshipSort("window-timing","timing")).toBe("window-timing");
+    expect(parseRelationshipSort("combined-timing","timing")).toBe("combined-timing");
+    expect(parseRelationshipSort("missed-rate","timing")).toBe("missed-rate");
     expect(parseFocusPlayerId(leagueId)).toBe(leagueId);
     expect(parseFocusPlayerId("nope")).toBeNull();
   });

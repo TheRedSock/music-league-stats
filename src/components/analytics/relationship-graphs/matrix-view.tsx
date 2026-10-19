@@ -15,6 +15,7 @@ import {
 import { useNormalizedThreshold } from "@/components/analytics/relationship-graphs/use-normalized-threshold";
 import {
   edgeWeight,
+  formatWeightValue, undirectedMetricFormat, undirectedMetricLabel, undirectedDisplayValue,
   LAB_DEFAULT_NORMALIZED,
   undirectedWeightScale,
   type RelationshipGraphData,
@@ -114,23 +115,24 @@ export function MatrixView({ graph }: { graph: RelationshipGraphData }) {
   const names = new Map(graph.nodes.map(node=>[node.id,node.name]));
   const [left,right] = pair.split(":");
   const selectedValue = left && right ? pairSim(values,left,right) : null;
-  const color = metric === "alignment" ? scaleDiverging(interpolateRdBu).domain([-1,0,1]) : scaleSequential(interpolateYlGnBu).domain([0,1]);
+  const supportHigh = Math.max(2, scale.high);
+  const color = metric === "alignment" ? scaleDiverging(interpolateRdBu).domain([-1,0,1]) : metric === "mutual" ? scaleDiverging(interpolateRdBu).domain([0,1,supportHigh]).clamp(true) : scaleSequential(interpolateYlGnBu).domain([0,Math.max(scale.high,0.01)]).clamp(true);
   const label = (leftId:string,rightId:string) => {
     const value = pairSim(values,leftId,rightId);
-    return `${names.get(leftId)} × ${names.get(rightId)}: ${leftId===rightId ? "same player" : value==null ? "no qualifying data" : `${(value*100).toFixed(1)}${metric==="alignment" ? " / 100 similarity" : "% mutual ballot share"}${value<rawThreshold ? " (below cutoff)" : ""}`}`;
+    return `${names.get(leftId)} × ${names.get(rightId)}: ${leftId===rightId ? "same player" : value==null ? "no qualifying data" : `${formatWeightValue(value, undirectedMetricFormat(metric))}${value<rawThreshold ? " (below cutoff)" : ""}`}`;
   };
   if (!graph.nodes.length) return <GraphEmptyState message="No players to compare yet." />;
   const cell = Math.max(26,Math.min(40,Math.floor(850 / Math.max(1,order.length))));
   const selectedInGrid = order.includes(left) && order.includes(right);
   return <div className="space-y-4 min-w-0">
-    <LabsControls metric={metric} onMetricChange={setMetric} onThresholdChange={setNormalized} rawThreshold={rawThreshold} threshold={normalized} thresholdLabel="Matrix connections">
+    <LabsControls rawFormat={undirectedMetricFormat(metric)} metric={metric} onMetricChange={setMetric} onThresholdChange={setNormalized} rawThreshold={rawThreshold} threshold={normalized} thresholdLabel="Matrix connections">
       <Popover label="Players in matrix" trigger={<>Choose players ({order.length})</>}>
         <button type="button" className="mb-3 text-sm text-lime-300" onClick={()=>setSubset("")}>Show all players</button>
         {graph.nodes.map(node=><label key={node.id} className="flex items-center gap-2 py-2 text-sm"><input type="checkbox" className="accent-lime-300" checked={order.includes(node.id)} onChange={()=>{const current=subset ? subset.split(",") : graph.nodes.map(node=>node.id);const next=current.includes(node.id) ? current.filter(id=>id!==node.id) : [...current,node.id];if(next.length)setSubset(next.join(","));}} />{node.name}</label>)}
       </Popover>
     </LabsControls>
     <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-zinc-300" aria-label="Matrix color scale">
-      {(metric === "alignment" ? [-1,0,1] : [0,0.5,1]).map(value=><span key={value} className="flex items-center gap-2"><i className="size-4 rounded-sm border border-white/20" style={{background:color(value)}} />{(value*100).toFixed(0)}{metric==="alignment" ? value<0 ? " opposing" : value>0 ? " agreement" : " neutral" : "%"}</span>)}
+      {(metric === "alignment" ? [-1,0,1] : metric === "mutual" ? [0,1,supportHigh] : [0,Math.max(scale.high,0.01)/2,Math.max(scale.high,0.01)]).map(value=><span key={value} className="flex items-center gap-2"><i className="size-4 rounded-sm border border-white/20" style={{background:color(value)}} />{formatWeightValue(value,undirectedMetricFormat(metric))}{metric==="alignment" ? value<0 ? " opposing" : value>0 ? " agreement" : " neutral" : metric === "mutual" && value === 1 ? " expected" : ""}</span>)}
       <span className="flex items-center gap-2"><i className="grid size-4 place-items-center border border-white/20">—</i>No data</span><span>Faded: below cutoff</span>
     </div>
     <p role="status" aria-live="polite" className="min-h-12 rounded-md border border-white/10 px-4 py-3 text-sm text-zinc-200">{selectedInGrid ? label(left,right) : "Select a cell, or use Tab and the arrow keys to compare players."}{selectedInGrid && selectedValue!=null ? ` · ${graph.undirectedEdges.find(edge=>(edge.source===left && edge.target===right)||(edge.target===left && edge.source===right))?.sharedRounds ?? 0} shared rounds` : ""}</p>
@@ -144,6 +146,6 @@ export function MatrixView({ graph }: { graph: RelationshipGraphData }) {
         </div>)}
       </div>
     </div>
-    <ConnectionTable unit={metric==="alignment" ? "Similarity / 100" : "Mutual share (%)"} onSelect={setPair} rows={graph.undirectedEdges.filter(edge=>order.includes(edge.source)&&order.includes(edge.target)).map(edge=>({id:`${edge.source}:${edge.target}`,left:edge.sourceName,right:edge.targetName,value:edgeWeight(edge,metric)==null ? null : edgeWeight(edge,metric)!*100,context:`${edge.sharedRounds ?? 0} shared rounds${edgeWeight(edge,metric)!=null && edgeWeight(edge,metric)!<rawThreshold ? " · below cutoff" : ""}`}))} />
+    <ConnectionTable unit={undirectedMetricLabel(metric)} onSelect={setPair} rows={graph.undirectedEdges.filter(edge=>order.includes(edge.source)&&order.includes(edge.target)).map(edge=>({id:`${edge.source}:${edge.target}`,left:edge.sourceName,right:edge.targetName,value:edgeWeight(edge,metric)==null ? null : undirectedDisplayValue(edgeWeight(edge,metric)!,metric),context:`${edge.sharedRounds ?? 0} shared rounds${edgeWeight(edge,metric)!=null && edgeWeight(edge,metric)!<rawThreshold ? " · below cutoff" : ""}`}))} />
   </div>;
 }
