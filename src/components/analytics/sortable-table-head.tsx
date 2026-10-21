@@ -46,7 +46,6 @@ export function SortableTableHead({
   const href = buildAnalyticsHref(path, params, {
     dir: nextDirection,
     page: null,
-    q: null,
     sort: sortKey,
   });
 

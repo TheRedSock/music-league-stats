@@ -137,6 +137,7 @@ async function SongsPageContent({
                 className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-500"
               />
               <input
+                aria-describedby="song-search-help"
                 className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 pl-10 pr-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
                 defaultValue={search}
                 maxLength={100}
@@ -164,6 +165,18 @@ async function SongsPageContent({
               Search
             </button>
           </Form>
+          <details className="mt-2 text-xs leading-5 text-zinc-400" id="song-search-help">
+            <summary className="w-fit cursor-pointer hover:text-zinc-200">Search syntax</summary>
+            <p className="mt-1">
+              Search a field with <code>artist:</code>, <code>title:</code>, <code>album:</code>,{" "}
+              <code>player:</code>, <code>league:</code>, or <code>round:</code>.{" "}
+              Quoted field values match the exact name, ignoring case: <code>artist:&quot;22&quot;</code>.{" "}
+              Unquoted values allow partial matches: <code>artist:beatles</code>.{" "}
+              Combine terms to require all of them, use quotes for a phrase, or exclude with <code>-</code>,{" "}
+              e.g. <code>artist:&quot;22&quot; -title:live</code>.{" "}
+              <code>song:</code> and <code>submitter:</code> also work as aliases for <code>title:</code> and <code>player:</code>.
+            </p>
+          </details>
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-4">

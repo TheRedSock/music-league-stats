@@ -16,6 +16,7 @@ import {
 } from "@/lib/point-buckets";
 import { ANALYTICS_REVISION } from "@/lib/analytics-revision";
 import { parseSpotifyTrackId } from "@/lib/spotify";
+import { songSearchPredicate } from "@/lib/song-search";
 
 const ANALYTICS_CACHE_TAG = "analytics";
 
@@ -2016,17 +2017,6 @@ export async function getDashboardAlignmentData(
     order by alignment desc
   `);
   return topScopeAlignments(alignments, 3, await countAvailableRounds());
-}
-
-function songSearchPredicate(search: string): SQL {
-  if (!search) return sql`true`;
-  const term = `%${search}%`;
-  return sql`(
-    ranked_songs.title ilike ${term}
-    or ranked_songs.artist ilike ${term}
-    or coalesce(ranked_songs.album, '') ilike ${term}
-    or ranked_songs."submitterName" ilike ${term}
-  )`;
 }
 
 function sortKeyword(direction: SortDirection): SQL {
