@@ -208,6 +208,19 @@ export function SongsTable({
               {"Round\npercentile"}
             </SortableTableHead>
           ) : null}
+          {isVisible("newest") ? (
+            <SortableTableHead
+              activeDirection={direction}
+              activeSort={sort}
+              defaultDirection={defaultSongSortDirection("newest")}
+              params={currentParams}
+              path="/songs"
+              sortKey="newest"
+              title="Date the song was submitted (UTC). Sorts newest first by default; click again for oldest first."
+            >
+              Submitted
+            </SortableTableHead>
+          ) : null}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -327,6 +340,13 @@ export function SongsTable({
                 {song.performancePercentile === null
                   ? "—"
                   : ordinal(song.performancePercentile)}
+              </TableCell>
+            ) : null}
+            {isVisible("newest") ? (
+              <TableCell className="font-mono text-zinc-400">
+                <time dateTime={song.submittedAt} title={song.submittedAt}>
+                  {song.submittedAt.slice(0, 10)}
+                </time>
               </TableCell>
             ) : null}
           </TableRow>

@@ -6,6 +6,55 @@ import { FaqAnchorTarget } from "@/components/analytics/faq-anchor-target";
 export const metadata: Metadata = { title: "How the stats work", description: "Rankings, voting similarity and the numbers behind Music League results." };
 
 const topics = [
+  {
+    id: "song-search",
+    title: "How do I search for songs?",
+    summary: "On Songs, plain text searches song titles, artists, albums and player names. Use a field prefix to narrow the search. All matching ignores case.",
+    detail: <div className="space-y-6 [&_code]:rounded [&_code]:bg-white/5 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:text-zinc-200">
+      <div>
+        <h3 className="font-medium text-zinc-200">Search within a field</h3>
+        <p className="mt-1">Put the field name and a colon directly before the value. Without quotes, values match part of the field.</p>
+        <dl className="mt-3 divide-y divide-white/10">
+          {[
+            ["Artist", "artist:beatles"],
+            ["Song title", "title:yellow"],
+            ["Album", "album:abbey"],
+            ["Player / submitter", "player:alex"],
+            ["League name", "league:summer"],
+            ["Round name", "round:summer"],
+          ].map(([label, example]) => <div key={label} className="grid gap-1 py-2 sm:grid-cols-[10rem_1fr]">
+            <dt>{label}</dt>
+            <dd><code>{example}</code></dd>
+          </div>)}
+        </dl>
+        <p className="mt-2"><code>song:</code> also works for song titles. <code>submitter:</code> also works for player names.</p>
+      </div>
+      <div>
+        <h3 className="font-medium text-zinc-200">Match an exact name</h3>
+        <p className="mt-1">Put double quotes around a field value to match the entire name, including spaces.</p>
+        <p className="mt-3"><code>artist:&quot;22&quot;</code></p>
+        <p className="mt-1">Finds songs whose artist is exactly 22. A song with 22 only in its title will not match.</p>
+        <p className="mt-3"><code>artist:&quot;Pink Floyd&quot;</code></p>
+        <p className="mt-1">Use the same pattern for any field, such as an exact album or player name.</p>
+      </div>
+      <div>
+        <h3 className="font-medium text-zinc-200">Keep a phrase together</h3>
+        <p className="mt-3"><code>&quot;yellow submarine&quot;</code></p>
+        <p className="mt-1">Without a field prefix, a quoted phrase can appear anywhere within a title, artist, album or player name. It does not need to fill the whole field.</p>
+      </div>
+      <div>
+        <h3 className="font-medium text-zinc-200">Combine filters or exclude matches</h3>
+        <p className="mt-1">Separate terms with spaces. Every term must match. A leading minus sign excludes a term or field value.</p>
+        <p className="mt-3"><code>artist:beatles title:yellow</code></p>
+        <p className="mt-1">Requires beatles in the artist and yellow in the song title.</p>
+        <p className="mt-3"><code>artist:&quot;22&quot; -title:live</code></p>
+        <p className="mt-1">Finds the artist 22 while excluding titles containing live.</p>
+        <p className="mt-3"><code>artist:beatles -remix</code></p>
+        <p className="mt-1">Excludes remix from all four fields searched by plain text.</p>
+      </div>
+      <p>Searches use your selected leagues. Click a column heading to sort the results; the search stays applied.</p>
+    </div>,
+  },
   { id: "rankings", title: "Why do the rankings differ?", summary: "Points reward the total earned. Average round index compares performance across rounds of different sizes.", detail: "For each round, the player’s points are divided by the expected points for their submissions, then those round indexes are averaged. 1.0 means expected support. The first column numbers the rows in the current sort order. The minimum rounds required is shown beside the results: roughly half the rounds for a small scope, easing to one third across all leagues. A dash means the player has not reached that threshold. Wins include ties; top quartile counts finishes in the top 25%." },
   { id: "song-measures", title: "What does each song measure tell me?", summary: "Songs starts with total points and adjusted support. Voters reached is available under Columns and shows how many eligible voters gave the song points.", detail: "Points per eligible voter includes zeroes; points per actual voter includes only voters who gave points. Round share is the song’s fraction of all eligible points in its round. Round percentile is its position within that round, with higher values meaning a better finish. Columns contains the additional measures. Choosing a sort also shows the relevant column." },
   { id: "adjusted-support", title: "How does adjusted support work?", summary: "It compares points with the round’s expected support and reduces extremes from small samples. The Home standout songs use it.", detail: "Raw support index = points ÷ expected points from eligible ballot budgets. Adjusted support is the empirical-Bayes estimate: the raw index is shrunk toward 1.0 using corpus-estimated variance, Var(SI) ≈ τ² + φ/E. It is an estimate, not an observed multiplier. When variance cannot be estimated, the raw index is used. Statistical surprise (support z) is (points − expected) ÷ √(φ × expected): a standardized surplus under the expected-support model. Neither measure is a judgment of musical quality." },
@@ -25,12 +74,12 @@ export default function FaqPage() {
     <div className="max-w-3xl">
       <h1 className="text-3xl font-semibold tracking-tight">How the stats work</h1>
       <nav aria-label="Metric topics" className="my-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-lime-300">
-        <Link href="#rankings">Rankings</Link><Link href="#song-measures">Songs</Link><Link href="#voting-similarity">Voting similarity</Link><Link href="#zeroes">Zeroes</Link><Link href="#graphs">Graphs</Link>
+        <Link href="#song-search">Song search</Link><Link href="#rankings">Rankings</Link><Link href="#song-measures">Songs</Link><Link href="#voting-similarity">Voting similarity</Link><Link href="#zeroes">Zeroes</Link><Link href="#graphs">Graphs</Link>
       </nav>
       {topics.map(topic => <section key={topic.id} id={topic.id} className="faq-topic scroll-mt-24 border-t border-white/10 py-6">
         <h2 className="text-lg font-semibold">{topic.title}</h2>
         <p className="mt-2 text-sm leading-6 text-zinc-300">{topic.summary}</p>
-        <details className="mt-3 text-sm text-zinc-400"><summary className="cursor-pointer text-lime-300">Details</summary><p className="mt-3 leading-7">{topic.detail}</p></details>
+        <details className="mt-3 text-sm text-zinc-400"><summary className="cursor-pointer text-lime-300">Details</summary><div className="mt-3 leading-7">{typeof topic.detail === "string" ? <p>{topic.detail}</p> : topic.detail}</div></details>
       </section>)}
     </div>
   </Container>;

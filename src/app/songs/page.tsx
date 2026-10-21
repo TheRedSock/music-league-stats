@@ -40,23 +40,6 @@ export const metadata: Metadata = {
   description: "Explore every imported song with round-adjusted Music League metrics.",
 };
 
-const sortLabels = {
-  title: "Song title",
-  submitter: "Submitter",
-  scope: "League / round",
-  points: "Total points",
-  "points-per-voter": "Points per eligible voter",
-  "positive-reach": "Voters reached",
-  "round-share": "Round share",
-  "support-eb": "Adjusted support",
-  "points-per-actual-voter": "Average points per actual voter",
-  "appeal-spread": "Reach vs share spread",
-  "support-z": "Statistical surprise",
-  "normalized-index": "Support index (raw)",
-  percentile: "Round percentile",
-  newest: "Newest",
-} as const;
-
 async function SongsPageContent({
   searchParams,
 }: {
@@ -121,8 +104,10 @@ async function SongsPageContent({
       <div className="mt-5">
           <Form
             action="/songs"
-            className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1fr_15rem_auto]"
+            className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
           >
+            <input name="sort" type="hidden" value={sort} />
+            <input name="dir" type="hidden" value={direction} />
             {filter.leagueIds.length ? (
               filter.leagueIds.map((leagueId) => (
                 <input key={leagueId} name="league" type="hidden" value={leagueId} />
@@ -130,7 +115,7 @@ async function SongsPageContent({
             ) : (
               <input name="league" type="hidden" value="all" />
             )}
-            <label className="relative col-span-2 sm:col-span-1">
+            <label className="relative min-w-0">
               <span className="sr-only">Search songs</span>
               <Search
                 aria-hidden="true"
@@ -146,37 +131,15 @@ async function SongsPageContent({
                 type="search"
               />
             </label>
-            <label>
-              <span className="sr-only">Sort songs</span>
-              <select
-                className="h-11 w-full rounded-md border border-white/10 bg-zinc-900 px-3 text-sm text-zinc-100 outline-none focus:border-lime-300/40 focus:ring-2 focus:ring-lime-300/15"
-                key={sort}
-                defaultValue={sort}
-                name="sort"
-              >
-                {Object.entries(sortLabels).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
             <button className={buttonStyles()} type="submit">
               Search
             </button>
           </Form>
-          <details className="mt-2 text-xs leading-5 text-zinc-400" id="song-search-help">
-            <summary className="w-fit cursor-pointer hover:text-zinc-200">Search syntax</summary>
-            <p className="mt-1">
-              Search a field with <code>artist:</code>, <code>title:</code>, <code>album:</code>,{" "}
-              <code>player:</code>, <code>league:</code>, or <code>round:</code>.{" "}
-              Quoted field values match the exact name, ignoring case: <code>artist:&quot;22&quot;</code>.{" "}
-              Unquoted values allow partial matches: <code>artist:beatles</code>.{" "}
-              Combine terms to require all of them, use quotes for a phrase, or exclude with <code>-</code>,{" "}
-              e.g. <code>artist:&quot;22&quot; -title:live</code>.{" "}
-              <code>song:</code> and <code>submitter:</code> also work as aliases for <code>title:</code> and <code>player:</code>.
-            </p>
-          </details>
+          <p className="mt-2 text-xs leading-5 text-zinc-400" id="song-search-help">
+            <Link className="underline underline-offset-4 hover:text-zinc-200" href="/faq#song-search">
+              Search syntax guide
+            </Link>
+          </p>
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-4">

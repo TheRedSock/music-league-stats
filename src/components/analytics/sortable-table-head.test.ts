@@ -10,6 +10,7 @@ describe("column sorting", () => {
     ["points", "asc"],
     ["title", "asc"],
     ["support-eb", "desc"],
+    ["newest", "desc"],
   ] as const)("keeps the search and scope when sorting by %s", (sortKey, direction) => {
     const html = renderToStaticMarkup(SortableTableHead({
       activeDirection: "desc",

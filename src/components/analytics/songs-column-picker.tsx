@@ -5,6 +5,7 @@ import { createTableColumnPicker } from "@/components/analytics/table-column-pic
 export const SONG_TABLE_COLUMN_IDS = [
   "positive-reach", "points-per-voter", "points-per-actual-voter", "round-share",
   "support-eb", "appeal-spread", "support-z", "normalized-index", "percentile",
+  "newest",
 ] as const;
 export type SongTableColumnId = (typeof SONG_TABLE_COLUMN_IDS)[number];
 export const SONG_TABLE_COLUMN_LABELS: Record<SongTableColumnId, string> = {
@@ -17,6 +18,7 @@ export const SONG_TABLE_COLUMN_LABELS: Record<SongTableColumnId, string> = {
   "support-z": "Statistical surprise",
   "normalized-index": "Support index (raw)",
   percentile: "Round percentile",
+  newest: "Submission date",
 };
 export const DEFAULT_SONG_TABLE_COLUMNS: SongTableColumnId[] = ["support-eb"];
 const oldDefaults = [["positive-reach"], ["positive-reach", "points-per-voter", "round-share", "support-eb", "appeal-spread"]];

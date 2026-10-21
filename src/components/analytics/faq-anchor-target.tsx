@@ -8,7 +8,11 @@ export function FaqAnchorTarget() {
     function highlight(hash = window.location.hash) {
       document.querySelectorAll(".faq-topic[data-anchor-target]").forEach(topic => topic.removeAttribute("data-anchor-target"));
       const topic = document.getElementById(hash.slice(1));
-      if (topic?.classList.contains("faq-topic")) topic.setAttribute("data-anchor-target", "true");
+      if (topic?.classList.contains("faq-topic")) {
+        topic.setAttribute("data-anchor-target", "true");
+        const details = topic.querySelector("details");
+        if (details) details.open = true;
+      }
     }
     const onHistory = () => highlight();
     const onClick = (event: MouseEvent) => {
