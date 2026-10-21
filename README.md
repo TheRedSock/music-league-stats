@@ -16,6 +16,27 @@ the direct `DATABASE_URL_DIRECT` connection. Generate
 `ADMIN_SESSION_SECRET` with at least 32 cryptographically random characters,
 for example `openssl rand -base64 48`. Do not commit local environment files.
 
+### Neon compute quota
+
+To preview or set a monthly project compute quota, add `NEON_API_KEY` (a
+project-scoped management key) and `NEON_PROJECT_ID` to local `.env`. Database
+connection credentials cannot change project quotas. Keep the management key
+local; the deployed app does not need it.
+
+Run `node scripts/neon-quota.mjs` to preview the current quota and a proposed
+50 CU-hour limit. Run `node scripts/neon-quota.mjs --apply` to save and read back
+that limit. Override the proposal with `--cu-hours=100` if needed. The script
+checks that the project owns the endpoint in `DATABASE_URL`, preserves other
+quotas, does not automatically raise stricter existing limits, and logs no
+credential values. It does not open a database connection.
+
+The 50 CU-hour starting recommendation allows roughly eight times the observed
+October 2026 monthly pace (4.26 CU-hours over about 20 days). It is a compute
+usage limit, not a total dollar cap. Neon suspends the project's computes when
+the quota is reached until the limit is raised or the billing period resets.
+Usage measurement can lag, so allow for overshoot. See Neon's
+[consumption quota documentation](https://neon.com/docs/guides/consumption-limits).
+
 ## Admin and CSV sync
 
 Leagues are created manually in `/admin`; their source IDs are generated
@@ -29,10 +50,43 @@ one shared bucket rather than trusting arbitrary forwarded IP headers. Multiple
 instances also need a hosting-edge rate limit; in-process limits reset on restart.
 Vercel client identity uses its [platform forwarding header](https://vercel.com/docs/headers/request-headers#x-vercel-forwarded-for).
 
-New multi-league comparison jobs are admitted under the database advisory lock:
-at most 12 starts per hour and two recently active jobs. Existing cached scopes
-and resumable checkpoints remain available. Capacity messages stop automatic
-polling and let the visitor choose an existing scope or try again later.
+Public analytics requests are limited before rendering or querying Neon. On
+Vercel, the shared firewall rule in `config/public-rate-limit.json` allows 120
+requests per minute per IP across the data pages and player-votes API. Assets,
+FAQ, and admin routes are excluded. HEAD requests, RSC refreshes, and prefetches
+count too. Vercel counters are regional, so this is not an absolute global cap.
+The application proxy adds a bounded token bucket of 120 requests per minute per
+client and 1,200 per minute per process, with uncached HTTP 429 and Retry-After
+responses. It trusts Vercel's forwarding header only on Vercel; self-hosted
+clients share a bucket. Process limits are defense in depth and reset on restart.
+
+New multi-league comparison attempts are admitted under the database advisory
+lock: at most 8 per rolling hour, 24 per rolling day, 60 per rolling 30 days, and
+two recently active jobs. These shared budgets include prior analytics revisions
+and failed-job retries. A retry creates a new admission record but retains
+completed checkpoints; the first failure waits one minute, the second five
+minutes, and three failures for a scope within a rolling day pause further retries.
+Completed scopes and processing checkpoints remain accessible without using new
+admission capacity. Capacity messages stop automatic polling and let the visitor
+choose an existing scope or try again later. No database migration is required.
+
+The hosting firewall is configured separately from application deployments. In a
+linked checkout, inspect `vercel firewall rules ls --json` and
+`vercel firewall diff` before staging the rule. If it is absent, run this in
+PowerShell:
+
+```powershell
+vercel firewall rules add --json (Get-Content -Raw -LiteralPath config/public-rate-limit.json) --yes
+vercel firewall diff
+vercel firewall publish
+```
+
+Publish only the reviewed change; preserve any unrelated firewall draft. Hobby
+allows one rate-limiting rule, so edit an existing rule rather than adding a
+duplicate. These controls reduce bursts and expensive retries; slow traffic and
+distributed attackers can still consume database time. Keep the Neon compute
+quota as the final cost guardrail. See Vercel's
+[rate-limiting documentation](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting).
 
 For each sync, select a target league and the four Music League exports:
 

@@ -29,7 +29,7 @@ import {
 import { analyticsProgressKey, LEAGUE_CALCULATIONS } from "@/lib/analytics-job-progress";
 import { analyticsFailureMessage, budgetedAnalyticsExecutor, configureAnalyticsTransaction, databaseErrorCode, type AnalyticsExecutor } from "@/lib/analytics-job-runtime";
 import { ANALYTICS_REVISION } from "@/lib/analytics-revision";
-import { ScopeCapacityError, scopeCapacityMessage } from "@/lib/scope-budget";
+import { ScopeCapacityError, scopeCapacityMessage, scopeRetryMessage } from "@/lib/scope-budget";
 
 const ALL_LEAGUES_FILTER: AnalyticsFilter = { leagueIds: [], roundIds: [] };
 const MATERIALIZATION_LOCK_KEY = 73_730_001;
@@ -885,21 +885,26 @@ export async function startScopeMaterializationJob(
       return latest;
     }
 
-    if (latest?.status === "failed" && progressFromSummary(latest.summary)) {
-      const [resumed] = await tx.update(analyticsScopeJobs).set({ status: "processing", errorMessage: null, completedAt: null, updatedAt: new Date() })
-        .where(eq(analyticsScopeJobs.id, latest.id)).returning();
-      return resumed;
-    }
-
-    // The advisory lock serializes admission across instances as well as duplicate scopes.
-    const [budget] = await tx.execute<{ recent: number; active: number }>(sql`
+    // Every restart reserves a new job record, retaining the saved checkpoint.
+    // Updating the failed row in place would let retries bypass the start budget.
+    // Count all revisions so a deployment cannot reset the rolling budget.
+    const [budget] = await tx.execute<{ recent: number; active: number; daily: number; monthly: number; failures: number }>(sql`
       select
         count(*) filter (where started_at > now() - interval '1 hour')::int as recent,
-        count(*) filter (where status = 'processing' and updated_at > now() - interval '5 minutes')::int as active
-      from analytics_scope_jobs where analytics_revision = ${ANALYTICS_REVISION}
+        count(*) filter (where status = 'processing' and updated_at > now() - interval '5 minutes')::int as active,
+        count(*) filter (where started_at > now() - interval '1 day')::int as daily,
+        count(*) filter (where started_at > now() - interval '30 days')::int as monthly,
+        count(*) filter (where scope_key = ${scopeKey} and status = 'failed'
+          and summary->>'kind' = 'progress' and updated_at > now() - interval '1 day')::int as failures
+      from analytics_scope_jobs
     `);
-    const capacityMessage = scopeCapacityMessage(budget?.recent ?? 0, budget?.active ?? 0);
+    const capacityMessage = scopeCapacityMessage(budget?.recent ?? 0, budget?.active ?? 0, budget?.daily ?? 0, budget?.monthly ?? 0);
     if (capacityMessage) throw new ScopeCapacityError(capacityMessage);
+    const savedProgress = latest?.status === "failed" ? progressFromSummary(latest.summary) : null;
+    if (savedProgress && latest) {
+      const retryMessage = scopeRetryMessage(budget?.failures ?? 0, latest.updatedAt);
+      if (retryMessage) throw new ScopeCapacityError(retryMessage);
+    }
 
     const [created] = await tx
       .insert(analyticsScopeJobs)
@@ -908,7 +913,9 @@ export async function startScopeMaterializationJob(
         scopeKey,
         startedAt: new Date(),
         status: "processing",
-        summary: scopeProgressSummary(0),
+        summary: savedProgress ?? scopeProgressSummary(0),
+        // Keep latest-job ordering deterministic even inside an outer transaction.
+        createdAt: new Date(Math.max(Date.now(), (latest?.createdAt.getTime() ?? 0) + 1)),
       })
       .returning();
     return created;

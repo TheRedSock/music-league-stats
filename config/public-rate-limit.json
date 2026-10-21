@@ -1,0 +1,28 @@
+{
+  "name": "Public analytics request limit",
+  "description": "120 public analytics requests per minute per IP; includes HTML, RSC, HEAD and vote API requests. Excludes assets and admin.",
+  "active": true,
+  "conditionGroup": [
+    {
+      "conditions": [
+        {
+          "type": "path",
+          "op": "re",
+          "value": "^/(?:$|(?:songs|players|relationships|facts)(?:/|$)|api/players(?:/|$))"
+        }
+      ]
+    }
+  ],
+  "action": {
+    "mitigate": {
+      "action": "rate_limit",
+      "rateLimit": {
+        "algo": "fixed_window",
+        "window": 60,
+        "limit": 120,
+        "keys": ["ip"],
+        "action": "rate_limit"
+      }
+    }
+  }
+}
